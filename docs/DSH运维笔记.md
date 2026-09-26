@@ -1407,3 +1407,25 @@ vivo 安装器的分支比想象的细，实测三条路：
 **踩到的一个小坑**：GitHub Release 的资产上传接口对**非 ASCII 文件名**不友好——
 我按 URL 编码传 `DSH控制台-v1.1.apk`，结果名字被吞成 `DSH.-v1.1.apk`。
 **改法：资产名一律用 ASCII**（`dsh-console-v1.1.apk`），中文名只留在仓库内的 `dist/` 里。
+
+### 十三·补三十七：GitHub token 的去留（2026-09-27 01:5x，用户决定）
+
+用户问「这个 token 对这个项目有什么作用」，我先把**真实权限**查清楚再说结论（响应头就是证据）：
+```
+x-oauth-scopes: repo                              ← classic token：仓库级完全控制
+x-oauth-client-id: 178c6fc778ccc68e1d6a           ← GitHub CLI 的 OAuth 应用
+实测可访问仓库: 2 → Maopk/dsh-termux-kit、Maopk/Skyhook
+```
+**所以它不是"本项目的钥匙"，而是"名下所有仓库的钥匙"**（含以后新建的私有仓库），
+OAuth token 又**没有自动过期**；而且关键一点：**光 `rm ~/.dsh-gh-token` 不会让它失效** ——
+GitHub 那边授权还在，必须去 Settings → Applications → Authorized OAuth Apps → **Revoke**。
+
+我把三个选项摆出来（彻底撤销 / 换 fine-grained 窄 token / 留着），**用户选择「留着方便后续维护」**。
+于是做了两件事，让"留着"是有护栏的：
+1. `~/.local/bin/dsh-gh`（已进仓库 tools/）：`status` / `push "说明"` / `release <tag> <标题> <文件…>` / `revoke-hint`。
+   - `push` 用一次性 URL（**token 不写进 `.git/config`**），实测提交+推送成功；
+   - `release` 会**提醒资产名别用非 ASCII**（中文名会被 GitHub 吞成 `DSH.-x.apk`）；
+   - `revoke-hint` 把撤销步骤写成一条命令输出，免得以后再想。
+2. 笔记与热记忆都记下：token 位置/scope/**撤销的正确做法**（删文件 ≠ 撤销）。
+
+**给未来的自己**：要动这个 token 前先想清楚它是"全仓库钥匙"；不确定就先 `dsh-gh revoke-hint` 看一眼。
