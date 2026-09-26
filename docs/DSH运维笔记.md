@@ -7,7 +7,7 @@
 | 条目 | 作用 |
 |---|---|
 | `1_启动DSH.sh` | 后台启动 DSH Web（8080）。已在运行则直接打开浏览器（优先用 `~/.dsh-restart.log` 里的 token URL）。输出 tee 到 `~/.dsh-restart.log`；**启动失败会把退出状态和第一条错误行写进日志** |
-| `2_关闭DSH.sh` | 停服务 → **自动备份**（时间戳，留最近 5 份）→ 日志轮换为 `.bak` → 清 8080 端口 → **关 DSH 窗口**（`dsh-close-window`：adb 优先，否则借桥按键；**排在停桥之前**）→ 软停桥 → 收任务器 → 发布状态 → 释放锁/wakelock → **Termux 默认保留**（2026-09-27 改，`--close-termux` 才关） |
+| `2_关闭DSH.sh` | 停服务 → **自动备份**（时间戳，留最近 5 份）→ 日志轮换为 `.bak` → 清 8080 端口 → 关浏览器/DSH PWA → 关闭 Termux |
 | `3_备份DSH.sh` | **主动备份**：不关服务，立刻做一次时间戳备份；结果写 `备份/最近备份.txt` 与 `备份日志.txt` |
 | `4_软重启DSH.sh` | **软重启**（不杀进程）：只向服务发 SIGTERM 优雅退出（**不用 -9**）→ 备份 → 日志轮换 → 等端口释放 → 启动新服务；**不关浏览器/PWA、不关 Termux、不动其它进程**。若服务 15 秒内没优雅退出则放弃并提示改用硬重启。自检：`bash 4_软重启DSH.sh --dry-run` |
 | `6_硬重启DSH.sh` | **硬重启**（最后一项，最彻底）：优雅停 → **`-9` 强杀** dsh 服务 / 灵枢桥 `md_cg` / `dsh-termux-runtime` 残留 → 备份 → 日志轮换 → 等端口释放 → **关掉旧浏览器与 PWA 窗口**（保证新页面加载最新插件模块）→ 启动新服务。**插件改动后必须用硬重启**。自检：`bash 6_硬重启DSH.sh --dry-run` |
@@ -397,7 +397,7 @@ droid devices                        # 应显示 127.0.0.1:<端口>  device
 |---|---|---|
 | **0_紧急停止** | 撤销**四路**：桥自杀＋吊销 token＋清空共享目录指令＋**切断 adb**（`adb usb` 回退 → disconnect → kill-server）；结束残留自动化进程；打开无障碍设置页 | `--dry-run` ✅ |
 | **1_启动DSH** | 幂等（在跑就直接开浏览器）；**后台脱离启动**（`setsid nohup`，不再占住小组件会话）；轮询等端口 + HTTP 校验；顺带恢复 adb/唤醒桥 | `--dry-run` ✅（正确识别已运行，HTTP 401） |
-| **2_关闭DSH** | 优雅停→强杀；备份；日志轮换；等端口释放（必要时 `fuser -k`）；**关窗口（借桥，须在停桥前）**；软停桥；收任务器；发布状态。支持 `--no-backup/--keep-browser/--keep-bridge/--full-stop/--close-termux`（默认保留 Termux） | `--dry-run` ✅ |
+| **2_关闭DSH** | 优雅停→强杀；备份；日志轮换；等端口释放（必要时 `fuser -k`）；关浏览器/PWA；关 Termux。支持 `--no-backup/--keep-browser/--keep-termux` | `--dry-run` ✅ |
 | **3_备份DSH** | 备份后**校验归档**（大小、`tar -tzf` 条目数、sha256 前 16 位）；执行保留策略；报告份数与占用 | **真跑** ✅ 11M / 346 条目 |
 | **4_软重启DSH** | 只 SIGTERM，**15 秒不退就放弃、绝不 -9**（保护"软"的语义），提示改用硬重启 | `--dry-run` ✅ |
 | **5_清理DSH** | 备份留 5 份／截图留 50 张／清临时文件与大 zip／清 14 天前日志／`pnpm store prune`；**删日志前先把认证 URL 存进 `~/.dsh-url`** | **真跑** ✅ 释放 70MB，pnpm 清 418 包 |
@@ -1506,3 +1506,52 @@ GitHub 那边授权还在，必须去 Settings → Applications → Authorized O
 - `~/probe-gh.sh`（30 次探测，输出表+成功率）、`~/gh-monitor.sh`（15 分钟三合一监控）、日志 `~/gh-probe.log` `~/gh-monitor.log`
 - **App 日志捕捉已开启**（主页 → 日志 → 「点此启动」）→ 之后能从 Logcat 看到 `[TCP] ... match ... using ...`，下次"断"能直接抓到时刻与原因
 - 抓规则实证的手法：先 `curl https://github.com/` 触发连接，再截 Clash 日志页 + tesseract OCR（a11y 文本会被截断到 ~40 字符，长行必须 OCR）
+
+### 十三·补四十：「关闭 DSH」的两个真 bug（2026-09-27 02:4x，用户实测反馈 → 已修并实机验证）
+
+用户原话：`task插件和控制台的关闭指令有问题，那就是 dsh 的 webapk 界面没有关闭，还有如果关闭后短时间内进入控制台那么控制台将会刷新刷不出来`。
+
+**Bug A：关了 DSH，浏览器/PWA 窗口不关**
+根因有**两层**：
+1. `termux-am 0.8.1` **没有 force-stop 子命令** → 组件 2 里那句 `close_pkg com.android.chrome` 在没有 adb 时**从来没生效过**（只打印了"已关闭"），`pkill -f webapk` 也一样假——它只能杀 Termux 自己 UID 的进程，动不了 Chrome 名下的窗口。
+2. **顺序反了**：唯一能真正关别人窗口的通道是**无障碍桥**（把窗口带到前台 → 连按返回键直到前台不再是它），
+   而组件 2 的第 ⑥ 步**先把桥停了**，第 ⑦ 步才去关窗口 → 桥都停了，按键无人可借。
+
+**修法**：
+- 新增 `~/.local/bin/dsh-close-window`：adb 优先（`adb shell am force-stop com.android.chrome` + PWA 壳），
+  没有 adb 就借桥——`am start` 把窗口带到前台 + `droid-sock key back`（最多 6 次，每次看前台包名是否已离开 Chrome）。
+  带 `--probe`（只报告不动手，自测用）/`--dry-run`/`--keep-chrome`。
+- 组件 2 里把「关窗口」整块**挪到停桥之前**（现为第 ⑥ 步，停桥是第 ⑦ 步）。
+- 组件 6（硬重启）的 `--close-browser` 分支同样是假逻辑，一起改成调用 `dsh-close-window`。
+- 判定说明：PWA/TWA 窗口的**前台包名是 `com.android.chrome`**（Chrome 替 WebAPK 渲染），所以"窗口还在不在"看的就是它。
+
+**实机验证（不是推断）**：
+```
+$ dsh-close-window --probe
+  PWA 包名 : org.chromium.webapk.aa0f83489237f2919_v2
+  前台包名 : com.android.chrome      → 判定：DSH 窗口**在**前台
+$ dsh-close-window
+  → 走桥关闭（无障碍）
+     ✔ 窗口已关（按了 1 次返回键）
+$ droid-sock cur   →  {"pkg": "com.bbk.launcher2"}   ← 已回桌面，窗口真的没了
+（随后 dsh-browser-open 立刻开回来，前台回到 com.android.chrome，服务端 http=401 正常）
+```
+
+**Bug B：刚关完进控制台，「刷新状态」刷不出来**
+根因：组件 2 第 ⑩ 步会 **`kill -9` 掉 Termux 自己**。控制台 App 与 Termux 之间**只有 RUN_COMMAND 一条通道**，
+Termux 一死，它下一次「刷新状态」就得等系统把 Termux 冷启动起来，正好撞上控制台 25 秒的等待窗口 → 用户看到的就是"刷不出来"。
+另外 `dsh-status-pub` 每步各带自己的超时（桥 ping 14s + adb 12s + curl 8s…），最坏能拼到 30s+，**本身就超了 App 的 25s**。
+
+**修法**：
+- **Termux 默认保留**（新增 `--close-termux` 才连它一起关）。DSH/桥/任务器/wakelock 都已停，留着 Termux 几乎不耗电。
+- `dsh-status-pub` 加**整包硬预算**（默认 6s，`--budget N` 可调）：每步只许用剩余预算，撞预算的项标 `partial` 而不是假装红。
+- `droid-sock ping --fast`：单次连接、失败立刻返回，**不走"广播+拉界面"的唤醒阶梯**（那条最多 14s）。
+- 顺带修一个真 bug：`kill -9` Termux 时 EXIT trap 不会跑 → **孤儿启动锁**会留下，下次「启动 DSH」直接报"已有启动在跑"。
+  现在第 ⑨ 步（动 Termux 之前）**显式 `boot_lock_release`**。
+
+**自检也补了两条回归守卫**（防以后再退回去）：
+- `dsh-close-window` 存在且 `--probe` 可用；
+- **关窗口必须排在停桥之前**（比较两者在脚本里的真实调用行号：74 < 108）。
+
+**Clash 那条线的收尾**：15 分钟监控（端口/tun/实测三合一）跑完 = **16/16 全绿**，期间跨了一次订阅重载也没掉 →
+再次印证补三十九的结论：稳态隧道是好的，"断"主要来自**核心被停**。
