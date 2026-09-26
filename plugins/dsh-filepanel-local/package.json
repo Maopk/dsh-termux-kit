@@ -1,0 +1,17 @@
+{
+  "name": "dsh-filepanel-local",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local bundle wrapper for the DSH workspace file panel (Lings01/dsh-filepanel-plugin), adapted for the profile bundle environment.",
+  "main": "./host.js",
+  "exports": {
+    ".": "./host.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web" }
+  }
+}

@@ -1,0 +1,46 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# dsh-look —— DSH 自看：用无头 Chromium 把 DSH Web UI（或任意网页）截成图片
+# 用法：
+#   dsh-look                    # 截本机 DSH UI（自动取带 token 的 URL），存到 Download/dsh/图片/
+#   dsh-look <输出路径>          # 指定输出文件
+#   dsh-look <输出路径> <URL>    # 截指定 URL
+# 说明：token 从 ~/.dsh-restart.log 取（每次启动会写最新的一条）；失效时退化为普通地址。
+set -u
+
+HOME_DIR="/data/data/com.termux/files/home"
+PORT="${DSH_LOOK_PORT:-8080}"
+LOG="$HOME_DIR/.dsh-restart.log"
+OUT="${1:-$HOME_DIR/storage/downloads/dsh/图片/dsh-ui-$(date +%Y%m%d-%H%M%S).png}"
+URL="${2:-}"
+
+if [ -z "$URL" ]; then
+  TOKEN_URL="$(grep -oE "http://127\.0\.0\.1:${PORT}/\?token=[A-Za-z0-9_-]+" "$LOG" 2>/dev/null | tail -1)"
+  URL="${TOKEN_URL:-http://127.0.0.1:${PORT}/}"
+fi
+
+if ! command -v chromium >/dev/null 2>&1; then
+  echo "chromium 未安装：pkg install chromium" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "$OUT")"
+PROFILE_DIR="$HOME_DIR/.cache/chromium-look"
+
+chromium \
+  --headless=new \
+  --no-sandbox \
+  --disable-gpu \
+  --hide-scrollbars \
+  --disable-dev-shm-usage \
+  --user-data-dir="$PROFILE_DIR" \
+  --window-size="${DSH_LOOK_SIZE:-412,915}" \
+  --virtual-time-budget="${DSH_LOOK_WAIT_MS:-15000}" \
+  --screenshot="$OUT" \
+  "$URL" >/dev/null 2>&1
+
+if [ -s "$OUT" ]; then
+  echo "已截图: $OUT ($(du -h "$OUT" | cut -f1))"
+else
+  echo "截图失败（可试：DSH_LOOK_WAIT_MS=25000 dsh-look）" >&2
+  exit 1
+fi

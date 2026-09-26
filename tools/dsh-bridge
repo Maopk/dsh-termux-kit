@@ -1,0 +1,59 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# dsh-bridge —— **只**操作「DSH 桥」（无障碍回环通道），与 adb 完全分开。
+#
+# 为什么单独做一个：桥和 adb 是两条独立的命——
+#   · 桥：无障碍 App + 127.0.0.1:8788 + token，走回环，**不需要网络**；
+#   · adb：无线调试 + wlan 接口，**必须有可用 Wi-Fi 网络**。
+#   以前「7_重连AI通道」把两者揉在一起（adb 失败就顺带喊一下桥），
+#   于是"桥没起来"和"adb 没连上"分不清是谁的问题。现在各管各的。
+#
+# 用法：
+#   dsh-bridge status   看桥状态（端口 / 真应答 / 版本 / 是否 paused）
+#   dsh-bridge wake     唤醒（带 token 的广播；服务被关掉时它会自动重新授权无障碍）
+#   dsh-bridge stop     软停（关端口+撤通知，v1.8 起不会自己回来；进程留着，一秒可恢复）
+#   dsh-bridge off      真停（连无障碍一起关；之后需要你手动开或由 wake 重新授权）
+set -u
+HOME_DIR="/data/data/com.termux/files/home"
+. "$HOME_DIR/.local/share/dsh-widgets/common.sh"
+SOCK="$HOME_DIR/.local/bin/droid-sock"
+
+case "${1:-status}" in
+  status)
+    if ! port_open 8788; then
+      printf '桥：未监听（8788 关闭）\n'
+      exit 2
+    fi
+    P=$(timeout 12 "$SOCK" ping 2>/dev/null || true)
+    if printf '%s' "$P" | grep -q '"pong": true'; then
+      V=$(printf '%s' "$P" | grep -oE '"ver": *"[^"]*"' | grep -oE '[0-9.]+')
+      PA=$(printf '%s' "$P" | grep -oE '"paused": *(true|false)' | grep -oE '(true|false)')
+      printf '桥：在监听且应答　版本 v%s　paused=%s\n' "${V:-?}" "${PA:-?}"
+      exit 0
+    fi
+    printf '桥：端口在听但不答应（多半被系统冻结）→ 建议 dsh-bridge wake\n'
+    exit 3
+    ;;
+  wake)
+    if bridge_alive; then ok "桥本来就在应答，无需唤醒"; exit 0; fi
+    printf '→ 唤醒桥（带 token 的广播）…\n'
+    bridge_wake
+    if bridge_alive; then
+      ok "桥已唤醒"
+      exit 0
+    fi
+    bridge_wake
+    if bridge_alive; then ok "桥已唤醒（第二拍）"; exit 0; fi
+    bad "桥没起来：token 被吊销 或 无障碍被关（设置→无障碍→DSH 桥）"
+    exit 1
+    ;;
+  stop)
+    if ! port_open 8788; then ok "桥本来就没在听"; exit 0; fi
+    timeout 15 "$SOCK" stop >/dev/null 2>&1 && { sleep 1; port_open 8788 && warn "仍在听" || ok "已软停（进程留着，wake 一秒恢复）"; } \
+      || bad "stop 指令没成功"
+    ;;
+  off)
+    timeout 20 "$SOCK" sleep >/dev/null 2>&1 && { sleep 1; port_open 8788 && warn "仍在听" || ok "已真停（无障碍也关了）"; } \
+      || bad "sleep 指令没成功"
+    ;;
+  *) sed -n '2,20p' "$0"; exit 2 ;;
+esac

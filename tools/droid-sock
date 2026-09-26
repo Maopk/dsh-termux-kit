@@ -1,0 +1,181 @@
+#!/data/data/com.termux/files/usr/bin/python3
+# droid-sock —— 与自建 App「DSH 桥」通信（127.0.0.1:8788，token 鉴权）
+# 用法（与 droid / droid-hub 对齐）：
+#   droid-sock ping | cur | ui [关键词] | shot [路径]
+#   droid-sock tap X Y | longpress X Y [毫秒] | swipe x1 y1 x2 y2 [毫秒]
+#   droid-sock text '文字' | key back|home|recents|notifications | start <包名>
+# token：先写进 ~/.dsh-bridge-token
+import base64
+import json
+import os
+import socket
+import sys
+import time
+
+HOST = '127.0.0.1'
+PORT = 8788
+TOKEN_FILE = os.path.expanduser('~/.dsh-bridge-token')
+IMG_DIR = os.path.expanduser('~/storage/downloads/dsh/图片')
+
+
+def load_token():
+    if os.path.exists(TOKEN_FILE):
+        t = open(TOKEN_FILE, encoding='utf-8').read().strip()
+        if t:
+            return t
+    return os.environ.get('DSH_BRIDGE_TOKEN', '').strip()
+
+
+def wake_bridge(stage=1):
+    """唤醒桥：stage=1 用显式广播（不打扰用户）；stage=2 才拉起界面（会占用前台）
+
+    广播里带上 token：桥 v1.7 起用它做「重新授权」——软停/自杀后无障碍被系统解绑，
+    只有带对 token 的唤醒才允许把自己重新挂回无障碍（否则任何 App 都能把它拉起来）。
+    旧版桥忽略这个 extra，行为不变。
+    """
+    import subprocess
+    try:
+        if stage == 1:
+            cmd = ['am', 'broadcast', '-a', 'io.dsh.bridge.WAKE',
+                   '-n', 'io.dsh.bridge/.WakeReceiver']
+            tok = load_token()
+            if tok:
+                cmd += ['--es', 'token', tok]
+            subprocess.run(cmd, capture_output=True, timeout=10)
+            time.sleep(1.5)
+        else:
+            subprocess.run(['am', 'start', '-n', 'io.dsh.bridge/.MainActivity'],
+                           capture_output=True, timeout=10)
+            time.sleep(2.0)
+    except Exception:
+        return False
+    return True
+
+
+def _connect_once(timeout):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    s.connect((HOST, PORT))
+    return s
+
+
+def call(obj, timeout=40):
+    tok = load_token()
+    if not tok:
+        print('❌ 还没有 token。请打开手机上的「DSH 桥」App，把它显示的 token 发我，'
+              '或自己写进 ' + TOKEN_FILE, file=sys.stderr)
+        sys.exit(2)
+    req = dict(obj)
+    req['token'] = tok
+    try:
+        s = _connect_once(timeout)
+    except Exception as first:
+        # 阶梯唤醒：① 广播（静默）→ ② 拉界面（兜底）
+        s = None
+        stages = (1, 2) if os.environ.get('DSH_BRIDGE_WAKE_UI') == '1' else (1,)
+        for stage in stages:
+            wake_bridge(stage)
+            try:
+                s = _connect_once(timeout)
+                break
+            except Exception:
+                s = None
+        if s is None:
+            print('❌ 连不上 DSH 桥（%s:%d）：广播唤醒与拉界面都试过了仍失败\n'
+                  '   请确认：无障碍里「DSH 桥」是开启状态（重新开启必须由你本人在系统设置里确认）'
+                  % (HOST, PORT), file=sys.stderr)
+            sys.exit(3)
+    s.sendall((json.dumps(req, ensure_ascii=False) + '\n').encode('utf-8'))
+    buf = b''
+    try:
+        while not buf.endswith(b'\n'):
+            chunk = s.recv(1 << 16)
+            if not chunk:
+                break
+            buf += chunk
+    finally:
+        s.close()
+    if not buf:
+        print('❌ 没有响应', file=sys.stderr)
+        sys.exit(4)
+    return json.loads(buf.decode('utf-8', 'replace'))
+
+
+def main():
+    a = sys.argv[1:]
+    if not a:
+        print(__doc__ or '')
+        print('用法: droid-sock ping|cur|ui|shot|tap|longpress|swipe|text|key|start ...')
+        return 2
+    k = a[0]
+    if k == 'ping':
+        r = call({'action': 'ping'})
+    elif k == 'cur':
+        r = call({'action': 'cur'})
+    elif k == 'netstate':      # Wi-Fi 开关 + 是否真的能上网（桥直连测试）
+        r = call({'action': 'netstate'}, timeout=15)
+    elif k == 'adbwifi':       # 开关「无线调试」（需要 WRITE_SECURE_SETTINGS）
+        r = call({'action': 'adbwifi', 'value': int(a[1]) if len(a) > 1 else 1}, timeout=15)
+    elif k == 'caps':          # 桥支持的动作清单（判断新旧版本用；旧版会回错误）
+        r = call({'action': 'caps'}, timeout=15)
+    elif k == 'sleep':         # 真停（v1.7+）：关端口 + 停前台服务 + 关闭自身无障碍，不会自恢复
+        r = call({'action': 'sleep'}, timeout=20)
+    elif k == 'wake':          # 只唤醒，不取数据（带 token 时 v1.7 可重新授权无障碍）
+        wake_bridge(1)
+        print('已发送唤醒广播')
+        return 0
+    elif k == 'stop':          # 软停：只关端口，无障碍保留（用于验证「广播唤醒」）
+        r = call({'action': 'stop'})
+    elif k == 'panic':         # 硬停：关端口 + 关闭无障碍
+        r = call({'action': 'panic'})
+    elif k == 'ui':
+        r = call({'action': 'ui', 'keyword': a[1] if len(a) > 1 else '',
+                  'limit': int(a[2]) if len(a) > 2 else 40})
+    elif k == 'shot':
+        r = call({'action': 'shot'}, timeout=60)
+    elif k == 'tap':
+        r = call({'action': 'tap', 'x': int(a[1]), 'y': int(a[2])})
+    elif k == 'longpress':
+        r = call({'action': 'longpress', 'x': int(a[1]), 'y': int(a[2]),
+                  'ms': int(a[3]) if len(a) > 3 else 800})
+    elif k == 'swipe':
+        r = call({'action': 'swipe', 'x1': int(a[1]), 'y1': int(a[2]),
+                  'x2': int(a[3]), 'y2': int(a[4]), 'ms': int(a[5]) if len(a) > 5 else 300})
+    elif k == 'text':
+        r = call({'action': 'text', 'value': a[1] if len(a) > 1 else ''})
+    elif k == 'key':
+        r = call({'action': 'key', 'value': a[1] if len(a) > 1 else 'back'})
+    elif k == 'start':
+        r = call({'action': 'start', 'value': a[1]})
+    else:
+        print('未知用法: ' + k, file=sys.stderr)
+        return 2
+
+    if not r.get('ok'):
+        print('❌ ' + str(r.get('error')), file=sys.stderr)
+        return 1
+    d = r.get('data') or {}
+
+    if 'png' in d:
+        os.makedirs(IMG_DIR, exist_ok=True)
+        path = a[1] if len(a) > 1 else os.path.join(IMG_DIR, 'droid-%s.png' % time.strftime('%Y%m%d-%H%M%S'))
+        raw = base64.b64decode(d['png'])
+        open(path, 'wb').write(raw)
+        print('已截图: %s (%.1f KB)' % (path, len(raw) / 1024))
+        return 0
+
+    if 'nodes' in d:
+        for n in d['nodes']:
+            c = n.get('center') or [0, 0]
+            print('  [%d,%d] %-18s text=%-42s desc=%-24s id=%s' % (
+                c[0], c[1], n.get('cls', ''), repr(n.get('text', ''))[:42],
+                repr(n.get('desc', ''))[:24], (n.get('id', '') or '')[-30:]))
+        print('  共 %d 个节点' % d.get('count', 0))
+        return 0
+
+    print('✅ ' + json.dumps(d, ensure_ascii=False)[:800])
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

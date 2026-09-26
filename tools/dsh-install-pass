@@ -1,0 +1,5 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# 已改名：dsh-install-pass → **dsh-auth-pass**（语义纠正：那 6 位是"系统身份验证的通用凭据"，
+# 不只用于安装）。这里保留一个转发壳，免得旧笔记/肌肉记忆踩空。
+printf '注意：dsh-install-pass 已改名为 dsh-auth-pass（语义：AI 能否动用你的密码，不只安装）\n' >&2
+exec "$HOME/.local/bin/dsh-auth-pass" "$@"

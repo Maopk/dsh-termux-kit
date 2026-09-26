@@ -1,0 +1,71 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# droid-pair —— 一次搞定无线调试配对与连接（只需你提供 6 位配对码，端口自动找）
+# 用法：droid-pair <6位配对码>          （配对对话框必须开着）
+#       droid-pair                      只做「重新连接」（已配对过时用）
+set -u
+CODE="${1:-}"
+
+find_port() {   # $1 = pairing | connect
+  python3 - "$1" <<'PY'
+import socket, sys, time
+from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
+want = 'pairing' if sys.argv[1] == 'pairing' else 'connect'
+found = []
+class L(ServiceListener):
+    def add_service(self, zc, type_, name):
+        info = zc.get_service_info(type_, name, timeout=2500)
+        if info and want in type_:
+            for a in info.addresses:
+                found.append((socket.inet_ntoa(a), info.port))
+    def update_service(self, *a): pass
+    def remove_service(self, *a): pass
+zc = Zeroconf()
+ServiceBrowser(zc, ['_adb-tls-pairing._tcp.local.', '_adb-tls-connect._tcp.local.'], L())
+deadline = time.time() + 22
+while time.time() < deadline and not found:
+    time.sleep(0.5)
+zc.close()
+if found:
+    ip, port = found[0]
+    print('%s:%d' % (ip, port))
+PY
+}
+
+MANUAL_PORT="${2:-}"
+if [ -n "$CODE" ]; then
+  if [ -n "$MANUAL_PORT" ]; then
+    PAIR="127.0.0.1:$MANUAL_PORT"
+    echo "① 使用你给的配对端口: $PAIR"
+  else
+  echo "① 找配对端口（mDNS，最多 22 秒）…"
+  PAIR="$(find_port pairing)"
+  if [ -z "$PAIR" ]; then
+    echo "❌ 没发现配对服务。可以改成手工指定端口：droid-pair <配对码> <配对端口>"
+    exit 1
+  fi
+  fi
+  echo "   配对服务: $PAIR"
+  echo "② 配对（配对码 $CODE）"
+  adb pair "${PAIR%:*}:${PAIR##*:}" "$CODE" 2>&1 | tail -3
+else
+  echo "① 跳过配对，直接重连"
+fi
+
+echo "③ 找连接端口 …"
+CONN="$(find_port connect)"
+CONN="${CONN:-192.168.137.170:43321}"
+echo "   连接目标: $CONN"
+adb connect "$CONN" 2>&1 | tail -2
+sleep 1
+
+echo "④ 设备状态"
+adb devices -l | tail -n +2
+if adb devices | awk 'NR>1 && $2=="device"' | grep -q .; then
+  echo "⑤ 验证 shell"
+  adb shell echo "adb-ok: \$(getprop ro.product.model)" 2>&1 | tail -1
+  echo
+  echo "✅ 无线调试通道打通。接下来可选：固定端口（关掉 Wi-Fi 也能用，重启前有效）"
+  echo "   执行：adb tcpip 5555 && adb connect 127.0.0.1:5555"
+else
+  echo "⚠️ 还没连上。若显示 unauthorized，请在手机屏幕上点『允许调试』；若显示 offline，重开一次无线调试再试。"
+fi

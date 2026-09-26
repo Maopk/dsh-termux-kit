@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DSH 桥 —— 自建最小无障碍桥接 App（源码全部可读，无第三方 SDK）
+  权限只有三个，每个都有明确用途：
+    · INTERNET                 仅监听 127.0.0.1:8788（本机回环），代码里没有第二个联网点
+    · BIND_ACCESSIBILITY_SERVICE  无障碍服务系统要求
+    · POST_NOTIFICATIONS       常驻通知栏「正在运行 + 紧急停止」按钮（安全可见性）
+  没有：短信/通讯录/定位/相机/录音/读应用列表/悬浮窗/发起安装 等权限。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="io.dsh.bridge"
+    android:versionCode="8"
+    android:versionName="1.8">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 用途唯一：读写「无线调试」开关（Settings.Global.adb_wifi_enabled）与 Wi-Fi 状态。
+         该权限属 development 级，必须由用户用 adb 显式授予（pm grant），不会自动获得。 -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <!-- 前台服务：让桥的进程不被系统/厂商省电策略冻结（冻结后连广播唤醒都收不到） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+
+    <application
+        android:label="DSH 桥"
+        android:allowBackup="false"
+        android:debuggable="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:label="DSH 桥"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".BridgeService"
+            android:label="DSH 桥"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_config" />
+        </service>
+
+        <service
+            android:name=".BridgeForeground"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="无障碍桥接保持常驻，防止厂商省电策略冻结导致失联" />
+        </service>
+
+        <!-- 唤醒接收器：Termux 用 am broadcast 就能让桥重新开监听（导出，因为其它 App 需要能发给它）。
+             服务还活着时：任何 App 都能唤醒，但端口仍要 token 才能下指令。
+             服务已被关闭时（sleep/panic/被系统解绑）：广播必须带对 token（extra 名为 token）
+             才允许把自己重新写回系统无障碍列表，否则任何 App 都能把用户关掉的无障碍拉起来。 -->
+        <receiver
+            android:name=".WakeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="io.dsh.bridge.WAKE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 通知栏「紧急停止」按钮的接收器；不导出，只有本 App 能发 -->
+        <receiver
+            android:name=".PanicReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="io.dsh.bridge.PANIC" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

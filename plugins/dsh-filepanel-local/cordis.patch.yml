@@ -1,0 +1,4 @@
+# 本地文件面板 bundle：插入指向本包的组合行
+- insert:
+    - id: filepanel
+      name: dsh-filepanel-local

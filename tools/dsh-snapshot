@@ -1,0 +1,168 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# dsh-snapshot —— 「把全部东西装进一个文件」的现实版本（完整快照 / 换机迁移）
+#
+# 和 dsh-backup 的区别：
+#   dsh-backup   只存**状态**（会话/设置/插件清单/笔记），约 11-14MB，每次关 DSH 自动跑；
+#   dsh-snapshot 存**整个环境**（Termux 前缀 2.6G + DSH 运行时 495M + ~/.dsh + 我写的运维层），
+#                压缩后约 1~1.5GB —— 换机/重装后一条命令还原，不用重新联网装依赖。
+#
+# 用法：
+#   dsh-snapshot                 # 打包（默认不含 pnpm store 等缓存）
+#   dsh-snapshot --with-store    # 连 pnpm store(约 674MB) 一起打，还原后完全离线可用
+#   dsh-snapshot --out DIR       # 指定输出目录
+#   dsh-snapshot --list          # 列出已有完整快照
+#   dsh-snapshot --verify FILE   # 只校验某个快照
+#
+# 还原（同版本 Termux 装好后，无需 root）：
+#   pkg install -y zstd
+#   tar -I zstd -xf /sdcard/Download/dsh/备份/dsh-full-*.tar.zst -C /
+#   bash ~/.shortcuts/tasks/1_启动DSH.sh
+set -u
+
+HOME_DIR="/data/data/com.termux/files/home"
+PREFIX_DIR="/data/data/com.termux/files/usr"
+DEST="${DSH_BACKUP_DEST:-$HOME_DIR/storage/downloads/dsh/备份}"
+STAMP="$(date '+%Y%m%d-%H%M%S')"
+NAME="dsh-full-${STAMP}.tar.zst"
+KEEP="${DSH_SNAPSHOT_KEEP:-3}"        # 完整快照很占地方：默认只留最近 3 份
+META_DIR="$HOME_DIR/.snapshot-meta"   # 临时目录，装完就删（会被塞进归档的 META/）
+
+WITH_STORE=0; OUT="$DEST"; VERIFY_ONLY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --with-store) WITH_STORE=1 ;;
+    --out) OUT="$2"; shift ;;
+    --list) ls -lh "$DEST"/dsh-full-*.tar.zst 2>/dev/null || echo "（还没有完整快照）"; exit 0 ;;
+    --verify) VERIFY_ONLY="$2"; shift ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    *) echo "未知参数: $1"; exit 2 ;;
+  esac
+  shift
+done
+
+ZSTD="$(command -v zstd 2>/dev/null || true)"
+[ -x "$ZSTD" ] || ZSTD="$PREFIX_DIR/glibc/bin/zstd"
+[ -x "$ZSTD" ] || { echo "✘ 找不到 zstd（pkg install zstd）"; exit 1; }
+
+T0=$(date +%s)
+say() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*"; }
+human() { numfmt --to=iec "$1" 2>/dev/null || echo "$1 B"; }
+
+# ── 校验：完整读一遍（zstd 自带 CRC，能读完=数据完整）+ 条目数 + sha256 ──
+verify() {
+  local f="$1"
+  [ -f "$f" ] || { echo "   ✘ 文件不存在: $f"; return 1; }
+  say "校验 $(basename "$f")（$(human "$(stat -c%s "$f")")）…"
+  # zstd -t 会把整个流解一遍并校验 CRC/长度：截断或损坏必定非 0
+  if ! "$ZSTD" -t "$f" >/dev/null 2>&1; then
+    echo "   ✘ 完整性检查失败（压缩流被截断或损坏）"; return 1
+  fi
+  local n; n=$("$ZSTD" -dc "$f" 2>/dev/null | tar -tf - 2>/dev/null | wc -l)
+  if [ "$n" -lt 1000 ]; then echo "   ✘ 归档异常：只有 $n 个条目"; return 1; fi
+  echo "   ✔ 完整性通过（zstd -t 退出 0），含 $n 个条目"
+  echo "   sha256: $(sha256sum "$f" | cut -c1-32)…"
+  return 0
+}
+if [ -n "$VERIFY_ONLY" ]; then verify "$VERIFY_ONLY"; exit $?; fi
+
+ARCHIVE="$OUT/$NAME"
+PART="${ARCHIVE}.part"
+mkdir -p "$OUT" "$HOME_DIR/.smoke"
+
+# ── 先把「还原说明 + 清单」写到一个会被打进包里的临时目录 ──
+rm -rf "$META_DIR"; mkdir -p "$META_DIR/META"
+{
+  echo "# DSH 完整快照 · 还原说明"
+  echo
+  echo "生成时间: $(date '+%F %T')"
+  echo "来源设备: $(getprop ro.product.model 2>/dev/null) / Android $(getprop ro.build.version.release 2>/dev/null) / $(getprop ro.product.cpu.abi 2>/dev/null)"
+  echo "pnpm store: $([ "$WITH_STORE" = 1 ] && echo '已包含（可离线重装依赖）' || echo '未包含（下次 pnpm install 需联网）')"
+  echo
+  echo "## 还原步骤（先装同版本 Termux，无需 root）"
+  echo '```bash'
+  echo "pkg install -y zstd"
+  echo "tar -I zstd -xf <这个文件> -C /"
+  echo "bash ~/.shortcuts/tasks/1_启动DSH.sh"
+  echo '```'
+  echo
+  echo "## 说明"
+  echo "- 归档里全是 /data/data/com.termux/... 的绝对路径；owner 记作 0，解包时非 root 会自动落成当前 Termux 的 UID。"
+  echo "- 不含：storage/（你的手机存储）、~/.smoke（缓存）、~/.npm、~/.cache、~/.dsh/profiles.bak-*。"
+  echo "- ⚠ 凭据（.credentials.yaml、桥 token）**在包内** —— 这是完整快照，请当敏感文件保管。"
+} > "$META_DIR/META/RESTORE.md"
+{
+  echo "生成时间: $(date '+%F %T')"
+  echo
+  echo "== 各部分体积 =="
+  du -sh "$PREFIX_DIR" "$HOME_DIR/.dsh" "$HOME_DIR/.local/opt/dsh-termux-runtime" \
+        "$HOME_DIR/.local/bin" "$HOME_DIR/.local/share/dsh-widgets" "$HOME_DIR/.shortcuts" 2>/dev/null
+  echo
+  echo "== 关键版本 =="
+  echo "node: $(node -v 2>/dev/null)"
+  echo "dsh : $(dsh --version 2>/dev/null | tail -1)"
+  echo "python: $(python3 -V 2>/dev/null)"
+} > "$META_DIR/META/MANIFEST.txt"
+
+EXCLUDES=(
+  "--exclude=home/.npm"
+  "--exclude=home/.cache"
+  "--exclude=home/.dsh/cache"
+  "--exclude=home/.dsh/profiles.bak-*"
+  "--exclude=home/.smoke"
+  "--exclude=home/storage"
+  # 注意：不要 exclude home/.snapshot-meta —— tar 的 --exclude 对命令行成员同样生效，
+  # 会把要打进包的 META/ 一起排掉（踩过）
+  "--exclude=*/tmp/*"
+  "--exclude=*.sock"
+)
+[ "$WITH_STORE" = 1 ] || EXCLUDES+=("--exclude=home/.local/share/pnpm")
+
+say "① 打包（zstd -T0 -3；源约 3.9GB，预计几分钟）"
+say "   输出：$ARCHIVE"
+say "   pnpm store：$([ "$WITH_STORE" = 1 ] && echo '包含' || echo '排除（--with-store 可包含）')"
+
+cd / || exit 1
+# owner/group 记 0：Termux 的 UID 是安装时分配的，记 0 才能在换机后由当前 UID 正常落地
+nice -n 10 tar \
+  --owner=0 --group=0 --numeric-owner \
+  --warning=no-file-changed --warning=no-file-ignored \
+  "${EXCLUDES[@]}" \
+  -I "$ZSTD -T0 -3 -q" \
+  -cf "$PART" \
+  data/data/com.termux/files/usr \
+  data/data/com.termux/files/home/.dsh \
+  data/data/com.termux/files/home/.local/opt/dsh-termux-runtime \
+  data/data/com.termux/files/home/.local/bin \
+  data/data/com.termux/files/home/.local/share/dsh-widgets \
+  data/data/com.termux/files/home/.shortcuts \
+  data/data/com.termux/files/home/.bashrc \
+  data/data/com.termux/files/home/.termux \
+  data/data/com.termux/files/home/droid-bridge \
+  data/data/com.termux/files/home/.clash-opt \
+  data/data/com.termux/files/home/DSH运维笔记.md \
+  data/data/com.termux/files/home/.snapshot-meta \
+  2> "$HOME_DIR/.smoke/snapshot-warn.log"
+RC=$?
+rm -rf "$META_DIR"
+# GNU tar：0=完全正常，1=有文件在读取时被改动（DSH 正在写会话/日志，属正常），≥2=致命
+if [ "$RC" -ge 2 ]; then
+  echo "✘ tar 退出码 $RC（致命）"; tail -3 "$HOME_DIR/.smoke/snapshot-warn.log" 2>/dev/null
+  rm -f "$PART"; exit 1
+fi
+[ "$RC" = 1 ] && say "   ⚠ tar 报告有文件在读取时被改动（DSH 正在写会话）——归档仍然完整，见下一步校验"
+mv -f "$PART" "$ARCHIVE"
+
+say "② 校验（完整读一遍，zstd 会校验 CRC）"
+verify "$ARCHIVE" || { echo "✘ 校验失败 → 删掉这个不可信的归档"; rm -f "$ARCHIVE"; exit 1; }
+
+say "③ 保留策略（完整快照只留最近 $KEEP 份）"
+ls -1t "$OUT"/dsh-full-*.tar.zst 2>/dev/null | tail -n +$((KEEP+1)) | while read -r f; do
+  rm -f "$f" && say "   删除旧快照 $(basename "$f")"
+done
+
+SZ=$(stat -c%s "$ARCHIVE")
+say "④ 完成，用时 $(( $(date +%s) - T0 ))s"
+echo
+echo "   快照：$ARCHIVE"
+echo "   大小：$(human "$SZ")（源数据约 3.9GB）"
+echo "   还原：tar -I zstd -xf \"$ARCHIVE\" -C /"

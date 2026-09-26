@@ -1,0 +1,258 @@
+// dsh-selflook-local —— 客户端半部（bundle 规范：模块加载器 CJS 工厂）
+// 每 2 秒向宿主轮询一次；收到请求就把当前页面渲染成 PNG 回传。
+// 四级兜底：① 整页+CSS → ② 视口+CSS → ③ 整页无CSS → ④ 文字快照（必定成功）
+//
+// 两个关键坑（2026-09-26 实测）：
+// 1) XML 层面：插件注入的 CSS 里含原始 `<`（data:image/svg+xml 图标）与 `&`，
+//    直接塞进 <style> 会让 SVG 解析失败（img.onerror）→ 必须用 CDATA 包裹。
+// 2) canvas 污染层面：SVG 以 blob:/data: 作为图片加载时是不透明源，
+//    页面里任何“同源”外链资源也算跨域 → canvas 被污染、导出被拒。
+//    因此所有外链（img/srcset/CSS url()）一律换成 data: 或占位。
+window.__ModuleLoader__.load({
+  id: 'dsh-selflook-local',
+  factory: (require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+
+    const inject = ['timer'];
+    const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+    async function rpc(method, payload) {
+      const resp = await fetch('/__dsh__/selflook/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ method: method }, payload || {})),
+      });
+      return await resp.json();
+    }
+
+    async function report(message) {
+      try { await rpc('log', { message: String(message).slice(0, 800) }); } catch (e) { /* ignore */ }
+    }
+
+    // 非法 XML 实体（&nbsp; 等）会让 SVG 解析失败
+    function repairXml(text) {
+      return String(text).replace(/&(?!(#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);)/g, '&amp;');
+    }
+
+    // CSS 塞进 CDATA：允许裸 < > &（只须避开 ]]> 结束标记）
+    function cdata(text) {
+      return '<![CDATA[' + String(text).split(']]>').join(']]]]><![CDATA[>') + ']]>';
+    }
+
+    // 只保留 data: 资源，其余 url() 一律去掉（否则污染 canvas）
+    function stripExternalUrls(css) {
+      return String(css).replace(/url\(([^)]*)\)/g, (m, u) => (/^\s*['"]?\s*data:/i.test(u) ? m : 'none'));
+    }
+
+    function blobToDataUrl(blob) {
+      return new Promise((resolve, reject) => {
+        const fr = new window.FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = () => reject(new Error('FileReader 失败'));
+        fr.readAsDataURL(blob);
+      });
+    }
+
+    // 把克隆体里的外链 img / srcset / 内联背景图全部本地化
+    async function localizeResources(clone) {
+      let inlined = 0;
+      let dropped = 0;
+      for (const img of Array.from(clone.querySelectorAll('img'))) {
+        const src = img.getAttribute('src') || '';
+        if (src.startsWith('data:')) { inlined++; continue; }
+        if (src === '') { img.setAttribute('src', BLANK); dropped++; continue; }
+        let abs = null;
+        try { abs = new window.URL(src, window.location.href); } catch (e) { abs = null; }
+        if (!abs || abs.origin !== window.location.origin) {
+          img.setAttribute('src', BLANK); dropped++; continue;
+        }
+        try {
+          const resp = await fetch(abs.href);
+          img.setAttribute('src', await blobToDataUrl(await resp.blob()));
+          inlined++;
+        } catch (e) {
+          img.setAttribute('src', BLANK); dropped++;
+        }
+      }
+      clone.querySelectorAll('[srcset]').forEach((n) => n.removeAttribute('srcset'));
+      clone.querySelectorAll('[style]').forEach((n) => {
+        const s = n.getAttribute('style') || '';
+        if (s.indexOf('url(') >= 0) n.setAttribute('style', stripExternalUrls(s));
+      });
+      return '图片内联' + inlined + '/占位' + dropped;
+    }
+
+    // canvas 内容不会随 cloneNode 复制，用 dataURL 转成 <img> 贴回去
+    function snapshotCanvases(clone) {
+      const srcs = document.querySelectorAll('canvas');
+      const dsts = clone.querySelectorAll('canvas');
+      let n = 0;
+      for (let i = 0; i < dsts.length && i < srcs.length; i++) {
+        try {
+          const r = srcs[i].getBoundingClientRect();
+          if (r.width < 2 || r.height < 2) continue;
+          const img = document.createElement('img');
+          img.setAttribute('src', srcs[i].toDataURL('image/png'));
+          img.setAttribute('width', String(Math.round(r.width)));
+          img.setAttribute('height', String(Math.round(r.height)));
+          dsts[i].parentNode.replaceChild(img, dsts[i]);
+          n++;
+        } catch (e) { /* 污染或空 canvas：保留空白 */ }
+      }
+      return n;
+    }
+
+    function collectCss() {
+      let css = '';
+      for (const sheet of Array.from(document.styleSheets)) {
+        if (css.length > 240000) break;
+        try {
+          for (const rule of Array.from(sheet.cssRules)) css += rule.cssText + '\n';
+        } catch (e) { /* 跨域样式表跳过 */ }
+      }
+      return stripExternalUrls(css);
+    }
+
+    // 一次性把页面状态固化成可渲染的数据
+    async function prepare() {
+      const w = document.documentElement.clientWidth;
+      const fullH = Math.min(document.documentElement.scrollHeight, 2400);
+      const viewH = document.documentElement.clientHeight;
+      const bg = getComputedStyle(document.body).backgroundColor || '#ffffff';
+
+      const clone = document.body.cloneNode(true);
+      clone.querySelectorAll('script').forEach((n) => n.remove());
+      const imgInfo = await localizeResources(clone);
+      const nCanvas = snapshotCanvases(clone);
+      const html = new window.XMLSerializer().serializeToString(clone);
+      const css = collectCss();
+      return { w, fullH, viewH, bg, html, css, imgInfo, nCanvas };
+    }
+
+    // 把 HTML+CSS 渲成一个 PNG（base64）；失败会抛错，由调用方降级
+    async function renderToPng(html, css, w, h, bg) {
+      const win = window;
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">' +
+        '<foreignObject x="0" y="0" width="100%" height="100%">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="width:' + w + 'px;background:' + bg + '">' +
+        (css ? '<style>' + cdata(css) + '</style>' : '') +
+        repairXml(html) +
+        '</div></foreignObject></svg>';
+      const blob = new win.Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = win.URL.createObjectURL(blob);
+      const img = new win.Image();
+      try {
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error('SVG渲染失败 svg=' + svg.length + ' html=' + html.length + ' css=' + css.length));
+          img.src = url;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const c = canvas.getContext('2d', { willReadFrequently: true });
+        c.fillStyle = bg; c.fillRect(0, 0, w, h);
+        c.drawImage(img, 0, 0);
+        try {
+          const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+          if (pngBlob) {
+            const bytes = new Uint8Array(await pngBlob.arrayBuffer());
+            let bin = '';
+            for (let i = 0; i < bytes.length; i += 8192) {
+              bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+            }
+            return win.btoa(bin);
+          }
+        } catch (e) { await report('toBlob 异常，改用 dataURL: ' + ((e && e.message) || e)); }
+        const dataUrl = canvas.toDataURL('image/png');
+        return dataUrl.slice(dataUrl.indexOf(',') + 1);
+      } finally {
+        win.URL.revokeObjectURL(url);
+      }
+    }
+
+    // 保底方案：把界面可见文字结构化上报（无需渲染，必定成功）
+    function textSnapshot() {
+      const lines = [];
+      lines.push('VIEWPORT ' + window.innerWidth + 'x' + window.innerHeight +
+        ' scrollY=' + Math.round(window.scrollY) + ' title=' + document.title);
+      let n = 0;
+      for (const el of document.body.querySelectorAll('*')) {
+        if (n >= 400) break;
+        const r = el.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) continue;
+        if (r.bottom < -20 || r.top > window.innerHeight + 20) continue;
+        let own = '';
+        for (const node of el.childNodes) if (node.nodeType === 3) own += node.textContent;
+        own = own.replace(/\s+/g, ' ').trim();
+        if (own === '') continue;
+        lines.push('[' + el.tagName.toLowerCase() + ' @' + Math.round(r.left) + ',' + Math.round(r.top) +
+          ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + '] ' + own.slice(0, 140));
+        n++;
+      }
+      return lines.join('\n');
+    }
+
+    async function sendTextSnapshot(text) {
+      await report('TEXT-SNAPSHOT 开始，共 ' + text.length + ' 字符');
+      const CH = 1500;
+      for (let i = 0; i < text.length; i += CH) {
+        await rpc('log', { message: 'SNAP|' + text.slice(i, i + CH) });
+      }
+      await report('TEXT-SNAPSHOT 结束');
+    }
+
+    function apply(ctx) {
+      let busy = false;
+
+      async function doCapture() {
+        const p = await prepare();
+        await report('收到触发：DOM=' + document.getElementsByTagName('*').length +
+          ' 视口=' + p.w + 'x' + p.viewH + ' 整页高=' + p.fullH +
+          ' css=' + p.css.length + ' html=' + p.html.length +
+          ' | ' + p.imgInfo + ' canvas=' + p.nCanvas);
+
+        const attempts = [
+          ['整页+CSS', p.html, p.css, p.w, p.fullH],
+          ['视口+CSS', p.html, p.css, p.w, p.viewH],
+          ['整页无CSS', p.html, '', p.w, p.fullH],
+        ];
+        for (const a of attempts) {
+          try {
+            const b64 = await renderToPng(a[1], a[2], a[3], a[4], p.bg);
+            await report(a[0] + ' 成功，base64=' + b64.length);
+            return await rpc('deliver', { base64: b64 });
+          } catch (e) {
+            await report(a[0] + ' 失败: ' + ((e && e.message) || e));
+          }
+        }
+        await report('三种渲染都失败 → 改用文字快照保底');
+        await sendTextSnapshot(textSnapshot());
+        return { ok: true, mode: 'text' };
+      }
+
+      const stop = ctx.interval(async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          const res = await rpc('poll', {});
+          if (res && res.pending === true) {
+            const out = await doCapture();
+            await report('本轮完成: ' + JSON.stringify(out));
+          }
+        } catch (e) {
+          await report('本轮异常: ' + ((e && e.message) || e) + ' | ' + String(e && e.stack).slice(0, 200));
+        } finally {
+          busy = false;
+        }
+      }, 2000);
+
+      ctx.effect(() => stop);
+      console.log('[selflook] client ready');
+    }
+
+    exports.apply = apply;
+    exports.inject = inject;
+    return module.exports;
+  },
+});

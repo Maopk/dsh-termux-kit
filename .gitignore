@@ -1,0 +1,18 @@
+# 运行期与构建产物
+build/
+*.part
+*.log
+status.json
+status.txt
+.dsh-url
+.smoke/
+__pycache__/
+*.pyc
+# 凭据（绝不入库）
+*.jks
+*.keystore
+.dsh-auth-pass
+.dsh-bridge-token
+.dsh-tasks-token
+.dsh-install-pass
+.git-credentials

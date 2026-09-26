@@ -1,0 +1,33 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# dsh-find-blue —— 在当前屏幕上找「蓝色可点文字」的位置，输出 "x,y"
+#
+# 为什么需要它：vivo 安装器那行「…您可授权本次安装」**不在无障碍树里**
+# （树里只有整段文字一个节点），而且系统文案/排版会变（实测同一台机器就有两种版式：
+# 段落在 y≈1135 或 y≈1255，链接在段尾）。所以只能按**颜色**定位蓝字。
+# 用法：dsh-find-blue [y起] [y止]      默认 600..2200（避开顶部应用信息与底部按钮）
+set -u
+Y1="${1:-600}"; Y2="${2:-2200}"
+SOCK="$HOME/.local/bin/droid-sock"
+SHOT=$(timeout 30 "$SOCK" shot 2>/dev/null | grep -oE '/data[^ ]+\.png' | head -1)
+[ -n "$SHOT" ] && [ -f "$SHOT" ] || { printf '截图失败\n' >&2; exit 1; }
+H=$(( Y2 - Y1 ))
+magick "$SHOT" -crop "1440x${H}+0+${Y1}" +repage \
+  -fuzz 22% -fill white -opaque "#2785FE" -fill black +opaque white \
+  -define connected-components:verbose=true -connected-components 8 null: 2>/dev/null \
+| awk -v y1="$Y1" '
+  /^ *[0-9]+:/ {
+    if (match($0, /[0-9]+x[0-9]+\+[0-9]+\+[0-9]+/)) {
+      split(substr($0,RSTART,RLENGTH), a, /x|\+/)
+      w=a[1]+0; h=a[2]+0
+      # 只要"字"那么大的块：太扁是下划线/边框，太高是色块
+      if (h >= 18 && h <= 90 && w >= 10) {
+        if (match($0, /[0-9]+\.[0-9]+,[0-9]+\.[0-9]+/)) {
+          split(substr($0,RSTART,RLENGTH), p, ",")
+          cx=p[1]+0; cy=p[2]+0
+          area = w*h
+          if (area > best) { best=area; bx=cx; by=cy+y1 }
+        }
+      }
+    }
+  }
+  END { if (best > 150) printf "%d,%d\n", bx, by; else exit 1 }'

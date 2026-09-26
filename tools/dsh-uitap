@@ -1,0 +1,114 @@
+#!/data/data/com.termux/files/usr/bin/python3
+"""dsh-uitap —— 用 DSH 桥在任意 App 里「按文字点控件」，必要时自动滚动。
+
+为什么需要它：桥的 ui dump 给的是**内容坐标**，长页面里目标常常在屏幕外（比如 y=5339，
+而屏幕只有 2976 高），直接 tap 会点空。这个工具会滚动到目标进入可视区再点。
+
+用法：
+  dsh-uitap "Name Server"        # 滚动找到该文字并点击
+  dsh-uitap "不修改" --nth 3      # 第 3 个匹配（同一个词常常出现很多次）
+  dsh-uitap --list               # 只列出当前可见控件（带屏幕内标记）
+  dsh-uitap --set "值"           # 在当前已聚焦的输入框里写入文本（配合点击后用）
+选项：
+  --contains    文字用「包含」匹配而不是全等
+  --no-tap      只报坐标不点
+"""
+import os
+import re
+import subprocess
+import sys
+import time
+
+SOCK = os.path.expanduser('~/.local/bin/droid-sock')
+SCREEN_H = 2976          # 这台机器的高度；用 ping 的 h 也可以，但固定值够用且省一次调用
+SAFE_TOP = 420           # 内容区上沿：标题栏 y≈247 常被“屏幕外旧副本”压住，必须排除
+SAFE_BOTTOM = 2500       # 底部手势区以上
+
+
+def sh(*args, timeout=45):
+    return subprocess.run(list(args), capture_output=True, text=True, timeout=timeout).stdout
+
+
+def dump(kw=''):
+    """返回 [{x,y,cls,text,desc}]，坐标为内容坐标。"""
+    out = sh(SOCK, 'ui', kw)
+    nodes = []
+    for line in out.splitlines():
+        m = re.match(r"\s*\[(-?\d+),(-?\d+)\]\s+(\S+)\s+text=(.*?)\s+desc=(.*?)\s+id=", line)
+        if m:
+            nodes.append({
+                'x': int(m.group(1)), 'y': int(m.group(2)), 'cls': m.group(3),
+                'text': m.group(4).strip().strip("'"), 'desc': m.group(5).strip().strip("'"),
+            })
+    return nodes
+
+
+def swipe(x1, y1, x2, y2, ms=300):
+    sh(SOCK, 'swipe', str(x1), str(y1), str(x2), str(y2), str(ms), timeout=30)
+
+
+def visible(y):
+    return SAFE_TOP <= y <= SAFE_BOTTOM
+
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        print(__doc__)
+        return 2
+    if args[0] == '--list':
+        for n in dump():
+            mark = '✔屏内' if visible(n['y']) else '  屏外'
+            print('  %s [%5d,%5d] %-16s %s' % (mark, n['x'], n['y'], n['cls'], n['text'][:48]))
+        return 0
+    if args[0] == '--set':
+        val = args[1] if len(args) > 1 else ''
+        r = sh(SOCK, 'text', val, timeout=60)
+        print('已写入: %s -> %s' % (val[:40], r.strip()[:80]))
+        return 0
+
+    target = args[0]
+    contains = '--contains' in args
+    no_tap = '--no-tap' in args
+    nth = 1
+    if '--nth' in args:
+        nth = int(args[args.index('--nth') + 1])
+
+    for attempt in range(14):
+        nodes = dump(target)
+        # 同时匹配 text 和 desc：很多按钮是图标 + contentDescription（比如「新建」「保存」）
+        if contains:
+            hits = [n for n in nodes if target in n['text'] or target in n['desc']]
+        else:
+            hits = [n for n in nodes if n['text'] == target or n['desc'] == target]
+        if hits:
+            # 无障碍树里常同时存在"屏幕外的旧副本"（坐标可能为负或很靠下），
+            # 所以先按"离视口中心最近"排序，避免朝错误方向滚动（实测会越滚越远）。
+            center = (SAFE_TOP + SAFE_BOTTOM) // 2
+            hits.sort(key=lambda n: abs(n['y'] - center))
+            if nth <= len(hits):
+                n = hits[nth - 1]
+                if visible(n['y']):
+                    if no_tap:
+                        print('找到（未点）: %s @ [%d,%d]' % (target, n['x'], n['y']))
+                        return 0
+                    r = sh(SOCK, 'tap', str(n['x']), str(n['y']), timeout=30)
+                    print('已点: %s @ [%d,%d]  %s' % (target, n['x'], n['y'], r.strip()[:60]))
+                    time.sleep(1.2)
+                    return 0
+                # 目标在屏幕外：往对应方向滚
+                if n['y'] > SAFE_BOTTOM:
+                    swipe(720, 2300, 720, 800)      # 内容往上走
+                else:
+                    swipe(720, 800, 720, 2300)      # 内容往下走（回到上面）
+            else:
+                swipe(720, 2300, 720, 800)          # 匹配数不够，继续往下找
+        else:
+            swipe(720, 2300, 720, 800)
+        time.sleep(0.8)
+    print('✘ 找不到/点不到: %s' % target)
+    return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

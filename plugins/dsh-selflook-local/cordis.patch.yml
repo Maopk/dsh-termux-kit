@@ -1,0 +1,4 @@
+# 本地自看插件：插入组合行
+- insert:
+    - id: selflook
+      name: dsh-selflook-local

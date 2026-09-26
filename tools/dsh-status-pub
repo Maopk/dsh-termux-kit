@@ -1,0 +1,172 @@
+#!/data/data/com.termux/files/usr/bin/python3
+"""dsh-status-pub —— 把「当前状态」发布成一个文件，给外部 App（未来的控制台 APK）读。
+
+为什么需要它：控制台 APK 和 Termux 是**不同 UID**，它读不到 ~/.smoke 里的日志和任何私有文件。
+所以这里把状态写进**共享存储**（Download/dsh/状态/），APK 读那个文件就能显示状态灯。
+
+产物：
+  Download/dsh/状态/status.json   机器可读（APK 用）
+  Download/dsh/状态/status.txt    人可读（你自己用文件管理器/编辑器看）
+
+内容：DSH(端口+HTTP码) / 桥(端口+版本+能否应答) / adb(已连设备) / 每个组件上次跑的结果与时间 /
+      启动锁与凭证锁是否残留 / 生成时间。
+
+用法：
+  dsh-status-pub            # 发布一次
+  dsh-status-pub --quiet    # 不打印（给组件收尾调用）
+  dsh-status-pub --print    # 只打印不写文件
+"""
+import json
+import os
+import re
+import socket
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser('~')
+OUTDIR = os.path.join(HOME, 'storage', 'shared', 'Download', 'dsh', '状态')
+JSON_PATH = os.path.join(OUTDIR, 'status.json')
+TXT_PATH = os.path.join(OUTDIR, 'status.txt')
+TASK_DIR = os.path.join(HOME, '.shortcuts', 'tasks')
+LOG_DIR = os.path.join(HOME, '.smoke')
+DANGEROUS = {'2_关闭DSH', '4_软重启DSH', '6_硬重启DSH', '0_紧急停止'}
+
+
+def sh(args, timeout=12):
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=timeout).stdout.strip()
+    except Exception:
+        return ''
+
+
+def port_open(p, timeout=1.2):
+    s = socket.socket()
+    s.settimeout(timeout)
+    try:
+        s.connect(('127.0.0.1', int(p)))
+        return True
+    except Exception:
+        return False
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+
+def tasks_state():
+    out = {}
+    try:
+        names = sorted(n[:-3] for n in os.listdir(TASK_DIR) if n.endswith('.sh'))
+    except Exception:
+        names = []
+    brief = '--brief' in sys.argv     # 给控制台 APK 用：不要每个任务的 tail（那 12 行占了整包的大半）
+    for n in names:
+        p = os.path.join(LOG_DIR, 'widget-%s.log' % n)
+        item = {'label': n.split('_', 1)[-1].replace('DSH', ' DSH').strip(),
+                'danger': n in DANGEROUS, 'last': None, 'at': None, 'tail': ''}
+        if os.path.exists(p):
+            try:
+                with open(p, 'rb') as f:
+                    f.seek(max(0, os.path.getsize(p) - 4000))
+                    tail = f.read().decode('utf-8', 'replace')
+                res = re.findall(r'【[^】]+】(完成|失败|未执行)', tail)
+                stamps = re.findall(r'^===== ([\d\-]+ [\d:]+)', tail, re.M)
+                item['last'] = res[-1] if res else None
+                item['at'] = stamps[-1] if stamps else None
+                if not brief:
+                    item['tail'] = '\n'.join(tail.strip().splitlines()[-12:])
+            except Exception:
+                pass
+        out[n] = item
+    return out
+
+
+def collect():
+    st = {'ts': time.strftime('%F %T'), 'epoch': int(time.time())}
+    # DSH Web
+    dsh = {'port': port_open(8080)}
+    code = sh(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '4',
+               'http://127.0.0.1:8080/'], timeout=8)
+    dsh['http'] = code or '?'
+    dsh['ok'] = dsh['port'] and code not in ('', '000', '404')
+    st['dsh'] = dsh
+    # 桥
+    br = {'port': port_open(8788), 'ok': False, 'ver': None, 'paused': None}
+    if br['port']:
+        pong = sh([os.path.join(HOME, '.local/bin/droid-sock'), 'ping'], timeout=14)
+        br['ok'] = '"pong": true' in pong
+        m = re.search(r'"ver":\s*"([^"]+)"', pong)
+        br['ver'] = m.group(1) if m else None
+        m2 = re.search(r'"paused":\s*(true|false)', pong)
+        br['paused'] = (m2.group(1) == 'true') if m2 else None
+    st['bridge'] = br
+    # adb
+    devs = []
+    out = sh(['adb', 'devices'], timeout=12)
+    for line in out.splitlines()[1:]:
+        if '\tdevice' in line:
+            devs.append(line.split('\t')[0])
+    st['adb'] = {'devices': devs, 'ok': bool(devs)}
+    # 残留
+    st['locks'] = {
+        'boot': os.path.exists(os.path.join(HOME, '.dsh-boot-8080.lock')),
+        'credentials': os.path.exists(os.path.join(HOME, '.dsh', '.credentials.yaml.lock')),
+    }
+    # 灯（给 UI 直接用的三色摘要）
+    st['lamps'] = {
+        'dsh': 'green' if st['dsh']['ok'] else ('yellow' if st['dsh']['port'] else 'red'),
+        'bridge': 'green' if st['bridge']['ok'] else ('yellow' if st['bridge']['port'] else 'red'),
+        'adb': 'green' if st['adb']['ok'] else 'red',
+    }
+    st['tasks'] = tasks_state()
+    return st
+
+
+def text_of(st):
+    L = []
+    L.append('DSH 状态  %s' % st['ts'])
+    L.append('─' * 34)
+    L.append('DSH Web : %s  (端口 %s, HTTP %s)' % ('在跑' if st['dsh']['ok'] else '停了',
+                                                   '开' if st['dsh']['port'] else '关', st['dsh']['http']))
+    L.append('DSH 桥  : %s  %s' % ('在' if st['bridge']['ok'] else ('端口在但不应答' if st['bridge']['port'] else '无'),
+                                   ('v' + st['bridge']['ver']) if st['bridge']['ver'] else ''))
+    L.append('adb     : %s' % (st['adb']['devices'][0] if st['adb']['devices'] else '未连接'))
+    if st['locks']['boot'] or st['locks']['credentials']:
+        L.append('⚠ 锁残留: %s' % ', '.join(k for k, v in st['locks'].items() if v))
+    L.append('')
+    L.append('组件（上次结果）')
+    for name, t in st['tasks'].items():
+        L.append('  %-16s %-6s %s' % (name, t['last'] or '—', t['at'] or ''))
+    return '\n'.join(L) + '\n'
+
+
+def main():
+    quiet = '--quiet' in sys.argv
+    only_print = '--print' in sys.argv
+    as_json = '--json' in sys.argv      # 只把 JSON 打到 stdout（给控制台 APK 用）
+    st = collect()
+    if as_json:
+        print(json.dumps(st, ensure_ascii=False))
+        return 0
+    txt = text_of(st)
+    if not only_print:
+        try:
+            os.makedirs(OUTDIR, exist_ok=True)
+            with open(JSON_PATH, 'w', encoding='utf-8') as f:
+                json.dump(st, f, ensure_ascii=False, indent=1)
+            with open(TXT_PATH, 'w', encoding='utf-8') as f:
+                f.write(txt)
+        except Exception as e:
+            print('✘ 写状态文件失败: %s' % e, file=sys.stderr)
+            return 1
+    if not quiet:
+        print(txt, end='')
+        if not only_print:
+            print('\n已写入: %s' % JSON_PATH)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

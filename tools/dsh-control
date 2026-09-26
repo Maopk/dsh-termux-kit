@@ -1,0 +1,100 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# dsh-control —— 通过自看插件（dsh-selflook-local）遥控 DSH 页面
+# 用法：
+#   dsh-control probe <关键词>             列出匹配元素（可穿透 shadow DOM）
+#   dsh-control click text=<文字>          点击首个可见的、自身文字匹配的元素
+#   dsh-control click selector=<CSS选择器> 按选择器点击
+#   dsh-control click x,y                  按坐标点击
+#   dsh-control swipe <起点> <终点> [步数] 滑动手势（选择器 / x,y / text=文字）
+#   dsh-control scroll <选择器> top|bottom|by|to [值] [shot]
+#   dsh-control capture                    截图（兜底失败则文字快照）
+#   dsh-control eval '<js 表达式>'         在页面里求值并回传结果
+#   dsh-control '<原始 JSON 命令>'         直接下发
+# 可选环境变量：TIMEOUT=秒（默认 30）
+set -u
+CMD="$HOME/.dsh-look-cmd.json"
+RES="$HOME/.dsh-look-cmd-result.json"
+TIMEOUT="${TIMEOUT:-30}"
+
+build_json() {
+  python3 - "$@" <<'PY'
+import json, sys, re
+a = sys.argv[1:]
+kind = a[0] if a else ''
+rest = a[1:]
+
+def spec(s):
+    """选择器 / x,y 坐标 / text=文字 → 手势起终点"""
+    if s.startswith('text='):
+        return {'text': s[5:]}
+    if re.match(r'^-?\d+\s*,\s*-?\d+$', s):
+        return [int(x) for x in s.split(',')]
+    return s
+
+if kind == 'probe':
+    cmd = {"action": "probe", "keyword": rest[0] if rest else "", "limit": 30}
+elif kind == 'click':
+    spec0 = rest[0] if rest else ''
+    cmd = {"action": "click", "after": True, "waitMs": 800}
+    if spec0.startswith('text='):
+        cmd["text"] = spec0[5:]
+    elif spec0.startswith('selector='):
+        cmd["selector"] = spec0[9:]
+    elif spec0.startswith('title='):
+        cmd["title"] = spec0[6:]
+    elif ',' in spec0 and all(p.strip().lstrip('-').isdigit() for p in spec0.split(',')[:2]):
+        x, y = spec0.split(',')[:2]
+        cmd["x"], cmd["y"] = int(x), int(y)
+    else:
+        cmd["text"] = spec0
+elif kind == 'swipe':
+    if len(rest) < 2:
+        print('用法: dsh-control swipe <起点> <终点> [步数]  （选择器 / x,y / text=文字）', file=sys.stderr)
+        sys.exit(2)
+    cmd = {"action": "swipe", "from": spec(rest[0]), "to": spec(rest[1]), "steps": int(rest[2]) if len(rest) > 2 else 16}
+elif kind == 'scroll':
+    cmd = {"action": "scroll", "selector": rest[0] if rest else 'window', "mode": rest[1] if len(rest) > 1 else 'bottom'}
+    if len(rest) > 2 and rest[2] not in ('shot',):
+        cmd["value"] = int(rest[2])
+    if 'shot' in rest:
+        cmd["capture"] = True
+elif kind == 'capture':
+    cmd = {"action": "capture"}
+elif kind == 'eval':
+    cmd = {"action": "eval", "code": rest[0] if rest else '1'}
+elif kind.startswith('{'):
+    cmd = json.loads(kind)
+else:
+    print('未知用法', file=sys.stderr); sys.exit(2)
+print(json.dumps(cmd, ensure_ascii=False))
+PY
+}
+
+if [ $# -eq 0 ]; then sed -n '2,12p' "$0"; exit 2; fi
+
+JSON="$(build_json "$@")" || exit 2
+[ -z "$JSON" ] && { echo "命令构造失败"; exit 2; }
+
+# 记录旧结果指纹
+BEFORE="$(md5sum "$RES" 2>/dev/null | cut -d' ' -f1)"
+
+# 原子写入命令文件（先写临时文件再 mv，避免客户端读到半个文件）
+printf '%s' "$JSON" > "$CMD.tmp" && mv "$CMD.tmp" "$CMD"
+
+# 等结果
+DEADLINE=$(( $(date +%s) + TIMEOUT ))
+while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+  sleep 1
+  AFTER="$(md5sum "$RES" 2>/dev/null | cut -d' ' -f1)"
+  if [ -n "$AFTER" ] && [ "$AFTER" != "$BEFORE" ]; then
+    echo "命令: $JSON"
+    echo "--- 结果 ---"
+    cat "$RES"
+    exit 0
+  fi
+done
+
+echo "命令: $JSON"
+echo "⏱ 超时 ${TIMEOUT}s：页面可能未打开、未刷新到新版客户端，或命令没被消费"
+echo "命令文件当前内容: $(cat "$CMD" 2>/dev/null | head -c 200)"
+exit 1

@@ -1,0 +1,505 @@
+// dsh-selflook-local —— 客户端半部：既能「自看」，也能「遥控」（bundle 规范 CJS 工厂）
+//
+// 两条通道：
+//  A. 自看：每 2s 轮询宿主 /__dsh__/selflook/rpc，宿主侧 touch ~/.dsh-look-request 即截图回传。
+//  B. 遥控：每 2s 读 ~/.dsh-look-cmd.json（借 filepanel 的 RPC 读写文件），
+//     执行 {action: probe|click|capture|eval}，结果写回 ~/.dsh-look-cmd-result.json 并清空命令文件。
+//
+// 渲染五级兜底：①整页+CSS ②视口+CSS ③整页无CSS ④视口无媒体+CSS ⑤文字快照（必定成功）
+//
+// 三个关键坑（2026-09-26 实测）：
+// 1) CSS 里含裸 `<`（data:image/svg+xml 图标）会让 SVG 解析失败 → 必须用 CDATA 包裹。
+// 2) SVG 以 blob: 作为图片加载时是不透明源：页面里任何外链（含“同源”）都会污染 canvas
+//    → 一律本地化成 data:，并把 iframe/video/audio/object/embed 等外部引用元素整个删掉。
+// 3) canvas 内容不随 cloneNode 复制 → 用 toDataURL() 转 <img> 贴回。
+window.__ModuleLoader__.load({
+  id: 'dsh-selflook-local',
+  factory: (require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+
+    const inject = ['timer'];
+    const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    const HOME = '/data/data/com.termux/files/home';
+    const CMD_PATH = HOME + '/.dsh-look-cmd.json';
+    const RES_PATH = HOME + '/.dsh-look-cmd-result.json';
+    const MAX_RESULT = 60000;
+
+    // ---------- 通道工具 ----------
+    async function post(url, body) {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return await resp.json();
+    }
+
+    const rpc = (method, payload) => post('/__dsh__/selflook/rpc', Object.assign({ method: method }, payload || {}));
+    const fp = (method, args) => post('/__dsh__/filepanel/rpc', { method: method, args: args || {} });
+
+    async function report(message) {
+      try { await rpc('log', { message: String(message).slice(0, 800) }); } catch (e) { /* ignore */ }
+    }
+
+    async function readCmd() {
+      try {
+        const r = await fp('panel.readText', { root: HOME, path: CMD_PATH });
+        if (!r || r.ok !== true || r.tooLarge === true) return '';
+        return String(r.content || '').trim();
+      } catch (e) { return ''; }
+    }
+
+    async function writeResult(obj) {
+      let text = '';
+      try { text = JSON.stringify(obj, null, 1); } catch (e) { text = '{"error":"结果无法序列化"}'; }
+      if (text.length > MAX_RESULT) text = text.slice(0, MAX_RESULT) + '\n…（已截断，原始 ' + text.length + ' 字符）';
+      try { await fp('panel.writeText', { root: HOME, path: RES_PATH, content: text }); } catch (e) { /* ignore */ }
+    }
+
+    async function clearCmd() {
+      try {
+        const r = await fp('panel.writeText', { root: HOME, path: CMD_PATH, content: '' });
+        return !!(r && r.ok === true);
+      } catch (e) { return false; }
+    }
+
+    // ---------- DOM 工具（可穿透 shadow DOM） ----------
+    function deepAll(root) {
+      const out = [];
+      const walk = (node) => {
+        let list = [];
+        try { list = Array.from(node.querySelectorAll('*')); } catch (e) { return; }
+        for (const el of list) {
+          out.push(el);
+          if (el.shadowRoot) walk(el.shadowRoot);
+        }
+      };
+      walk(root || document);
+      return out;
+    }
+
+    function describe(el) {
+      if (!el || !el.tagName) return '(无)';
+      const r = el.getBoundingClientRect();
+      const cls = (el.getAttribute && el.getAttribute('class')) || '';
+      const id = (el.getAttribute && el.getAttribute('id')) || '';
+      let vis = 'visible';
+      try {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) vis = 'hidden';
+      } catch (e) { /* ignore */ }
+      return el.tagName.toLowerCase() + (id ? '#' + id : '') + (cls ? '.' + String(cls).split(/\s+/).slice(0, 3).join('.') : '') +
+        ' @' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' ' + vis;
+    }
+
+    function ownText(el) {
+      let s = '';
+      for (const n of el.childNodes) if (n.nodeType === 3) s += n.textContent;
+      return s.replace(/\s+/g, ' ').trim();
+    }
+
+    function isVisible(el) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) return false;
+      try {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return false;
+      } catch (e) { return false; }
+      return true;
+    }
+
+    function findTarget(spec) {
+      const all = deepAll();
+      if (spec.selector) {
+        for (const el of all) {
+          try { if (el.matches(spec.selector)) return el; } catch (e) { /* ignore */ }
+        }
+      }
+      if (spec.text) {
+        const t = String(spec.text);
+        const loose = [];
+        for (const el of all) {
+          const own = ownText(el);
+          if (own && own.indexOf(t) >= 0) { if (isVisible(el)) return el; loose.push(el); }
+        }
+        if (loose.length) return loose[loose.length - 1];
+      }
+      if (spec.title) {
+        for (const el of all) {
+          const a = (el.getAttribute && (el.getAttribute('title') || el.getAttribute('aria-label'))) || '';
+          if (a.indexOf(String(spec.title)) >= 0) return el;
+        }
+      }
+      if (typeof spec.x === 'number' && typeof spec.y === 'number') {
+        return document.elementFromPoint(spec.x, spec.y);
+      }
+      return null;
+    }
+
+    function tap(el) {
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      const base = {
+        bubbles: true, cancelable: true, composed: true, view: window,
+        clientX: x, clientY: y, screenX: x, screenY: y, button: 0,
+      };
+      const fire = (name, Ctor, extra) => {
+        try { el.dispatchEvent(new Ctor(name, Object.assign({}, base, extra || {}))); return true; } catch (e) { return false; }
+      };
+      fire('pointerdown', window.PointerEvent, { buttons: 1, pointerId: 1, pointerType: 'touch', isPrimary: true });
+      fire('mousedown', window.MouseEvent, { buttons: 1 });
+      if (window.TouchEvent) {
+        try {
+          const t = new window.Touch({ identifier: 1, target: el, clientX: x, clientY: y, pageX: x, pageY: y });
+          el.dispatchEvent(new window.TouchEvent('touchstart', { bubbles: true, cancelable: true, composed: true, touches: [t], targetTouches: [t], changedTouches: [t] }));
+        } catch (e) { /* ignore */ }
+      }
+      fire('pointerup', window.PointerEvent, { buttons: 0, pointerId: 1, pointerType: 'touch', isPrimary: true });
+      fire('mouseup', window.MouseEvent, { buttons: 0 });
+      try { el.click(); } catch (e) { /* ignore */ }
+      return { at: [Math.round(x), Math.round(y)] };
+    }
+
+    // 外部引用清单：用来定位 canvas 污染源
+    function externalInventory() {
+      const inv = { img: 0, imgData: 0, svgImage: 0, use: 0, video: 0, audio: 0, iframe: 0, object: 0, embed: 0, inlineBg: 0, samples: [] };
+      for (const el of deepAll()) {
+        const tag = (el.tagName || '').toLowerCase();
+        const attr = (n) => (el.getAttribute ? (el.getAttribute(n) || '') : '');
+        const note = (kind, val) => {
+          if (inv.samples.length < 8) inv.samples.push(kind + ': ' + String(val).slice(0, 90));
+        };
+        if (tag === 'img') {
+          const s = attr('src');
+          if (s.startsWith('data:')) inv.imgData++; else { inv.img++; note('img', s); }
+        }
+        if (tag === 'image') {
+          const h = attr('href') || attr('xlink:href');
+          if (!h.startsWith('data:')) { inv.svgImage++; note('svg-image', h); }
+        }
+        if (tag === 'use') {
+          const h = attr('href') || attr('xlink:href');
+          if (h && !h.startsWith('#')) { inv.use++; note('use', h); }
+        }
+        if (tag === 'video') { inv.video++; note('video', attr('src') || attr('poster')); }
+        if (tag === 'audio') { inv.audio++; note('audio', attr('src')); }
+        if (tag === 'iframe') { inv.iframe++; note('iframe', attr('src')); }
+        if (tag === 'object') { inv.object++; note('object', attr('data')); }
+        if (tag === 'embed') { inv.embed++; note('embed', attr('src')); }
+        const st = attr('style');
+        if (st && st.indexOf('url(') >= 0 && !/url\(\s*['"]?\s*data:/i.test(st)) { inv.inlineBg++; note('inline-url', st.slice(0, 60)); }
+      }
+      return inv;
+    }
+
+    // ---------- 渲染 ----------
+    function repairXml(text) {
+      return String(text).replace(/&(?!(#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);)/g, '&amp;');
+    }
+
+    function cdata(text) {
+      return '<![CDATA[' + String(text).split(']]>').join(']]]]><![CDATA[>') + ']]>';
+    }
+
+    function stripExternalUrls(css) {
+      return String(css).replace(/url\(([^)]*)\)/g, (m, u) => (/^\s*['"]?\s*data:/i.test(u) ? m : 'none'));
+    }
+
+    // 字符串级「硬化」：删掉一切可能引用外部资源的东西（污染 canvas 的元凶）
+    function hardenHtml(html, level) {
+      let out = String(html);
+      out = out.replace(/<(video|audio|source|track|iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1>/gi, '');
+      out = out.replace(/<(video|audio|source|track|iframe|object|embed)\b[^>]*\/?>/gi, '');
+      out = out.replace(/\s(?:xlink:)?(href|src|poster|data|srcset)\s*=\s*("([^"]*)"|'([^']*)')/gi,
+        (m, name, _all, dq, sq) => {
+          const v = dq !== undefined ? dq : (sq || '');
+          return (v.startsWith('data:') || v.startsWith('#')) ? m : '';
+        });
+      if (level >= 2) {
+        out = out.replace(/<(svg|img|picture|canvas|image)\b[^>]*>[\s\S]*?<\/\1>/gi, '');
+        out = out.replace(/<(img|image|source)\b[^>]*\/?>/gi, '');
+      }
+      return out;
+    }
+
+    function blobToDataUrl(blob) {
+      return new Promise((resolve, reject) => {
+        const fr = new window.FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = () => reject(new Error('FileReader 失败'));
+        fr.readAsDataURL(blob);
+      });
+    }
+
+    async function localizeResources(clone) {
+      let inlined = 0;
+      let dropped = 0;
+      for (const img of Array.from(clone.querySelectorAll('img'))) {
+        const src = img.getAttribute('src') || '';
+        if (src.startsWith('data:')) { inlined++; continue; }
+        if (src === '') { img.setAttribute('src', BLANK); dropped++; continue; }
+        let abs = null;
+        try { abs = new window.URL(src, window.location.href); } catch (e) { abs = null; }
+        if (!abs || abs.origin !== window.location.origin) { img.setAttribute('src', BLANK); dropped++; continue; }
+        try {
+          const resp = await fetch(abs.href);
+          img.setAttribute('src', await blobToDataUrl(await resp.blob()));
+          inlined++;
+        } catch (e) { img.setAttribute('src', BLANK); dropped++; }
+      }
+      clone.querySelectorAll('[srcset]').forEach((n) => n.removeAttribute('srcset'));
+      clone.querySelectorAll('[style]').forEach((n) => {
+        const s = n.getAttribute('style') || '';
+        if (s.indexOf('url(') >= 0) n.setAttribute('style', stripExternalUrls(s));
+      });
+      return '图片内联' + inlined + '/占位' + dropped;
+    }
+
+    function snapshotCanvases(clone) {
+      const srcs = document.querySelectorAll('canvas');
+      const dsts = clone.querySelectorAll('canvas');
+      let n = 0;
+      for (let i = 0; i < dsts.length && i < srcs.length; i++) {
+        try {
+          const r = srcs[i].getBoundingClientRect();
+          if (r.width < 2 || r.height < 2) continue;
+          const img = document.createElement('img');
+          img.setAttribute('src', srcs[i].toDataURL('image/png'));
+          img.setAttribute('width', String(Math.round(r.width)));
+          img.setAttribute('height', String(Math.round(r.height)));
+          dsts[i].parentNode.replaceChild(img, dsts[i]);
+          n++;
+        } catch (e) { /* 污染或空 canvas */ }
+      }
+      return n;
+    }
+
+    function collectCss() {
+      let css = '';
+      for (const sheet of Array.from(document.styleSheets)) {
+        if (css.length > 240000) break;
+        try {
+          for (const rule of Array.from(sheet.cssRules)) css += rule.cssText + '\n';
+        } catch (e) { /* 跨域样式表跳过 */ }
+      }
+      return stripExternalUrls(css);
+    }
+
+    async function prepare() {
+      const w = document.documentElement.clientWidth;
+      const fullH = Math.min(document.documentElement.scrollHeight, 2400);
+      const viewH = document.documentElement.clientHeight;
+      const bg = getComputedStyle(document.body).backgroundColor || '#ffffff';
+      const clone = document.body.cloneNode(true);
+      clone.querySelectorAll('script').forEach((n) => n.remove());
+      const imgInfo = await localizeResources(clone);
+      const nCanvas = snapshotCanvases(clone);
+      const raw = new window.XMLSerializer().serializeToString(clone);
+      return { w, fullH, viewH, bg, raw, imgInfo, nCanvas, css: collectCss() };
+    }
+
+    async function renderToPng(html, css, w, h, bg) {
+      const win = window;
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">' +
+        '<foreignObject x="0" y="0" width="100%" height="100%">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="width:' + w + 'px;background:' + bg + '">' +
+        (css ? '<style>' + cdata(css) + '</style>' : '') +
+        repairXml(html) +
+        '</div></foreignObject></svg>';
+      const blob = new win.Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = win.URL.createObjectURL(blob);
+      const img = new win.Image();
+      try {
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error('SVG渲染失败 svg=' + svg.length));
+          img.src = url;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const c = canvas.getContext('2d', { willReadFrequently: true });
+        c.fillStyle = bg; c.fillRect(0, 0, w, h);
+        c.drawImage(img, 0, 0);
+        const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        if (pngBlob) {
+          const bytes = new Uint8Array(await pngBlob.arrayBuffer());
+          let bin = '';
+          for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+          return win.btoa(bin);
+        }
+        const dataUrl = canvas.toDataURL('image/png');
+        return dataUrl.slice(dataUrl.indexOf(',') + 1);
+      } finally {
+        win.URL.revokeObjectURL(url);
+      }
+    }
+
+    function textSnapshot() {
+      const lines = [];
+      lines.push('VIEWPORT ' + window.innerWidth + 'x' + window.innerHeight +
+        ' scrollY=' + Math.round(window.scrollY) + ' title=' + document.title);
+      let n = 0;
+      for (const el of document.body.querySelectorAll('*')) {
+        if (n >= 400) break;
+        const r = el.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) continue;
+        if (r.bottom < -20 || r.top > window.innerHeight + 20) continue;
+        const own = ownText(el);
+        if (own === '') continue;
+        lines.push('[' + el.tagName.toLowerCase() + ' @' + Math.round(r.left) + ',' + Math.round(r.top) +
+          ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + '] ' + own.slice(0, 140));
+        n++;
+      }
+      return lines.join('\n');
+    }
+
+    async function sendTextSnapshot(text) {
+      await report('TEXT-SNAPSHOT 开始，共 ' + text.length + ' 字符');
+      const CH = 1500;
+      for (let i = 0; i < text.length; i += CH) {
+        await rpc('log', { message: 'SNAP|' + text.slice(i, i + CH) });
+      }
+      await report('TEXT-SNAPSHOT 结束');
+    }
+
+    async function capture(quiet) {
+      const p = await prepare();
+      if (!quiet) {
+        await report('收到触发：DOM=' + document.getElementsByTagName('*').length +
+          ' 视口=' + p.w + 'x' + p.viewH + ' 整页高=' + p.fullH +
+          ' css=' + p.css.length + ' raw=' + p.raw.length + ' | ' + p.imgInfo + ' canvas=' + p.nCanvas);
+        const inv = externalInventory();
+        await report('外部引用清单: ' + JSON.stringify(Object.assign({}, inv, { samples: inv.samples.slice(0, 3) })));
+      }
+      const attempts = [
+        ['整页+CSS', hardenHtml(p.raw, 1), p.css, p.w, p.fullH],
+        ['视口+CSS', hardenHtml(p.raw, 1), p.css, p.w, p.viewH],
+        ['整页无CSS', hardenHtml(p.raw, 1), '', p.w, p.fullH],
+        ['视口无媒体+CSS', hardenHtml(p.raw, 2), p.css, p.w, p.viewH],
+      ];
+      for (const a of attempts) {
+        try {
+          const b64 = await renderToPng(a[1], a[2], a[3], a[4], p.bg);
+          await report(a[0] + ' 成功，base64=' + b64.length);
+          return await rpc('deliver', { base64: b64 });
+        } catch (e) {
+          await report(a[0] + ' 失败: ' + ((e && e.message) || e));
+        }
+      }
+      await report('四种渲染都失败 → 文字快照保底');
+      await sendTextSnapshot(textSnapshot());
+      return { ok: true, mode: 'text' };
+    }
+
+    // ---------- 遥控动作 ----------
+    async function runAction(cmd) {
+      const action = String(cmd && cmd.action || 'capture');
+      if (action === 'capture') {
+        const out = await capture(false);
+        return { action: action, out: out };
+      }
+      if (action === 'probe') {
+        const kw = String(cmd.keyword || '').toLowerCase();
+        const hits = [];
+        for (const el of deepAll()) {
+          const tag = (el.tagName || '').toLowerCase();
+          const id = ((el.getAttribute && el.getAttribute('id')) || '').toLowerCase();
+          const cls = ((el.getAttribute && el.getAttribute('class')) || '').toLowerCase();
+          const text = ownText(el).toLowerCase();
+          const hay = tag + ' ' + id + ' ' + cls + ' ' + ((el.getAttribute && el.getAttribute('title')) || '') + ' ' + ((el.getAttribute && el.getAttribute('aria-label')) || '');
+          const hitKeyword = kw === '' ? false : (hay.indexOf(kw) >= 0 || text.indexOf(kw) >= 0);
+          const hitSelector = cmd.selector ? (() => { try { return el.matches(cmd.selector); } catch (e) { return false; } })() : false;
+          if (hitKeyword || hitSelector) {
+            hits.push(describe(el) + (text ? ' | 文本: ' + text.slice(0, 40) : ''));
+            if (hits.length >= Number(cmd.limit || 25)) break;
+          }
+        }
+        return { action: action, keyword: kw, count: hits.length, hits: hits, inventory: externalInventory() };
+      }
+      if (action === 'click') {
+        const el = findTarget(cmd);
+        if (!el) return { action: action, ok: false, error: '没找到目标', spec: cmd };
+        const before = describe(el);
+        const near = el.closest ? (el.closest('button,[role=button],a') || el) : el;
+        const clicked = (near && near !== el) ? near : el;
+        try { clicked.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) { /* ignore */ }
+        const info = tap(clicked);
+        const res = { action: action, ok: true, target: before, clicked: describe(clicked), at: info.at };
+        if (cmd.after !== false) {
+          await new Promise((r) => setTimeout(r, Number(cmd.waitMs || 700)));
+          res.after = await capture(true);
+          res.afterText = textSnapshot().split('\n').slice(0, 60).join('\n');
+        }
+        return res;
+      }
+      if (action === 'eval') {
+        const code = String(cmd.code || '');
+        const fn = new Function('"use strict";return (async () => { ' + code + ' })()');
+        const value = await fn();
+        let safe = value;
+        if (value && value.tagName) safe = describe(value);
+        else if (value && value.nodeType === 9) safe = 'document';
+        return { action: action, ok: true, value: safe };
+      }
+      return { action: action, ok: false, error: '未知动作: ' + action };
+    }
+
+    function apply(ctx) {
+      let busy = false;
+      let lastCmd = '';
+      let lastPoll = 0;
+
+      const stop = ctx.interval(async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          // 1) 遥控通道优先
+          const raw = await readCmd();
+          if (raw !== '' && raw !== lastCmd) {
+            lastCmd = raw;
+            let cmd = null;
+            try { cmd = JSON.parse(raw); } catch (e) { cmd = null; }
+            if (cmd === null) {
+              await report('命令文件不是合法 JSON，已忽略');
+              await writeResult({ ok: false, error: '命令文件不是合法 JSON' });
+              await clearCmd();
+            } else {
+              await report('执行遥控命令: ' + String(cmd.action || '') );
+              let out = null;
+              try { out = await runAction(cmd); }
+              catch (e) { out = { ok: false, error: (e && e.message) || String(e), stack: String(e && e.stack).slice(0, 400) }; }
+              await writeResult(Object.assign({ ts: new Date().toISOString(), cmd: cmd }, out));
+              const cleared = await clearCmd();
+              // 只有确认清空成功才重置基线；否则保持原值，避免同一条命令被反复执行
+              lastCmd = cleared ? '' : raw;
+              await report('遥控命令完成: ' + JSON.stringify(out).slice(0, 300));
+            }
+          }
+          // 2) 自看通道（宿主 ~/.dsh-look-request）
+          const now = Date.now();
+          if (now - lastPoll > 3000) {
+            lastPoll = now;
+            const res = await rpc('poll', {});
+            if (res && res.pending === true) {
+              const out = await capture(false);
+              await report('本轮完成: ' + JSON.stringify(out));
+            }
+          }
+        } catch (e) {
+          await report('本轮异常: ' + ((e && e.message) || e) + ' | ' + String(e && e.stack).slice(0, 200));
+        } finally {
+          busy = false;
+        }
+      }, 2000);
+
+      ctx.effect(() => stop);
+      console.log('[selflook] client ready (capture + remote)');
+    }
+
+    exports.apply = apply;
+    exports.inject = inject;
+    return module.exports;
+  },
+});

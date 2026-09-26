@@ -1,0 +1,171 @@
+// dsh-selflook-local —— 客户端半部（bundle 规范：模块加载器 CJS 工厂）
+// 每 2 秒向宿主轮询一次；收到请求就把当前页面渲染成 PNG 回传。
+// 多级兜底：① 整页+CSS → ② 整页无CSS → ③ 视口+CSS → ④ 文字快照（必定成功）
+window.__ModuleLoader__.load({
+  id: 'dsh-selflook-local',
+  factory: (require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+
+    const inject = ['timer'];
+
+    async function rpc(method, payload) {
+      const resp = await fetch('/__dsh__/selflook/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ method: method }, payload || {})),
+      });
+      return await resp.json();
+    }
+
+    async function report(message) {
+      try { await rpc('log', { message: String(message).slice(0, 800) }); } catch (e) { /* ignore */ }
+    }
+
+    // 非法 XML 实体会让 SVG 解析失败（&nbsp; 等）
+    function repairXml(text) {
+      return String(text).replace(/&(?!(#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);)/g, '&amp;');
+    }
+
+    // 把 HTML+CSS 渲成一个 SVG 图片；失败会抛错（由调用方重试）
+    async function renderToPng(html, css, w, h, bg) {
+      const win = window;
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">' +
+        '<foreignObject x="0" y="0" width="100%" height="100%">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="width:' + w + 'px;background:' + bg + '">' +
+        (css ? '<style>' + repairXml(css) + '</style>' : '') +
+        repairXml(html) +
+        '</div></foreignObject></svg>';
+      const blob = new win.Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = win.URL.createObjectURL(blob);
+      const img = new win.Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('SVG渲染失败 svg=' + svg.length + ' html=' + html.length + ' css=' + css.length));
+        img.src = url;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const c = canvas.getContext('2d');
+      c.fillStyle = bg; c.fillRect(0, 0, w, h);
+      c.drawImage(img, 0, 0);
+      win.URL.revokeObjectURL(url);
+      let pngBlob = null;
+      try { pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png')); }
+      catch (e) { await report('toBlob 抛错: ' + ((e && e.message) || e)); }
+      if (pngBlob) {
+        const bytes = new Uint8Array(await pngBlob.arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+        return win.btoa(bin);
+      }
+      const dataUrl = canvas.toDataURL('image/png');
+      return dataUrl.slice(dataUrl.indexOf(',') + 1);
+    }
+
+    // 保底方案：把界面可见文字结构化上报（无需渲染，必定成功）
+    function textSnapshot() {
+      const lines = [];
+      lines.push('VIEWPORT ' + window.innerWidth + 'x' + window.innerHeight + ' scrollY=' + Math.round(window.scrollY) + ' title=' + document.title);
+      let n = 0;
+      for (const el of document.body.querySelectorAll('*')) {
+        if (n >= 400) break;
+        const r = el.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) continue;
+        if (r.bottom < -20 || r.top > window.innerHeight + 20) continue;
+        let own = '';
+        for (const node of el.childNodes) if (node.nodeType === 3) own += node.textContent;
+        own = own.replace(/\s+/g, ' ').trim();
+        if (own === '') continue;
+        lines.push('[' + el.tagName.toLowerCase() + ' @' + Math.round(r.left) + ',' + Math.round(r.top) +
+          ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + '] ' + own.slice(0, 140));
+        n++;
+      }
+      return lines.join('\n');
+    }
+
+    async function sendTextSnapshot(text) {
+      await report('TEXT-SNAPSHOT 开始，共 ' + text.length + ' 字符');
+      const CH = 1500;
+      for (let i = 0; i < text.length; i += CH) {
+        await rpc('log', { message: 'SNAP|' + text.slice(i, i + CH) });
+      }
+      await report('TEXT-SNAPSHOT 结束');
+    }
+
+    function apply(ctx) {
+      let busy = false;
+
+      async function doCapture() {
+        const w = document.documentElement.clientWidth;
+        const fullH = Math.min(document.documentElement.scrollHeight, 2400);
+        const viewH = document.documentElement.clientHeight;
+        const bg = getComputedStyle(document.body).backgroundColor || '#ffffff';
+
+        let css = '';
+        for (const sheet of Array.from(document.styleSheets)) {
+          if (css.length > 300000) break;
+          try {
+            for (const rule of Array.from(sheet.cssRules)) css += rule.cssText + '\n';
+          } catch (e) { /* 跨域样式表跳过 */ }
+        }
+        css = css.replace(/url\(\s*['"]?https?:[^)]*\)/g, 'none');
+
+        const bodyClone = document.body.cloneNode(true);
+        bodyClone.querySelectorAll('script').forEach((n) => n.remove());
+        bodyClone.querySelectorAll('img').forEach((img) => {
+          const src = img.getAttribute('src') || '';
+          const same = src === '' || src.startsWith('data:') || src.startsWith('/') || src.startsWith(window.location.origin);
+          if (src !== '' && !same) {
+            img.setAttribute('src', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+          }
+        });
+        const html = new window.XMLSerializer().serializeToString(bodyClone);
+
+        await report('收到触发：DOM=' + document.getElementsByTagName('*').length +
+          ' 视口=' + w + 'x' + viewH + ' 整页高=' + fullH + ' css=' + css.length + ' html=' + html.length);
+
+        const attempts = [
+          ['整页+CSS', html, css, w, fullH],
+          ['整页无CSS', html, '', w, fullH],
+          ['视口+CSS', html, css, w, viewH],
+        ];
+        for (const a of attempts) {
+          try {
+            const b64 = await renderToPng(a[1], a[2], a[3], a[4], bg);
+            await report(a[0] + ' 成功，base64=' + b64.length);
+            return await rpc('deliver', { base64: b64 });
+          } catch (e) {
+            await report(a[0] + ' 失败: ' + ((e && e.message) || e));
+          }
+        }
+        await report('三种渲染都失败 → 改用文字快照保底');
+        await sendTextSnapshot(textSnapshot());
+        return { ok: true, mode: 'text' };
+      }
+
+      const stop = ctx.interval(async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          const res = await rpc('poll', {});
+          if (res && res.pending === true) {
+            const out = await doCapture();
+            await report('本轮完成: ' + JSON.stringify(out));
+          }
+        } catch (e) {
+          await report('本轮异常: ' + ((e && e.message) || e) + ' | ' + String(e && e.stack).slice(0, 200));
+        } finally {
+          busy = false;
+        }
+      }, 2000);
+
+      ctx.effect(() => stop);
+      console.log('[selflook] client ready');
+    }
+
+    exports.apply = apply;
+    exports.inject = inject;
+    return module.exports;
+  },
+});

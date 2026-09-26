@@ -1,0 +1,22 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# 把产物按扩展名归类复制到 Download/dsh/<分类>/（DSH 输出统一投递点）
+BASE="/data/data/com.termux/files/home/storage/downloads/dsh"
+f="$1"
+[ -f "$f" ] || { echo "用法: dsh-out <文件路径>"; exit 1; }
+ext="${f##*.}"; ext="$(echo "$ext" | tr 'A-Z' 'a-z')"
+case "$ext" in
+  md|txt|pdf|docx|doc|rtf)          c="文档" ;;
+  xlsx|xls|csv|tsv|ods)             c="表格" ;;
+  pptx|ppt|odp)                     c="演示" ;;
+  sh|bash|py|js|mjs|cjs|ts)         c="脚本" ;;
+  yaml|yml|json|toml|ini|conf)      c="配置" ;;
+  zip|tar|gz|7z)                    c="归档" ;;
+  png|jpg|jpeg|webp|svg|gif)        c="图片" ;;
+  apk|apks|xapk|apkm|aab)           c="应用" ;;
+  *)                                c="其他" ;;
+esac
+mkdir -p "$BASE/$c"
+if [ "$(realpath "$f")" = "$(realpath "$BASE/$c/$(basename "$f")" 2>/dev/null)" ]; then
+  echo "已在位: Download/dsh/$c/$(basename "$f")"; exit 0
+fi
+cp -f "$f" "$BASE/$c/" && echo "已投递: Download/dsh/$c/$(basename "$f")"
