@@ -345,7 +345,7 @@ droid devices                        # 应显示 127.0.0.1:<端口>  device
 
 ## 十二、ADB 通道打通（2026-09-26，**已连接并验证**）
 
-**最终状态**：`adb connect 127.0.0.1:5555` → `device`，model <机型> / **Android 16**。
+**最终状态**：`adb connect 127.0.0.1:5555` → `device`，model V2463A / **Android 16**。
 
 **怎么配对成功的**（关键经验）：
 1. 无线调试的**配对端口是临时开放的**，只有「使用配对码配对设备」对话框开着时才对——而且**用户切到聊天窗口报码时，对话框就关了，配对模式随之结束**（这是硬约束，不是流程问题）。
@@ -1315,3 +1315,95 @@ vivo 安装器的分支比想象的细，实测三条路：
   但 `dsh-status-pub` 的 `--json` 分支**打印完直接 return，不写文件**（第 150~152 行）；
   写文件只发生在不带 `--json` 的调用（小组件/tasksd）。→ **判据要选"这条路径真的会产出的证据"**，
   别拿旁边的副产物当铁证。（同一天第二次栽在这类"证据错配"上：第一次是页面上 `&amp;` 转义的 URL。）
+
+### 十三·补三十三：Clash「连 GitHub 都打不开」的真凶 —— 节点域名被自己的 fake-ip 吃了（2026-09-27 00:5x）
+
+**症状**：Clash 显示"运行中"、国内直连（百度）200、但**所有走节点的请求全 502**，GitHub 打不开。
+
+**排查过程（都是实测证据，不是猜）**
+1. `curl -x 7890 https://github.com` → CONNECT 200 后 **TLS 握手卡死**；`gstatic/generate_204` → **502**；
+   国内直连 200 ✓ → 说明"核心在、规则在、DNS 劫持在，只有上游节点这条腿断了"。
+2. **决定性实验**：拿一个**不需要解析的裸 IP 目标**（`http://1.1.1.1/`）走代理 —— 仍然 502，
+   日志写 `dial Fantasy Cloud (match Match/) --> 1.1.1.1:80 error: connect error: dns resolve failed: couldn't find ip`。
+   目标不需要 DNS 却报 DNS 失败 → **失败的是"节点自己那个域名"的解析**。
+3. 打开 Clash 的「Clash 日志捕捉工具」（info 级）复现，拿到原文：
+   `dial Fantasy Cloud (match DomainSuffix/gstatic.com) ... error: connect error: dns resolve failed: couldn't find ip`
+4. 对照解析：机场节点域 `a-ec01.kfchaochi.com`：
+   · DoH（阿里）→ CNAME `gtm-*.moeya.cc` → **16.162.47.51**（真实）
+   · **Clash 自己的 DNS → 198.18.0.50（FakeIP！）**
+   → mihomo **拒绝拿 FakeIP 去连代理服务器** → 全部节点"连不上"。而订阅本身是好的
+     （流量 8.41/99 GiB、到期 2027-05-23、2 小时前刚更新过）。
+
+**修法（两步，缺一不可 —— 我只做了这两步，没动别的）**
+1. 把**整个机场域名**加进 `设置 → 覆写 → DNS → FakeIP 过滤器`：
+   `+.kfchaochi.com` 与 `+.moeya.cc`（工具 `~/.local/share/dsh-widgets/clash-override.py list "FakeIP 过滤器" …`）。
+2. **让配置重新生成 + 核心重启**：只点「更新」不生效（实测 DNS 仍发 FakeIP）；
+   把 App 彻底退出重进（或停/开一次核心）之后才生效 —— 生效后立刻：
+   `gstatic204=204`、`github=200`、`google/youtube=200`、系统路径（浏览器走的那条）也 200 ✅
+
+**留下的自检工具**：`~/.local/bin/clash-doctor` —— 一条命令跑完五项
+（核心在不在 / 直连 / 代理 / **节点域名有没有被 fake-ip 吃** / 结论 + 取证指引），退出码 0/1。
+
+**⚠ 会复发**：机场换域名（比如从 `kfchaochi.com` 换成别的）时，同样的坑会再来一次；
+`clash-doctor` 第④步就是为了让人一眼看出来（它会给出现成的修法）。
+
+### 十三·补三十四：桥"唤醒不了"的真凶 —— 广播叫不醒死掉的 App 进程（2026-09-27 01:0x）
+排查 Clash 时发现 DSH 桥掉了，`dsh-bridge wake` 报"token 被吊销 或 无障碍被关"，
+但**手动 `am start -n io.dsh.bridge/.MainActivity` 立刻就活了**（token 也没问题）。
+看代码发现：`droid-sock` 的阶梯唤醒里，**stage 2（拉界面）被 `DSH_BRIDGE_WAKE_UI=1` 默认挡着**
+→ 广播受 Android 后台启动限制、叫不醒已死的 App 进程 → 桥一死就再也回不来。
+**修**：stage 2 改为**默认启用**（代价：桥界面会被拉到前台一次），要关掉兜底就设
+`DSH_BRIDGE_NO_UI=1`。实测语法通过、桥正常应答。
+
+### 十三·补三十五：把套件发到 GitHub（2026-09-27 01:2x，全程我操作）
+
+**结果**：仓库 **`Maopk/dsh-termux-kit`**（**私有**），默认分支 `master`，**87 个文件**已推送
+（`apps/ widgets/ tools/ plugins/ tests/ docs/ dist/` + README/LICENSE/.gitignore）。
+验证方式：GitHub API 读 `repos/.../git/trees/master?recursive=1` 数到 87 个 blob ✓。
+
+**走通的路（含三次踩坑）**
+1. 你说"我在 Chrome 里已登录，你自己去操作" → 我用桥驱动 Chrome：确认 `id=dashboard`（已登录）→
+   打开 `/new?name=…&visibility=private`，**用 URL 参数预填表单**（比点表单可靠得多）。
+2. **坑 1：分屏**。Chrome 和 DSH 的 PWA 窗口是分屏的，无障碍树只读**当前聚焦窗口** → 我按坐标点
+   全点在了另一半上（还误读了一堆 OCR）。**解法：先回桌面再按 Activity 名拉起主 Chrome**
+   （`am start -n com.android.chrome/com.google.android.apps.chrome.Main`），分屏自动拆掉。
+3. **坑 2：账号 2FA（sudo 模式）**。生成 token 的页面直接弹 "Confirm access"（passkey/验证器/邮件码）——
+   **这一步只能用户本人做**，我无法代过。
+4. **坑 3：设备码用错了**。`gh auth login --web` 的进程被我误杀后，我用 curl 自己发起设备码流程，
+   但浏览器沿用会话里**上一个未完成的设备码** → 用户授权的是旧码，我的轮询永远 `pending`
+   （还因为轮询太密被 GitHub 判 `slow_down`）。**教训：设备码流程里，"页面上显示的码"必须和你
+   手里那个 device_code 是同一次申请的**；重新申请后要让页面回到**输入码的那一步**再填。
+5. 最终：重新申请设备码 `26B7-03A7` → 浏览器里 Continue as Maopk → 填 8 格 → Continue →
+   **因为 sudo 模式还在，没有再要 2FA** → Authorize → curl 轮询拿到 token。
+
+**token 与凭据**
+- token 存在 `~/.dsh-gh-token`（**600**，内容从不打印）；用它建了仓库并推送一次。
+- **撤销入口**：GitHub → Settings → Applications → Authorized OAuth Apps → "GitHub CLI" → Revoke
+  （或在 Termux 里 `rm ~/.dsh-gh-token`）。`.git/config` 里**没有** token（推送时用一次性 URL）。
+
+**可复用的经验（写给未来的我）**
+- GitHub 的**表单字段不在无障碍树里**（React 受控输入），但**只读文本/按钮/代码框在** →
+  验证码类输入可以从树里逐格读回、精确填写（比 OCR 稳）。
+- 生成 token / 创建 token 需要 **sudo 模式**（2FA）；**OAuth 设备授权**在 sudo 有效期内**可以不再要 2FA** ——
+  所以"刚做完一次 2FA 之后"是趁热打铁的最好时机。
+- 一次 `slow_down` 之后要把轮询间隔拉长（GitHub 要求 +5s 以上），别硬轮询。
+
+### 十三·补三十六：公开仓库 + 发行版（2026-09-27 01:4x）
+
+用户要求：「我还是想公开，你把产品介绍做精简一些，不要花哨繁杂，还有把现有的产品公布出来以及加上README使用说明」。
+
+**做的四件事**
+1. **README 精简重写**（原来 200 行、偏"散文"）：现在是一句话定位 + 一张"包含什么"表 +
+   **安装 5 步**（含 `allow-external-apps`、自检）+ **使用说明**（小组件表 / App / 插件 / 常用命令）+
+   撤销与安全表 + 已知限制。事故复盘那类内容全部留在 `docs/`，不占首页。
+2. **成品作为发行版发出**：`v1.1 — 控制台 1.1 + 桥 1.8`，资产三个：
+   `dsh-console-v1.1.apk`(36.8KB) / `dsh-bridge-v1.8.apk`(28.5KB) / `SHA256SUMS.txt`。
+   实测匿名下载：桥 APK `http=200`、29167 字节、sha256 与本地一致 ✓
+3. **仓库转公开**：`PATCH /repos/... {"private": false}` → 之后匿名验证：
+   `api/repos` / 仓库主页 / raw README / 发行版页 **全部 200** ✓
+4. **公开前的复查**：`tools/check-no-secrets.sh` ✓；**全 git 历史**也扫了一遍
+   （`gho_`/`ghp_`/`github_pat_`/锁屏密码/机场域名/设备序列号/`token=` 长串）→ **0 命中**。
+
+**踩到的一个小坑**：GitHub Release 的资产上传接口对**非 ASCII 文件名**不友好——
+我按 URL 编码传 `DSH控制台-v1.1.apk`，结果名字被吞成 `DSH.-v1.1.apk`。
+**改法：资产名一律用 ASCII**（`dsh-console-v1.1.apk`），中文名只留在仓库内的 `dist/` 里。
