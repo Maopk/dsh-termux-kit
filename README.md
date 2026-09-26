@@ -102,6 +102,7 @@ droid conn|shot|ui|tap|text     # 只操作 adb 那条线
 dsh-uitap "刷新状态"            # 按文字点界面（自动滚动，比写死坐标可靠）
 dsh-install-apk <apk> --verify  # 全自动装包，装完再开一次 APK 复核
 clash-doctor                    # Clash 五项自检（含"节点域名被 fake-ip 吃掉"这个坑）
+dsh-gh push|release|status      # 维护本仓库：推送 / 发发行版 / 看状态
 ```
 
 ---
