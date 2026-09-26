@@ -47,7 +47,7 @@ final class Tasks {
         new T("open", RUN, "打开 Web UI", "用 ~/.dsh-url 里的地址开页面（优先桌面 PWA）", false, TermuxRunner.openUiCmd(), 60),
         new T("4_软重启DSH", RUN, "软重启", "SIGTERM 后重启，会断开当前网页会话", true, null, 300),
         new T("6_硬重启DSH", RUN, "硬重启", "-9 强杀后重启，会断开当前网页会话", true, null, 300),
-        new T("2_关闭DSH", RUN, "关闭 DSH", "停 DSH 并关浏览器；桥是独立通道，默认不动它", true, null, 200),
+        new T("2_关闭DSH", RUN, "关闭 DSH", "停 DSH 并关掉 DSH 窗口；桥默认也软停（保留需 --keep-bridge）；Termux 保留，控制台随即可用", true, null, 200),
 
         // ── 通道 ───────────────────────────────────────────────────
         new T("8_自动开无线调试", LINK, "连 adb", "只走无线调试：置开关 → 找端口 → adb connect（需要可用 Wi-Fi）", false, null, 220),
