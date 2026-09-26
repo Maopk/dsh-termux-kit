@@ -165,10 +165,16 @@ GOT=$(token_from_log "$TMPD/fake.log")
 # 注意：必须用**真正的另一个进程**来当持锁者 —— subshell 里 $$ 仍是父进程 pid，
 # 会被「同进程幂等」判定当成自己人，测不出互斥。真实的连点就是两个 bash 进程。
 LOCK_BLOCKED=0; LOCK_OK=0
-bash -c '. "$HOME/.local/share/dsh-widgets/common.sh"; boot_lock_acquire; sleep 3; boot_lock_release' &
+# 2026-09-27 改成**握手**而不是固定 sleep 3：
+#   原来 holder 只持锁 3 秒，而这台机器在跑重活时（备份/沙箱）sleep 1 会被拉长到 3 秒以上 →
+#   等测试者去抢时 holder 已经释放 → 报"没挡住"的**假失败**（实测遇到过一次）。
+#   现在：holder 拿到锁后写 ready 文件，一直等到测试者写 go 文件才释放。
+LOCK_READY="$TMPDIR/lock-ready.$$"; LOCK_GO="$TMPDIR/lock-go.$$"; rm -f "$LOCK_READY" "$LOCK_GO"
+bash -c '. "$HOME/.local/share/dsh-widgets/common.sh"; boot_lock_acquire && : > "'"$LOCK_READY"'"; for _ in $(seq 1 100); do [ -f "'"$LOCK_GO"'" ] && break; sleep 0.2; done; boot_lock_release' &
 HOLDER=$!
-sleep 1
+for _ in $(seq 1 50); do [ -f "$LOCK_READY" ] && break; sleep 0.1; done
 if boot_lock_acquire 2>/dev/null; then boot_lock_release; else LOCK_BLOCKED=1; fi
+: > "$LOCK_GO"
 if [ "$LOCK_BLOCKED" = 1 ]; then
   wait $HOLDER 2>/dev/null
   boot_lock_acquire && LOCK_OK=1
@@ -227,8 +233,18 @@ BADFS=$(grep -n 'am force-stop' "$T/2_关闭DSH.sh" 2>/dev/null | grep -v ':[[:s
 if [ "$BADFS" -gt 0 ]; then
   rec FAIL "关闭动作不撒谎" "组件 2 里还有 $BADFS 处裸 am force-stop（termux-am 不支持 → 没关却报成功）"
 else
-  rec PASS "关闭动作不撒谎" "组件 2 只用 adb shell am force-stop；没 adb 就如实说做不到"
+  rec PASS "关闭动作不撒谎" "组件 2 不裸用 am force-stop；没 adb 时交给 dsh-close-window 借桥按键（2026-09-27 实机验证：1 次返回键即关闭）"
 fi
+
+# ⑨·补 关窗口工具必须存在、可自测，且**排在停桥之前**（2026-09-27 用户实测的两个坑）
+if [ -x "$HOME/.local/bin/dsh-close-window" ] && timeout 20 "$HOME/.local/bin/dsh-close-window" --probe >/dev/null 2>&1; then
+  rec PASS "dsh-close-window" "存在且 --probe 可用（不动手就能看清窗口在不在前台）"
+else rec FAIL "dsh-close-window" "缺失或 --probe 不可用 → 没 adb 时关窗口又是假的"; fi
+CW=$(grep -n 'bin/dsh-close-window' "$T/2_关闭DSH.sh" 2>/dev/null | grep -v ':[[:space:]]*#' | head -1 | cut -d: -f1)
+BSTOP=$(grep -n 'droid-sock" stop' "$T/2_关闭DSH.sh" 2>/dev/null | grep -v ':[[:space:]]*#' | head -1 | cut -d: -f1)
+if [ -n "$CW" ] && [ -n "$BSTOP" ] && [ "$CW" -lt "$BSTOP" ]; then
+  rec PASS "关窗口早于停桥" "第 $CW 行关窗口、第 $BSTOP 行才停桥（顺序反了就没 adb 一定关不掉）"
+else rec FAIL "关窗口早于停桥" "关窗口($CW) 没有排在停桥($BSTOP) 之前 → 桥已停，按键无人可借"; fi
 
 # ⑩ 组件 8：Wi-Fi 关着时不能只是"停下来抱怨"，必须把 Wi-Fi 页打开并自动接续
 #    （Android 10+ 不允许 App 开 Wi-Fi → 只能这样半自动；--no-ui 可退回纯提示）
@@ -539,7 +555,7 @@ line "     沙箱清理：8099 = $P8099（应为 closed），启动日志与 .ds
 # ── SKIP ──
 line "【SKIP】真跑会杀掉当前会话或需人工恢复"
 rec SKIP "0_紧急停止.sh" "真跑会吊销 token + 关无障碍 + 断 adb，需你手动恢复；已由音量键演练间接验证"
-rec SKIP "2_关闭DSH.sh" "真跑会停掉当前会话；各步骤已单独真跑（备份/轮换/端口等待/桥停/关浏览器）"
+rec SKIP "2_关闭DSH.sh" "真跑会停掉当前会话；各步骤已单独真跑（备份/轮换/端口等待/桥停），关窗口由 dsh-close-window 单独真跑过"
 rec SKIP "4_软重启DSH.sh" "真跑会重启服务、断开当前会话"
 rec SKIP "6_硬重启DSH.sh" "同上；这是唯一能验证 -9 强杀路径的方式（孤儿锁清理已由 L3⑤ 单测覆盖）"
 

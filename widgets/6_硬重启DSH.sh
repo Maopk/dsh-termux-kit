@@ -79,8 +79,16 @@ step "⑥ 浏览器与 PWA（默认**不动**你正在看的页面）"
 #      → 余额小鲸鱼挂件的配置 GET 失败 → 弹「设置读取失败，已暂停保存以免覆盖你的原有设置」。
 # 所以默认改成保留；确实想连浏览器一起关，加 --close-browser。
 if [ "$CLOSE_BROWSER" = 1 ]; then
-  run "am force-stop '$BROWSER_PKG'"; ok "已关闭 $BROWSER_PKG"
-  run "pkill -f webapk 2>/dev/null || true"; ok "已结束 PWA(webapk) 进程"
+  # 2026-09-27 修正：原来这里 `am force-stop` + `pkill -f webapk` 两句**都是假的**——
+  #   Termux 的 am 没有 force-stop 子命令；pkill 只能杀自己 UID 的进程，动不了 Chrome 名下的窗口。
+  #   现在统一交给 dsh-close-window（adb 优先，没 adb 就借无障碍桥按键）。
+  if [ "$DRY" = 1 ]; then
+    printf '   · [dry] dsh-close-window\n'; ok "（dry-run）"
+  elif [ -x "$HOME_DIR/.local/bin/dsh-close-window" ] && "$HOME_DIR/.local/bin/dsh-close-window"; then
+    ok "浏览器 / PWA 窗口已关闭"
+  else
+    warn "窗口没能关掉（原因见上面）—— 可从最近任务手动划掉，或开 adb"
+  fi
 else
   ok "保留浏览器（重启完成后**刷新页面**即可加载新客户端模块；登录 cookie 重启后依然有效）"
 fi

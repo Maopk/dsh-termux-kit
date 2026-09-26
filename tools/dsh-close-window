@@ -74,26 +74,38 @@ close_via_adb() {
 }
 
 close_via_bridge() {
-  local i
+  local i prev
   if ! timeout 8 "$SOCK" ping --fast >/dev/null 2>&1; then
     say "   ✘ 桥没应答（--fast），无法借它按键"
     return 1
   fi
+  # 记下"关窗口之前你在用哪个 App"：为了借返回键，我们必须先把 DSH 窗口拉到前台，
+  # 关完若不还回去，你就会停在桌面（实机踩到）。关完把它拉回前台（Termux/桌面除外）。
+  prev=$(fg_pkg)
+  if [ "$prev" = "com.android.chrome" ]; then prev=""; fi
   # 窗口必须在最前面才收得到返回键
   if [ "$(fg_pkg)" != "com.android.chrome" ]; then
     say "   · 把 DSH 窗口带到前台（这样才能给它发返回键）"
     timeout 15 am start -a android.intent.action.VIEW -d "$(dsh_url)" ${PWA:+-p "$PWA"} >/dev/null 2>&1
     sleep 2
   fi
+  # 关完把原来的 App 还到前台
+  restore_prev() {
+    [ -z "$prev" ] && return 0
+    case "$prev" in com.termux|com.bbk.launcher*|*launcher*) return 0 ;; esac
+    timeout 12 am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "$prev" >/dev/null 2>&1 \
+      && say "   · 已把 $prev 拉回前台"
+  }
   for i in 1 2 3 4 5 6; do
     if [ "$(fg_pkg)" != "com.android.chrome" ]; then
       say "   ✔ 窗口已关（按了 $((i-1)) 次返回键）"
+      restore_prev
       return 0
     fi
     timeout 8 "$SOCK" key back >/dev/null 2>&1
     sleep 0.8
   done
-  [ "$(fg_pkg)" != "com.android.chrome" ] && { say "   ✔ 窗口已关（按了 6 次返回键）"; return 0; }
+  [ "$(fg_pkg)" != "com.android.chrome" ] && { say "   ✔ 窗口已关（按了 6 次返回键）"; restore_prev; return 0; }
   say "   ✘ 按了 6 次返回键窗口还在 —— 页面可能自己吞了返回键；有 adb 时用 adb 关更干净"
   return 1
 }
