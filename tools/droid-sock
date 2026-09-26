@@ -70,9 +70,16 @@ def call(obj, timeout=40):
     try:
         s = _connect_once(timeout)
     except Exception as first:
-        # 阶梯唤醒：① 广播（静默）→ ② 拉界面（兜底）
+        # 阶梯唤醒：① 广播（静默，不打扰）→ ② 拉界面（兜底）
+        # ⚠ 2026-09-27 实测教训：广播**叫不醒已经死掉的 App 进程**（Android 后台启动限制），
+        #   而 stage 2 以前被 DSH_BRIDGE_WAKE_UI=1 挡着 → 桥一死就再也回不来，只能人工点图标。
+        #   现在默认就会走 stage 2（代价：桥的界面会被拉到前台一次）；不想被占屏设
+        #   DSH_BRIDGE_NO_UI=1 关掉兜底。
         s = None
-        stages = (1, 2) if os.environ.get('DSH_BRIDGE_WAKE_UI') == '1' else (1,)
+        if os.environ.get('DSH_BRIDGE_NO_UI') == '1':
+            stages = (1,)
+        else:
+            stages = (1, 2)
         for stage in stages:
             wake_bridge(stage)
             try:
@@ -81,7 +88,7 @@ def call(obj, timeout=40):
             except Exception:
                 s = None
         if s is None:
-            print('❌ 连不上 DSH 桥（%s:%d）：广播唤醒与拉界面都试过了仍失败\n'
+            print('❌ 连不上 DSH 桥（%s:%d）：广播唤醒 + 拉起桥界面都试过了仍失败\n'
                   '   请确认：无障碍里「DSH 桥」是开启状态（重新开启必须由你本人在系统设置里确认）'
                   % (HOST, PORT), file=sys.stderr)
             sys.exit(3)
