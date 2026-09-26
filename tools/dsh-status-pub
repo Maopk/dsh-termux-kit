@@ -12,9 +12,10 @@
       启动锁与凭证锁是否残留 / 生成时间。
 
 用法：
-  dsh-status-pub            # 发布一次
+  dsh-status-pub            # 发布一次（整包硬预算 6 秒，撞预算的部分标 partial）
   dsh-status-pub --quiet    # 不打印（给组件收尾调用）
   dsh-status-pub --print    # 只打印不写文件
+  dsh-status-pub --budget 3 # 自定义整包预算（秒）；控制台走 25 秒超时，默认 6 秒足够
 """
 import json
 import os
@@ -31,6 +32,24 @@ TXT_PATH = os.path.join(OUTDIR, 'status.txt')
 TASK_DIR = os.path.join(HOME, '.shortcuts', 'tasks')
 LOG_DIR = os.path.join(HOME, '.smoke')
 DANGEROUS = {'2_关闭DSH', '4_软重启DSH', '6_硬重启DSH', '0_紧急停止'}
+
+
+# ── 全局时间预算（2026-09-27 加）──
+# 为什么：控制台 APK 的「刷新状态」只等 25 秒，而这里每一步各带自己的超时
+# （桥 ping 14s + adb 12s + curl 8s…），最坏情况能拼到 30s+ → App 端先超时，
+# 手机上表现为"点了刷新刷不出来"。现在整包有硬预算（默认 6s），每一步只许用剩下的。
+DEADLINE = None
+BUDGET_S = 6.0
+
+
+def budget(default):
+    if DEADLINE is None:
+        return default
+    return max(0.3, min(float(default), DEADLINE - time.time()))
+
+
+def out_of_time():
+    return DEADLINE is not None and time.time() >= DEADLINE
 
 
 def sh(args, timeout=12):
@@ -84,18 +103,22 @@ def tasks_state():
 
 
 def collect():
-    st = {'ts': time.strftime('%F %T'), 'epoch': int(time.time())}
+    global DEADLINE
+    DEADLINE = time.time() + BUDGET_S
+    st = {'ts': time.strftime('%F %T'), 'epoch': int(time.time()), 'budget_s': BUDGET_S}
     # DSH Web
     dsh = {'port': port_open(8080)}
-    code = sh(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '4',
-               'http://127.0.0.1:8080/'], timeout=8)
+    mt = int(max(1, budget(4)))
+    code = sh(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', str(mt),
+               'http://127.0.0.1:8080/'], timeout=budget(6))
     dsh['http'] = code or '?'
     dsh['ok'] = dsh['port'] and code not in ('', '000', '404')
     st['dsh'] = dsh
     # 桥
     br = {'port': port_open(8788), 'ok': False, 'ver': None, 'paused': None}
     if br['port']:
-        pong = sh([os.path.join(HOME, '.local/bin/droid-sock'), 'ping'], timeout=14)
+        # --fast：单次连接、失败/被冻结立刻返回，不走"广播+拉界面"的唤醒阶梯（那条最多 14s）
+        pong = sh([os.path.join(HOME, '.local/bin/droid-sock'), 'ping', '--fast'], timeout=budget(4))
         br['ok'] = '"pong": true' in pong
         m = re.search(r'"ver":\s*"([^"]+)"', pong)
         br['ver'] = m.group(1) if m else None
@@ -104,7 +127,7 @@ def collect():
     st['bridge'] = br
     # adb
     devs = []
-    out = sh(['adb', 'devices'], timeout=12)
+    out = sh(['adb', 'devices'], timeout=budget(3))
     for line in out.splitlines()[1:]:
         if '\tdevice' in line:
             devs.append(line.split('\t')[0])
@@ -121,6 +144,7 @@ def collect():
         'adb': 'green' if st['adb']['ok'] else 'red',
     }
     st['tasks'] = tasks_state()
+    st['partial'] = out_of_time()   # true = 撞到预算、有些项是"没来得及问"而不是"真的红"
     return st
 
 
@@ -143,6 +167,18 @@ def text_of(st):
 
 
 def main():
+    global BUDGET_S
+    for i, a in enumerate(sys.argv):
+        if a == '--budget' and i + 1 < len(sys.argv):
+            try:
+                BUDGET_S = float(sys.argv[i + 1])
+            except Exception:
+                pass
+        elif a.startswith('--budget='):
+            try:
+                BUDGET_S = float(a.split('=', 1)[1])
+            except Exception:
+                pass
     quiet = '--quiet' in sys.argv
     only_print = '--print' in sys.argv
     as_json = '--json' in sys.argv      # 只把 JSON 打到 stdout（给控制台 APK 用）

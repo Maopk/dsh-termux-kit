@@ -113,7 +113,38 @@ def main():
     if not a:
         print(__doc__ or '')
         print('用法: droid-sock ping|cur|ui|shot|tap|longpress|swipe|text|key|start ...')
+        print('      droid-sock ping --fast   # 只探一次，不唤醒（给状态收集这类"必须快"的场景）')
         return 2
+    # --fast：单次连接、失败立刻返回，**不做唤醒阶梯**。
+    # 为什么要它：dsh-status-pub 要给控制台 APK 在超时窗口内回话，
+    # 而默认的 call() 在"端口在听但服务被冻结"时会走广播+拉界面（最多 14s）→ 整包超时。
+    FAST = '--fast' in a
+    a = [x for x in a if x != '--fast']
+    if FAST:
+        global call
+        def call(obj, timeout=3):
+            try:
+                s = _connect_once(3)
+            except Exception as e:
+                print('❌ 桥没应答（--fast，未唤醒）：%s' % e, file=sys.stderr)
+                sys.exit(3)
+            tok = load_token()
+            if not tok:
+                print('❌ 没有 token', file=sys.stderr)
+                sys.exit(2)
+            req = dict(obj); req['token'] = tok
+            s.sendall((json.dumps(req, ensure_ascii=False) + '\n').encode('utf-8'))
+            buf = b''
+            try:
+                while not buf.endswith(b'\n'):
+                    chunk = s.recv(1 << 16)
+                    if not chunk: break
+                    buf += chunk
+            finally:
+                s.close()
+            if not buf:
+                print('❌ 没有响应', file=sys.stderr); sys.exit(4)
+            return json.loads(buf.decode('utf-8', 'replace'))
     k = a[0]
     if k == 'ping':
         r = call({'action': 'ping'})

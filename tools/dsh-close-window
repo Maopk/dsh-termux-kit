@@ -1,0 +1,114 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# dsh-close-window —— 关掉 DSH 的浏览器 / PWA（WebAPK）窗口
+#
+# 为什么需要单独一个工具：
+#   Termux 自带的 am 是 termux-am 0.8.1，**没有 force-stop 子命令**
+#   （`am force-stop X` → Error: unknown command）。所以"关闭 DSH"里原来那句
+#   `close_pkg com.android.chrome` 在没有 adb 时是**假的**——打印了"已关闭"，窗口根本没关。
+#   能真正关掉别的 App 窗口的只有两条路：
+#     ① adb（shell 身份）：adb shell am force-stop …
+#     ② 无障碍桥：把窗口带到前台，再连按系统返回键，直到前台不再是它
+#   （PWA/TWA 窗口的"前台包名"是 com.android.chrome —— Chrome 替 WebAPK 渲染，
+#     所以判定"窗口还在不在"看的就是 com.android.chrome。）
+#
+# ⚠ 顺序要求：借桥关窗口必须在「停桥」之前做（2_关闭DSH.sh 已按此排序）。
+#
+# 用法：
+#   dsh-close-window            真正关（adb 优先，其次桥）
+#   dsh-close-window --probe    只报告状态，不动手（自测用）
+#   dsh-close-window --dry-run  只打印计划
+#   dsh-close-window --keep-chrome   只关 PWA 壳，不 force-stop Chrome（有 adb 时）
+set -u
+HOME_DIR=/data/data/com.termux/files/home
+SOCK="$HOME_DIR/.local/bin/droid-sock"
+PWAFILE="$HOME_DIR/.dsh-pwa"
+URLFILE="$HOME_DIR/.dsh-url"
+DRY=0; PROBE=0; KEEP_CHROME=0
+for a in "$@"; do case "$a" in
+  --dry-run) DRY=1 ;;
+  --probe) PROBE=1 ;;
+  --keep-chrome) KEEP_CHROME=1 ;;
+esac; done
+say() { printf '%s\n' "$*"; }
+
+# 前台包名（快，不唤醒）
+fg_pkg() {
+  timeout 8 "$SOCK" cur 2>/dev/null | grep -o '"pkg":[[:space:]]*"[^"]*"' | cut -d'"' -f4
+}
+# PWA 包名：优先缓存（dsh-browser-open 写的），其次 adb 现查
+pwa_pkg() {
+  local p=""
+  [ -f "$PWAFILE" ] && p=$(head -1 "$PWAFILE" | tr -d '[:space:]')
+  if [ -z "$p" ] && adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q .; then
+    p=$(timeout 20 adb shell pm list packages 2>/dev/null | sed 's/package://' | grep -E '^org\.chromium\.webapk\.' | head -1)
+    [ -n "$p" ] && printf '%s\n' "$p" > "$PWAFILE"
+  fi
+  printf '%s' "$p"
+}
+dsh_url() {
+  local u=""
+  [ -f "$URLFILE" ] && u=$(head -1 "$URLFILE" | tr -d '[:space:]')
+  printf '%s' "${u:-http://127.0.0.1:8080/}"
+}
+adb_ready() { adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q .; }
+
+PWA=$(pwa_pkg); FG=$(fg_pkg)
+say "PWA 包名   : ${PWA:-（未发现，dsh-browser-open 还没写过缓存）}"
+say "前台包名   : ${FG:-（桥没应答）}"
+say "adb        : $(adb_ready && echo 已连接 || echo 未连接)"
+if [ "$PROBE" = 1 ]; then
+  if [ "$FG" = "com.android.chrome" ]; then say "判定        : DSH 窗口**在**前台（Chrome 托管）"
+  else say "判定        : 前台不是 Chrome → DSH 窗口此刻不在最前面"; fi
+  exit 0
+fi
+
+close_via_adb() {
+  local ok=0
+  if [ "$KEEP_CHROME" = 0 ]; then
+    timeout 20 adb shell am force-stop com.android.chrome >/dev/null 2>&1 && ok=1 || ok=0
+  fi
+  [ -n "$PWA" ] && timeout 20 adb shell am force-stop "$PWA" >/dev/null 2>&1
+  sleep 1
+  [ "$(fg_pkg)" != "com.android.chrome" ] && return 0
+  return 1
+}
+
+close_via_bridge() {
+  local i
+  if ! timeout 8 "$SOCK" ping --fast >/dev/null 2>&1; then
+    say "   ✘ 桥没应答（--fast），无法借它按键"
+    return 1
+  fi
+  # 窗口必须在最前面才收得到返回键
+  if [ "$(fg_pkg)" != "com.android.chrome" ]; then
+    say "   · 把 DSH 窗口带到前台（这样才能给它发返回键）"
+    timeout 15 am start -a android.intent.action.VIEW -d "$(dsh_url)" ${PWA:+-p "$PWA"} >/dev/null 2>&1
+    sleep 2
+  fi
+  for i in 1 2 3 4 5 6; do
+    if [ "$(fg_pkg)" != "com.android.chrome" ]; then
+      say "   ✔ 窗口已关（按了 $((i-1)) 次返回键）"
+      return 0
+    fi
+    timeout 8 "$SOCK" key back >/dev/null 2>&1
+    sleep 0.8
+  done
+  [ "$(fg_pkg)" != "com.android.chrome" ] && { say "   ✔ 窗口已关（按了 6 次返回键）"; return 0; }
+  say "   ✘ 按了 6 次返回键窗口还在 —— 页面可能自己吞了返回键；有 adb 时用 adb 关更干净"
+  return 1
+}
+
+if [ "$DRY" = 1 ]; then
+  say "· [dry] $(adb_ready && echo 'adb shell am force-stop com.android.chrome' || echo '借桥：带到前台 + 连按返回键')"
+  exit 0
+fi
+
+if adb_ready; then
+  say "→ 走 adb 关闭"
+  close_via_adb && { say "✔ 已关闭（adb）：浏览器/PWA 窗口已消失"; exit 0; }
+  say "   adb 关了但前台仍是 Chrome → 试试借桥"
+fi
+say "→ 走桥关闭（无障碍）"
+if close_via_bridge; then exit 0; fi
+say "✘ 没关掉。可行的替代：① 手动从最近任务划掉；② 开一次无线调试让我用 adb 关"
+exit 1
