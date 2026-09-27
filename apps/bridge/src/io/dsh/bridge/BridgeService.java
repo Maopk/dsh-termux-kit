@@ -370,6 +370,78 @@ public class BridgeService extends AccessibilityService {
         }
 
         // ---- Toggling wireless debugging: the only place that needs WRITE_SECURE_SETTINGS ----
+        if (a.equals("screen")) {
+            // 用桥做自动化之前把屏幕「不息屏」，用完调回来。
+            //
+            // Why it lives here: setting the screen timeout needs a permission only this app holds
+            // (WRITE_SECURE_SETTINGS, granted once over adb). The user asked for exactly this
+            // practice after a run was wasted on a screen that had gone to sleep mid-way.
+            //
+            // Two mechanisms, because they need different permissions:
+            //   ① Settings.System.SCREEN_OFF_TIMEOUT  — the real "息屏时间"; needs WRITE_SETTINGS,
+            //      which this app does not hold, so it usually throws.
+            //   ② Settings.Global.STAY_ON_WHILE_PLUGGED_IN — writable with WRITE_SECURE_SETTINGS;
+            //      keeps the screen on while charging, which is the usual state during a bridge run.
+            // ① 是用户说的那个设置项，所以先试它；失败就退到 ②，并在回复里说明用的是哪个，
+            // 不假装设成了用户要的那个。
+            String mode = req.optString("value", "status");
+            android.content.SharedPreferences sp = getSharedPreferences(PREFS, MODE_PRIVATE);
+            android.content.ContentResolver cr = getContentResolver();
+            if (mode.equals("keep")) {
+                try {
+                    int cur = android.provider.Settings.System.getInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT);
+                    sp.edit().putInt("screen_off_saved", cur).putBoolean("screen_off_kept", true).apply();
+                    android.provider.Settings.System.putInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT, 2147483647);
+                    d.put("method", "screen_off_timeout");
+                    d.put("was", cur);
+                } catch (Throwable t1) {
+                    try {
+                        int cur = android.provider.Settings.Global.getInt(cr, android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN, 0);
+                        sp.edit().putInt("stay_on_saved", cur).putBoolean("stay_on_kept", true).apply();
+                        android.provider.Settings.Global.putInt(cr, android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN, 7);
+                        d.put("method", "stay_on_while_plugged_in");
+                        d.put("was", cur);
+                        d.put("note", "SCREEN_OFF_TIMEOUT needs WRITE_SETTINGS; used stay-awake-while-charging instead");
+                    } catch (Throwable t2) {
+                        throw new Exception("cannot keep the screen on: " + t1.getMessage() + " / " + t2.getMessage());
+                    }
+                }
+                d.put("kept", true);
+                return d;
+            }
+            if (mode.equals("restore")) {
+                boolean did = false;
+                if (sp.getBoolean("screen_off_kept", false)) {
+                    try {
+                        android.provider.Settings.System.putInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT,
+                                sp.getInt("screen_off_saved", 60000));
+                        sp.edit().putBoolean("screen_off_kept", false).apply();
+                        d.put("method", "screen_off_timeout"); d.put("restored", sp.getInt("screen_off_saved", 60000));
+                        did = true;
+                    } catch (Throwable t) { /* fall through to the other mechanism */ }
+                }
+                if (sp.getBoolean("stay_on_kept", false)) {
+                    try {
+                        android.provider.Settings.Global.putInt(cr, android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN,
+                                sp.getInt("stay_on_saved", 0));
+                        sp.edit().putBoolean("stay_on_kept", false).apply();
+                        if (!did) { d.put("method", "stay_on_while_plugged_in"); d.put("restored", sp.getInt("stay_on_saved", 0)); }
+                        did = true;
+                    } catch (Throwable t) { /* nothing else to try */ }
+                }
+                d.put("restored_ok", did);
+                return d;
+            }
+            // status
+            try {
+                d.put("screen_off_timeout", android.provider.Settings.System.getInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT));
+            } catch (Throwable t) { d.put("screen_off_timeout", -1); }
+            try {
+                d.put("stay_on_while_plugged_in", android.provider.Settings.Global.getInt(cr, android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN, 0));
+            } catch (Throwable t) { d.put("stay_on_while_plugged_in", -1); }
+            d.put("kept", sp.getBoolean("screen_off_kept", false) || sp.getBoolean("stay_on_kept", false));
+            return d;
+        }
         if (a.equals("adbwifi")) {
             int v = req.optInt("value", 1);
             try {

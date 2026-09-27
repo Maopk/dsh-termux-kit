@@ -30,6 +30,7 @@ window.__ModuleLoader__.load({
         { id: 'bridge_status', cat: 'Channels (adb and bridge separate)', label: 'Bridge status', icon: '🔎', hint: 'Bridge only: port / response / version' },
         { id: '10_net-fix', cat: 'Channels (adb and bridge separate)', label: 'Network first aid', icon: '🩺', hint: 'One tap when foreign sites die: decides whether the core stopped or the config went bad, then repairs' },
         { id: '7_reconnect-ai', cat: 'Channels (adb and bridge separate)', label: 'Restore all (adb + bridge)', icon: '🔗', hint: 'Use only when you need both' },
+        { id: '11_update-apps', cat: 'Maintenance', label: 'Update the two apps', icon: '⬆', hint: 'Downloads the latest console and bridge from the repo, verifies and installs them' },
         { id: '3_backup-dsh', cat: 'Maintenance', label: 'Backup', icon: '💾', hint: 'Pack and verify the archive' },
         { id: '5_cleanup-dsh', cat: 'Maintenance', label: 'Cleanup', icon: '🧹', hint: 'Deletes only my artifacts' },
         { id: '9_revoke-pin', cat: 'Emergency', label: 'Revoke password access', icon: '🔑', hint: 'Deletes the stored password; the AI loses it at once' },

@@ -68,6 +68,10 @@ public class MainActivity extends Activity {
      * degrades to "?".
      */
     private String ver = "?";
+    private TextView updateRow;       // 关于：项目地址 + 有没有新版本
+    private TextView projRow;
+    private static final String PROJECT_URL = "https://github.com/Maopk/dsh-termux-kit";
+    private long lastUpdateCheck = 0;
     private static final int TIMEOUT_S = 45;
     private static final int MAX_HISTORY = 60;
 
@@ -155,6 +159,11 @@ public class MainActivity extends Activity {
                         recreate();
                     }
                 }
+                return;
+            }
+            if ("update_check".equals(cmdId)) {
+                // Termux 侧查完仓库，把 JSON 原样回传；这里只认字段，不做网络（本 App 没有网络权限）
+                showUpdateResult(i.getStringExtra("output"));
                 return;
             }
             if ("installpass_query".equals(cmdId)) {
@@ -296,6 +305,15 @@ public class MainActivity extends Activity {
         lastLine.setOnClickListener(v -> openLog());
         root.addView(lastLine, llp);
 
+        TextView about = new TextView(this);
+        about.setText(Lang.t("About"));
+        about.setTextSize(13); about.setTypeface(Typeface.DEFAULT_BOLD);
+        about.setTextColor(Color.parseColor("#58A6FF"));
+        about.setPadding(0, dp(14), 0, dp(2));
+        root.addView(about);
+        root.addView(buildUpdateRow(), wideLp());
+        root.addView(buildProjectRow(), wideLp());
+
         TextView tip = new TextView(this);
         tip.setTextSize(11); tip.setTextColor(Color.parseColor("#6E7681"));
         tip.setPadding(0, dp(10), 0, 0);
@@ -309,6 +327,7 @@ public class MainActivity extends Activity {
         loadHistory();   // the log survives a cold start now (see saveHistory)
         render();
         autoStatus();
+        checkUpdate();   // 每次打开自动问一次仓库有没有新版本（走 Termux，本 App 不要网络权限）
         refreshAuthState();
     }
 
@@ -662,6 +681,78 @@ public class MainActivity extends Activity {
         busyRow.setVisibility(busy ? View.VISIBLE : View.GONE);
         if (busy) busyText.setText(Lang.t("Running: ") + pendingLabel + Lang.t("　waited 0s"));
         for (Button bt : buttons) bt.setEnabled(!busy);
+    }
+
+    /** 关于区：项目地址（点开就是仓库） */
+    private TextView buildProjectRow() {
+        projRow = new TextView(this);
+        projRow.setTextSize(12.5f);
+        projRow.setTextColor(0xFF79C0FF);
+        projRow.setPadding(dp(10), dp(10), dp(10), dp(10));
+        projRow.setBackgroundResource(R.drawable.box);
+        projRow.setText(Lang.t("Project page: ") + "github.com/Maopk/dsh-termux-kit");
+        projRow.setOnClickListener(v -> {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(PROJECT_URL))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (Throwable t) {
+                toast(Lang.t("No browser to open it with; the address is github.com/Maopk/dsh-termux-kit"));
+            }
+        });
+        return projRow;
+    }
+
+    private TextView buildUpdateRow() {
+        updateRow = new TextView(this);
+        updateRow.setTextSize(12.5f);
+        updateRow.setTextColor(0xFF8B949E);
+        updateRow.setPadding(dp(10), dp(10), dp(10), dp(10));
+        updateRow.setBackgroundResource(R.drawable.box);
+        updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" · checking for a newer release…"));
+        return updateRow;
+    }
+
+    /**
+     * 打开时自动查一次发行版。
+     *
+     * 走 Termux 而不是自己发请求：这个 App 的承诺是「只用 RUN_COMMAND，不要存储/网络/无障碍权限」，
+     * 加个 INTERNET 就破了这个承诺。它把自己的版本号传过去，Termux 侧比对仓库最新发行版。
+     * 一分钟节流：onResume 触发很频繁，而用户要的是"每次打开"。
+     */
+    private void checkUpdate() {
+        long now = System.currentTimeMillis();
+        if (now - lastUpdateCheck < 60000) return;
+        lastUpdateCheck = now;
+        run("update_check", Lang.t("Check for updates"), TermuxRunner.HOME
+                + "/.local/bin/dsh-update check --app console --current " + ver + " --json",
+                false, true, false, 25, true);
+    }
+
+    private void showUpdateResult(String out) {
+        if (updateRow == null) return;
+        String latest = "", tag = "";
+        boolean ok = false, has = false;
+        try {
+            org.json.JSONObject o = new org.json.JSONObject((out == null ? "" : out).trim());
+            ok = o.optBoolean("ok", false);
+            latest = o.optString("latest_app", "");
+            tag = o.optString("tag", "");
+            has = o.optBoolean("update", false);
+        } catch (Throwable t) { ok = false; }
+        if (!ok || latest.isEmpty()) {
+            // 查不到就直说查不到 —— 显示"已是最新"会把"没网"说成"没问题"
+            updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" · could not check for updates now (no network?)"));
+            updateRow.setTextColor(0xFF8B949E);
+            return;
+        }
+        if (has) {
+            updateRow.setText(Lang.t("⬆ New release available: ") + "v" + latest
+                    + Lang.t(" (you have ") + ver + Lang.t(") · tap the project page to get it"));
+            updateRow.setTextColor(0xFFD29922);
+        } else {
+            updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" · up to date (latest v") + latest + ")");
+            updateRow.setTextColor(0xFF3FB950);
+        }
     }
 
     private void pushHistory(String s) {

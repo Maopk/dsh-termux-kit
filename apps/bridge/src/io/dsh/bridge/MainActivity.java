@@ -31,6 +31,10 @@ public class MainActivity extends Activity {
     private TextView warnView;
     private Button idleBtn;
     private Button langBtn;   // language switch: auto → 中文 → English
+    private Button projBtn;   // 本项目的网址（点开就是仓库）
+    private TextView updateView;   // 打开时自动查一次发行版，有新的就显示在这里
+    private String ver = "?";      // 运行时从包信息读，绝不写死
+    private static final String PROJECT_URL = "https://github.com/Maopk/dsh-termux-kit";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,11 +48,12 @@ public class MainActivity extends Activity {
         root.setPadding(pad, pad, pad, pad);
 
         TextView title = new TextView(this);
-        // Version read dynamically from package info — never hard-coded again (last time the manifest went to 1.6 while the UI still said 1.5)
-        String ver = "?";
+        // Version read dynamically from package info — never hard-coded again (last time the manifest
+        // went to 1.6 while the UI still said 1.5). A field now, because the update check needs it
+        // from a background thread too.
         try {
             ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-        } catch (Throwable t) { /* ignore */ }
+        } catch (Throwable t) { /* stays "?" — never claim a version we could not read */ }
         title.setText(Lang.t("DSH Bridge") + "  v" + ver);
         title.setTextSize(22f);
 
@@ -117,6 +122,25 @@ public class MainActivity extends Activity {
             }
         });
 
+        // ── About: the project URL, and whether a newer release exists ──
+        projBtn = new Button(this);
+        projBtn.setText(Lang.t("Project page: ") + "github.com/Maopk/dsh-termux-kit");
+        projBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(PROJECT_URL))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Throwable t) {
+                    toast(Lang.t("No browser to open it with; the address is github.com/Maopk/dsh-termux-kit"));
+                }
+            }
+        });
+        updateView = new TextView(this);
+        updateView.setTextSize(13f);
+        updateView.setPadding(0, (int) (6 * getResources().getDisplayMetrics().density), 0, 0);
+        updateView.setTextColor(0xFF8B949E);
+        updateView.setText(Lang.t("Version: ") + ver + Lang.t(" · checking for a newer release…"));
+
         Button panic = new Button(this);
         panic.setText(Lang.t("Emergency stop (turn accessibility off now)"));
         panic.setTextSize(17f);
@@ -168,7 +192,7 @@ public class MainActivity extends Activity {
         requestNotifPermission();
         updateIdleBtn();
         updateState();
-        layoutAll(root, title, desc, tokenView, copy, open, refresh, notif, panic);
+        layoutAll(root, title, desc, tokenView, copy, open, refresh, notif, panic);   // projBtn/updateView are fields, built above
     }
 
     @Override
@@ -180,6 +204,88 @@ public class MainActivity extends Activity {
     }
 
     // ---------- State / settings ----------
+    /** 上一次查更新的时刻：onResume 会频繁触发，但用户要的是「每次打开」而不是每次返回都发请求。 */
+    private long lastUpdateCheck = 0;
+
+    /**
+     * 打开 App 时自动问一次仓库有没有新发行版。
+     *
+     * 放在后台线程里：onCreate/onResume 上做网络请求会把界面卡住，而这台手机上已经有过
+     * 「界面没反应 = 这 App 是空壳」的教训。失败**不报错**（没网是常态），只把状态写清楚，
+     * 免得用户以为"检查过了、没有新版本"。
+     */
+    private void checkUpdate() {
+        long now = System.currentTimeMillis();
+        if (now - lastUpdateCheck < 60000) return;      // 一分钟内不重复
+        lastUpdateCheck = now;
+        final String mine = ver;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                String latest = null, err = null;
+                try {
+                    java.net.HttpURLConnection c = (java.net.HttpURLConnection)
+                            new java.net.URL("https://api.github.com/repos/Maopk/dsh-termux-kit/releases/latest")
+                                    .openConnection();
+                    c.setRequestProperty("User-Agent", "dsh-bridge");
+                    c.setConnectTimeout(8000);
+                    c.setReadTimeout(8000);
+                    java.io.BufferedReader r = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(c.getInputStream(), "UTF-8"));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = r.readLine()) != null) sb.append(line);
+                    r.close();
+                    java.util.regex.Matcher m = java.util.regex.Pattern
+                            .compile("dsh-bridge-v([0-9.]+)\\.apk").matcher(sb.toString());
+                    if (m.find()) latest = m.group(1);
+                    else err = Lang.t("no bridge APK in the latest release");
+                } catch (Throwable t) {
+                    err = t.getClass().getSimpleName();
+                }
+                final String L = latest, E = err;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() { showUpdate(L, E, mine); }
+                });
+            }
+        }).start();
+    }
+
+    private static int[] vparts(String v) {
+        String[] p = (v == null ? "" : v).split("\\.");
+        int[] out = new int[p.length];
+        for (int i = 0; i < p.length; i++) {
+            try { out[i] = Integer.parseInt(p[i].replaceAll("[^0-9]", "")); } catch (Throwable t) { out[i] = 0; }
+        }
+        return out;
+    }
+
+    private static boolean isNewer(String a, String b) {
+        int[] x = vparts(a), y = vparts(b);
+        for (int i = 0; i < Math.max(x.length, y.length); i++) {
+            int xi = i < x.length ? x[i] : 0, yi = i < y.length ? y[i] : 0;
+            if (xi != yi) return xi > yi;
+        }
+        return false;
+    }
+
+    private void showUpdate(String latest, String err, String mine) {
+        if (updateView == null) return;
+        if (err != null || latest == null) {
+            // 说不清就说说不清 —— 不能显示成"已是最新"
+            updateView.setText(Lang.t("Version: ") + mine + Lang.t(" · could not check for updates now (no network?)"));
+            updateView.setTextColor(0xFF8B949E);
+            return;
+        }
+        if (isNewer(latest, mine)) {
+            updateView.setText(Lang.t("⬆ New release available: ") + "v" + latest
+                    + Lang.t(" (you have ") + mine + Lang.t(") · tap the project page to get it"));
+            updateView.setTextColor(0xFFD29922);
+        } else {
+            updateView.setText(Lang.t("Version: ") + mine + Lang.t(" · up to date (latest v") + latest + ")");
+            updateView.setTextColor(0xFF3FB950);
+        }
+    }
+
     private void updateState() {
         boolean on = isAccessibilityEnabled(this);
         BridgeService svc = BridgeService.INSTANCE;
@@ -193,6 +299,8 @@ public class MainActivity extends Activity {
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             notifOk = nm == null || nm.areNotificationsEnabled();
         } catch (Throwable t) { notifOk = true; }
+        checkUpdate();   // 每次打开自动查一次发行版（内部有节流与失败降级）
+
         if (warnView != null) {
             warnView.setText(notifOk ? ""
                     : Lang.t("⚠️ Notification permission is off: the notification-bar emergency stop layer is currently dead.") + "\n"
@@ -224,6 +332,10 @@ public class MainActivity extends Activity {
         root.addView(langBtn);
 
         root.addView(warnView);
+
+        root.addView(section("About"));
+        root.addView(updateView);
+        root.addView(projBtn);
 
         root.addView(section("Emergency"));
         root.addView(panic);

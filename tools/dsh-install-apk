@@ -45,6 +45,16 @@ safe_tmp() {
 TMP_APK=$(safe_tmp "$APK")
 
 log()  { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*"; }
+
+# 装包全程要屏幕亮着：中途息屏会让安装页被锁屏盖住，整轮白跑（真踩过）。所以进入时 keep、
+# 退出时无论成败都 restore —— 装完之后屏幕设置必须回到你原来的样子。
+SCREEN="$HOME_DIR/.local/bin/dsh-screen"
+screen_keep()    { [ -x "$SCREEN" ] && "$SCREEN" keep >/dev/null 2>&1 || true; }
+screen_restore() { [ -x "$SCREEN" ] && "$SCREEN" restore >/dev/null 2>&1 || true; }
+if [ "$DRY" = 0 ]; then
+  screen_keep
+  trap screen_restore EXIT INT TERM
+fi
 step() { printf '\n▶ %s\n' "$*"; }
 ok()   { printf '   ✔ %s\n' "$*"; }
 warn() { printf '   ⚠ %s\n' "$*"; }

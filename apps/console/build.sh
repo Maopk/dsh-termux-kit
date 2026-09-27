@@ -6,6 +6,12 @@ AJ="$HOME/.smoke/android.jar"
 OUT="$SRC/build"
 rm -rf "$OUT"; mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/gen"
 
+# 先把语言表重新生成一遍：Lang.java 是从 i18n/zh.json 生成的，忘了这一步就会拿旧表编译，
+# 表现为"代码里明明写了 Lang.t(新串)，装到手机上却是英文"（真踩过：控制台 1.12 的新串没进 dex）。
+if [ -x "$HOME/dsh-termux-kit/tools/i18n-table" ]; then
+  python3 "$HOME/dsh-termux-kit/tools/i18n-table" gen >/dev/null 2>&1 || true
+fi
+
 echo "① aapt2 compile (resources)"
 aapt2 compile --dir "$SRC/res" -o "$OUT/res.zip"
 

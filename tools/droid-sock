@@ -112,7 +112,7 @@ def main():
     a = sys.argv[1:]
     if not a:
         print(__doc__ or '')
-        print('Usage: droid-sock ping|cur|ui|shot|tap|longpress|swipe|text|key|start ...')
+        print('Usage: droid-sock ping|cur|ui|shot|tap|longpress|swipe|text|key|start|screen ...')
         print('      droid-sock ping --fast   # probe once, no wake (for cases like status collection that "must be fast")')
         return 2
     # --fast: a single connection that returns at once on failure, **with no wake ladder**.
@@ -164,6 +164,8 @@ def main():
         return 0
     elif k == 'stop':          # soft stop: closes only the port, accessibility stays (used to verify the broadcast wake)
         r = call({'action': 'stop'})
+    elif k == 'screen':        # keep the screen awake before bridge work / restore it after
+        r = call({'action': 'screen', 'value': a[1] if len(a) > 1 else 'status'}, timeout=15)
     elif k == 'panic':         # panic: close the port + disable accessibility
         r = call({'action': 'panic'})
     elif k == 'ui':

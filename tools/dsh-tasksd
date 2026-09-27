@@ -62,7 +62,7 @@ def origin_ok(origin):
 # Whitelist: only these script names; everything else is refused (no paths, no arbitrary commands)
 ALLOWED = {
     '0_emergency-stop', '10_net-fix', '1_start-dsh', '2_shutdown-dsh', '3_backup-dsh', '4_soft-restart-dsh',
-    '5_cleanup-dsh', '6_hard-restart-dsh', '7_reconnect-ai', '8_enable-wireless-adb',
+    '5_cleanup-dsh', '6_hard-restart-dsh', '7_reconnect-ai', '8_enable-wireless-adb', '11_update-apps',
     '9_revoke-pin',
 }
 # Virtual tasks: not scripts in .shortcuts/tasks but a command with an **absolute path** (same id set as the console App).

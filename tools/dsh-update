@@ -1,0 +1,190 @@
+#!/data/data/com.termux/files/usr/bin/python3
+"""dsh-update — 查这个项目有没有新发行版，需要时把 APK 下下来。
+
+设计上的两条约束：
+  · **控制台没有网络权限**（它的承诺是"只用 Termux 跑命令，不要存储/网络/无障碍"）。
+    所以它把「我是哪个版本」当参数传进来，由这里联网查 —— 检测逻辑全在 Termux 侧，
+    控制台依旧一个多余权限都不要。
+  · 桥有 INTERNET，自己就能查，不必经过这里（见 BridgeService 里的 updatecheck）。
+
+用法：
+    dsh-update check --app console --current 1.11 [--json]
+    dsh-update check --app bridge  --current 2.11 [--json]
+    dsh-update get console|bridge [--downloads-dir DIR]     # 下载最新 APK（不安装）
+    dsh-update latest [--json]                              # 只看仓库最新发行版
+
+退出码：0 = 没有更新（或已是最新）；10 = **有更新**；2 = 查不到（没网/限流）。
+把「有更新」单独给一个退出码，调用方不用去解析文字。
+"""
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.request
+
+REPO = 'Maopk/dsh-termux-kit'
+API = 'https://api.github.com/repos/%s/releases/latest' % REPO
+RELEASES_PAGE = 'https://github.com/%s/releases' % REPO
+HOME = os.path.expanduser('~')
+DL_DIR = os.path.join(HOME, 'storage/shared/Download/dsh/应用')
+
+
+def fetch_release(timeout=20):
+    req = urllib.request.Request(API, headers={
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'dsh-update (termux kit)',
+    })
+    tok = os.path.join(HOME, '.dsh-gh-token')
+    if os.path.isfile(tok):
+        try:
+            req.add_header('Authorization', 'token ' + open(tok).read().strip())
+        except Exception:
+            pass
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def ver_tuple(v):
+    """v1.10 / 1.10 / v2.11 → (1,10)；(0,) 表示读不出。"""
+    m = re.findall(r'\d+', v or '')
+    return tuple(int(x) for x in m) if m else (0,)
+
+
+def newer(latest, current):
+    return ver_tuple(latest) > ver_tuple(current)
+
+
+def asset_for(release, app):
+    """发行版里属于这个 App 的 APK。命名约定：dsh-<app>-v<版本>.apk（必须 ASCII）。"""
+    for a in release.get('assets', []):
+        if re.match(r'dsh-%s-v[\d.]+\.apk$' % re.escape(app), a['name']):
+            return a
+    return None
+
+
+def cmd_latest(args):
+    try:
+        rel = fetch_release()
+    except Exception as e:
+        print('✘ 查不到发行版：%s' % e, file=sys.stderr)
+        return 2
+    out = {'tag': rel.get('tag_name', ''), 'name': rel.get('name', ''), 'page': RELEASES_PAGE,
+           'assets': [a['name'] for a in rel.get('assets', [])]}
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False))
+    else:
+        print('%s  %s' % (out['tag'], out['name']))
+        for n in out['assets']:
+            print('   · ' + n)
+    return 0
+
+
+def cmd_check(args):
+    try:
+        rel = fetch_release()
+    except Exception as e:
+        # 查不到不是"没有更新"，必须区分开，否则界面会理直气壮地说"已是最新"
+        if args.json:
+            print(json.dumps({'ok': False, 'error': str(e)}, ensure_ascii=False))
+        else:
+            print('✘ 检查更新失败：%s' % e, file=sys.stderr)
+        return 2
+    tag = rel.get('tag_name', '')
+    a = asset_for(rel, args.app)
+    latest_app = ''
+    if a:
+        m = re.search(r'-v([\d.]+)\.apk$', a['name'])
+        latest_app = m.group(1) if m else ''
+    has = bool(latest_app) and newer(latest_app, args.current)
+    res = {'ok': True, 'app': args.app, 'current': args.current, 'tag': tag,
+           'latest_app': latest_app, 'update': has,
+           'asset': (a or {}).get('name', ''), 'url': (a or {}).get('browser_download_url', ''),
+           'page': RELEASES_PAGE, 'name': rel.get('name', '')}
+    if args.json:
+        print(json.dumps(res, ensure_ascii=False))
+    else:
+        if has:
+            print('⬆ 有新版本：%s %s → %s（%s）' % (args.app, args.current, latest_app, tag))
+            print('   下载：%s' % res['url'])
+        else:
+            print('✔ %s %s 已是最新（仓库最新 %s）' % (args.app, args.current, tag or '?'))
+    return 10 if has else 0
+
+
+def cmd_get(args):
+    try:
+        rel = fetch_release()
+    except Exception as e:
+        print('✘ 查不到发行版：%s' % e, file=sys.stderr)
+        return 2
+    a = asset_for(rel, args.app)
+    if not a:
+        print('✘ %s 的 APK 不在最新发行版里（%s）' % (args.app, rel.get('tag_name')), file=sys.stderr)
+        return 2
+    d = args.downloads_dir or DL_DIR
+    os.makedirs(d, exist_ok=True)
+    out = os.path.join(d, a['name'])
+    # 超时给足：GitHub 的资源直链在国内要过代理，实测**能下但很慢**（同一个文件一次 60 秒超时、
+    # 一次跑完且 SHA256 与发行版一致）。所以这里 60 → 180 秒，并先把"在下载"说清楚，
+    # 免得看起来像卡住了。
+    print('   正在下载 %s …' % a['name'], file=sys.stderr)
+    try:
+        req = urllib.request.Request(a['browser_download_url'], headers={'User-Agent': 'dsh-update'})
+        with urllib.request.urlopen(req, timeout=180) as r, open(out, 'wb') as fh:
+            fh.write(r.read())
+    except Exception as e:
+        print('✘ 下载失败：%s' % e, file=sys.stderr)
+        return 2
+    # 发行版自带 SHA256SUMS，能校验就校验 —— 下载成功不等于文件是对的
+    sums = None
+    for x in rel.get('assets', []):
+        if x['name'] == 'SHA256SUMS.txt':
+            try:
+                with urllib.request.urlopen(urllib.request.Request(
+                        x['browser_download_url'], headers={'User-Agent': 'dsh-update'}), timeout=30) as r:
+                    sums = r.read().decode('utf-8', 'replace')
+            except Exception:
+                pass
+            break
+    if sums:
+        want = ''
+        for line in sums.splitlines():
+            if line.strip().endswith(a['name']):
+                want = line.split()[0]
+        if want:
+            got = subprocess.run(['sha256sum', out], capture_output=True, text=True).stdout.split()[0]
+            if got != want:
+                os.remove(out)
+                print('✘ 校验失败：下载到的文件与发行版的 SHA256 不一致，已删除', file=sys.stderr)
+                return 2
+            print('   ✔ SHA256 与发行版一致')
+    print(out)
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(prog='dsh-update')
+    sub = ap.add_subparsers(dest='cmd', required=True)
+
+    p = sub.add_parser('latest'); p.add_argument('--json', action='store_true')
+    p.set_defaults(fn=cmd_latest)
+
+    p = sub.add_parser('check')
+    p.add_argument('--app', required=True, choices=['console', 'bridge'])
+    p.add_argument('--current', required=True, help='本机正在跑的版本号，例如 1.11')
+    p.add_argument('--json', action='store_true')
+    p.set_defaults(fn=cmd_check)
+
+    p = sub.add_parser('get')
+    p.add_argument('app', choices=['console', 'bridge'])
+    p.add_argument('--downloads-dir', default='')
+    p.set_defaults(fn=cmd_get)
+
+    args = ap.parse_args()
+    return args.fn(args)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

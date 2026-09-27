@@ -1,0 +1,46 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# dsh-screen —— 用桥做自动化之前把屏幕「不息屏」，用完调回来。
+#
+# 为什么要有它：一次真机装包跑到一半屏幕自己灭了，安装页被锁屏盖住，整轮白跑。
+# 用户的说法很直接：「你是用桥前能不能先去显示设置里把息屏时间改成不息屏，用完再调回来」。
+# 手点设置又慢又容易点错，所以做成命令 —— 而且**用完一定要能调回来**，
+# 所以这里带一个「忘了还原」的自检：keep 过的状态记在桥的 prefs 里，restore 才知道原值。
+#
+# 两种机制（桥那边按权限自动选，并如实回报用的是哪个）：
+#   ① Settings.System.SCREEN_OFF_TIMEOUT   = 屏幕上那个「息屏时间」，需要 WRITE_SETTINGS
+#   ② Settings.Global.STAY_ON_WHILE_PLUGGED_IN = 充电时保持常亮，需要 WRITE_SECURE_SETTINGS（桥有）
+#   桥先试 ①；不行就退到 ②，并在输出里说明，绝不假装设成了用户要的那一项。
+#
+# Usage:
+#   dsh-screen keep        用桥之前
+#   dsh-screen restore     用完（幂等：没 keep 过就什么都不做）
+#   dsh-screen status      看当前值 / 有没有 keep 过没还原
+set -u
+SOCK="$HOME/.local/bin/droid-sock"
+
+r=$(timeout 20 "$SOCK" screen "${1:-status}" 2>&1) || { printf '✘ 桥没有应答（先 dsh-bridge wake）\n' >&2; exit 1; }
+case "${1:-status}" in
+  keep)
+    if printf '%s' "$r" | grep -q '"kept": true'; then
+      m=$(printf '%s' "$r" | sed -n 's/.*"method": "\([^"]*\)".*/\1/p')
+      if [ "$m" = "screen_off_timeout" ]; then
+        printf '✔ 已设为「不息屏」（改的是系统的息屏时间，原值已记下）\n'
+      else
+        printf '✔ 已保持常亮（改的是「充电时屏幕不休眠」——息屏时间这项需要 WRITE_SETTINGS，桥没有，所以退到这个等效办法）\n'
+      fi
+    else
+      printf '✘ 没能保持常亮：%s\n' "$r" >&2; exit 1
+    fi ;;
+  restore)
+    if printf '%s' "$r" | grep -q '"restored_ok": true'; then
+      printf '✔ 已还原成原来的设置\n'
+    elif printf '%s' "$r" | grep -q '"restored_ok": false'; then
+      printf '· 没有需要还原的（之前没 keep 过）\n'
+    else
+      printf '⚠ 还原结果不明：%s\n' "$r" >&2; exit 1
+    fi ;;
+  *)
+    printf '%s\n' "$r"
+    printf '%s' "$r" | grep -q '"kept": true' && printf '⚠ 现在处于「已 keep 未还原」状态，用完记得 dsh-screen restore\n'
+    ;;
+esac

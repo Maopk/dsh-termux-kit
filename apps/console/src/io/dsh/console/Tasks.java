@@ -70,6 +70,9 @@ final class Tasks {
         // One-tap network first aid (the recurring "foreign sites dead" failure on this phone).
         new T("10_net-fix", LINK, "Network first aid", "Decides whether the Clash core is stopped or the generated config went bad, then repairs it (clash-doctor --fix)", false, null, 240),
 
+        // One-tap update: both apps check the repo on open, and this turns "there is a new
+        // release" into "it is installed" without a manual download.
+        new T("11_update-apps", CARE, "Update the two apps", "Downloads the latest console and bridge from the repo, verifies them, and installs them (keeps the screen awake meanwhile)", false, null, 600),
         new T("3_backup-dsh", CARE, "Backup", "Packs and verifies the archive (zstd -t + entry count)", false, null, 420),
         new T("5_cleanup-dsh", CARE, "Cleanup", "Deletes only my own artifacts; never touches config or notes", false, null, 420),
 

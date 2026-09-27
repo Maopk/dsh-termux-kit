@@ -26,7 +26,7 @@ declare -A MAP=(
   [3_备份DSH]=3_backup-dsh [4_软重启DSH]=4_soft-restart-dsh [5_清理DSH]=5_cleanup-dsh
   [6_硬重启DSH]=6_hard-restart-dsh [7_重连AI通道]=7_reconnect-ai
   [8_自动开无线调试]=8_enable-wireless-adb [9_撤销密码授权]=9_revoke-pin
-  [10_网络急救]=10_net-fix
+  [10_网络急救]=10_net-fix [11_更新应用]=11_update-apps
 )
 
 # Gate: a task in the repo with no Chinese name would show up as a single English row in an

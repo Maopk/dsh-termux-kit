@@ -40,15 +40,20 @@ final class Lang {
         ZH.put("  Bridge:", "  桥：");
         ZH.put("  DSH:", "  DSH：");
         ZH.put("  adb:", "  adb：");
+        ZH.put(" (you have ", "（你的是 ");
         ZH.put(" completed (exit=", " 已完成（exit=");
         ZH.put(" entries (keeps up to ", " 条（最多保留 ");
         ZH.put(" entries)", " 条）");
         ZH.put(" · ", " · ");
+        ZH.put(" · checking for a newer release…", " · 正在检查有没有新版本…");
+        ZH.put(" · could not check for updates now (no network?)", " · 现在查不了更新（没网？）");
+        ZH.put(" · up to date (latest v", " · 已是最新（仓库最新 v");
         ZH.put("(Does not affect DSH / Bridge / adb — each has its own revoke entry.)", "（不影响 DSH／桥／adb —— 它们各有自己的收回入口。）");
         ZH.put("(no entries yet)\n\n", "（还没有记录）\n\n");
         ZH.put("(no output this time)", "（这次没有输出）");
         ZH.put("(no result bundle received; Termux may not be authorized or allow-external-apps is off)\n", "(没有收到结果 bundle；可能是 Termux 未授权或 allow-external-apps 未开)\n");
         ZH.put(")", "）");
+        ZH.put(") · tap the project page to get it", "）· 点下面的项目地址去取");
         ZH.put(") — the lamps above and the summary line below are updated", "）—— 上面的灯和下面的摘要已更新");
         ZH.put(", took ", "，用时 ");
         ZH.put(", waiting for Termux to reply…", "，等待 Termux 回传…");
@@ -62,6 +67,7 @@ final class Lang {
         ZH.put("6_hard-restart-dsh", "6_硬重启DSH");
         ZH.put("7_reconnect-ai", "7_重连AI通道");
         ZH.put("8_enable-wireless-adb", "8_自动开无线调试");
+        ZH.put("About", "关于");
         ZH.put("Accessibility loopback only: a broadcast carrying the token, no network needed", "只走无障碍回环：带 token 的广播，不需要网络");
         ZH.put("Afterwards the AI can no longer use those 6 digits to pass any identity check for you (the security check when installing an APK, ", "之后 AI 就不能再用那 6 位替你过任何身份验证了（装 APK 时的安全验证、");
         ZH.put("Authorize", "授权");
@@ -73,6 +79,7 @@ final class Lang {
         ZH.put("Cancel", "取消");
         ZH.put("Channels (adb and bridge separate)", "通道（adb 与桥分开）");
         ZH.put("Check bridge status", "查看桥状态");
+        ZH.put("Check for updates", "检查更新");
         ZH.put("Chinese", "中文");
         ZH.put("Cleanup", "清理");
         ZH.put("Clear", "清空");
@@ -86,6 +93,7 @@ final class Lang {
         ZH.put("DSH Console log", "DSH 控制台日志");
         ZH.put("Decides whether the Clash core is stopped or the generated config went bad, then repairs it (clash-doctor --fix)", "判断是 Clash 核心被停了、还是生成的配置坏了，然后修好它（clash-doctor --fix）");
         ZH.put("Deletes only my own artifacts; never touches config or notes", "只删我自己的产物；绝不碰配置与笔记");
+        ZH.put("Downloads the latest console and bridge from the repo, verifies them, and installs them (keeps the screen awake meanwhile)", "从仓库下载最新的控制台与桥、校验后安装（过程中保持屏幕常亮）");
         ZH.put("Emergency", "紧急");
         ZH.put("Emergency stop", "紧急停止");
         ZH.put("English", "English");
@@ -101,6 +109,7 @@ final class Lang {
         ZH.put("Maintenance", "维护");
         ZH.put("Must be 6 digits", "必须是 6 位数字");
         ZH.put("Network first aid", "网络急救");
+        ZH.put("No browser to open it with; the address is github.com/Maopk/dsh-termux-kit", "没有可用的浏览器；地址是 github.com/Maopk/dsh-termux-kit");
         ZH.put("No reply the first time, resending: ", "第一次没回音，正在补发：");
         ZH.put("No status yet — tap Refresh status", "还没有状态 —— 点「刷新状态」");
         ZH.put("Now: authorized (the AI can pass identity checks for you)", "当前：已授权（AI 可代你过身份验证）");
@@ -113,6 +122,7 @@ final class Lang {
         ZH.put("Opens the page directly if it is already running; includes the start mutex and a real readiness check", "已在跑则直接开页面；含启动互斥与真就绪判定");
         ZH.put("Packs and verifies the archive (zstd -t + entry count)", "打包并校验归档（zstd -t + 条目数）");
         ZH.put("Password access", "密码使用权");
+        ZH.put("Project page: ", "项目地址：");
         ZH.put("Query password access", "查询密码使用权");
         ZH.put("Reading authorization state…", "正在读取授权状态…");
         ZH.put("Reading status…", "正在读取状态…");
@@ -144,7 +154,9 @@ final class Lang {
         ZH.put("This revokes it: ~/.dsh-auth-pass is deleted.\n", "收回后：~/.dsh-auth-pass 会被删除。\n");
         ZH.put("Turn the switch off at any time to revoke.", "随时把开关关掉即可收回。");
         ZH.put("Type that 6-digit lock-screen password → it is written to ~/.dsh-auth-pass (600).\n", "输入那 6 位锁屏密码 → 写进 ~/.dsh-auth-pass（600）。\n");
+        ZH.put("Update the two apps", "更新两个 App");
         ZH.put("Used only to pass system identity checks for you (installing packages, lifting settings restrictions, etc.).\n", "用途仅限：替你过系统身份验证（装包、解除设置限制等）。\n");
+        ZH.put("Version: ", "版本：");
         ZH.put("Wake bridge", "唤醒桥");
         ZH.put("Wireless debugging only: set the switch → find the port → adb connect (needs working Wi-Fi)", "只走无线调试：置开关 → 找端口 → adb connect（需要可用 Wi-Fi）");
         ZH.put("Write password authorization", "写入密码授权");
@@ -179,6 +191,7 @@ final class Lang {
         ZH.put("⚠ No callback from Termux after ", "⚠ 等了 ");
         ZH.put("⚠ RUN_COMMAND permission not granted yet; a permission prompt was shown.\n", "⚠ 还没拿到 RUN_COMMAND 权限；已弹出授权提示。\n");
         ZH.put("⚠ Termux (com.termux) not found; please install Termux first.", "⚠ 找不到 Termux（com.termux）；请先安装 Termux。");
+        ZH.put("⬆ New release available: ", "⬆ 有新版本：");
         ZH.put("　(tap here for the log)", "　（点这里看日志）");
         ZH.put("　Bridge ", "　桥 ");
         ZH.put("　DSH ", "　DSH ");
