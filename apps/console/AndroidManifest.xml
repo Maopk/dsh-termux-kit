@@ -1,26 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  DSH 控制台 —— 给这套 Termux 环境配的"遥控器"。
-  权限只有**一个**：com.termux.permission.RUN_COMMAND（由 Termux 定义，用来让别的 App 请它执行命令）。
-  没有：存储访问、网络、无障碍、悬浮窗、读应用列表、后台自启。
-  状态与执行全部走 Termux 的 RUN_COMMAND 通道，所以不需要读任何 Termux 的私有文件。
+  DSH Console — a "remote control" for this Termux setup.
+  Exactly **one** permission: com.termux.permission.RUN_COMMAND (defined by Termux so another app can ask it to run commands).
+  None of: storage, network, accessibility, overlay, app-list reading, boot autostart.
+  Status and execution both go through Termux's RUN_COMMAND channel, so no Termux private file is ever read.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="io.dsh.console"
-    android:versionCode="14"
-    android:versionName="1.1">
+    android:versionCode="15"
+    android:versionName="1.2">
 
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 
-    <!-- Android 11+ 的包可见性：不声明就看不到 Termux（桥那个 App 就踩过这个坑） -->
+    <!-- Android 11+ package visibility: without this declaration Termux is invisible (the Bridge app hit this bug) -->
     <queries>
         <package android:name="com.termux" />
     </queries>
 
-    <!-- 深色主题：界面本来就是深色，对话框（确认执行 / 日志）跟着一起深色，
-         否则 Android 默认亮色对话框会在深色页面上突兀地白一块 -->
+    <!-- Dark theme: the UI is dark anyway, so the dialogs (run confirmation / log) stay dark too;
+         otherwise Android's default light dialog shows up as a jarring white block on a dark page -->
     <application
-        android:label="DSH 控制台"
+        android:label="DSH Console"
         android:icon="@drawable/ic_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:allowBackup="false"
@@ -28,7 +28,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:label="DSH 控制台"
+            android:label="DSH Console"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -36,7 +36,7 @@
             </intent-filter>
         </activity>
 
-        <!-- 桌面小部件：三灯 + 常用任务按钮 -->
+        <!-- Home-screen widget: three status lamps + common task buttons -->
         <receiver
             android:name=".DshWidget"
             android:exported="true">
@@ -48,12 +48,12 @@
                 android:resource="@xml/widget_info" />
         </receiver>
 
-        <!-- 接收 Termux 回传的执行结果（由我们自己创建的 PendingIntent 触发，不导出） -->
+        <!-- Receives the execution result sent back by Termux (triggered by a PendingIntent we create ourselves; not exported) -->
         <receiver
             android:name=".TaskResultReceiver"
             android:exported="false" />
 
-        <!-- 小部件按钮点击 → 在这里发 RUN_COMMAND（小部件本身不能直接发服务意图） -->
+        <!-- Widget button tap → RUN_COMMAND is sent from here (the widget itself cannot send a service intent) -->
         <receiver
             android:name=".WidgetActionReceiver"
             android:exported="false" />

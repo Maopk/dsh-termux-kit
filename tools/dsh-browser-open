@@ -1,15 +1,15 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# DSH 打开器 —— 在桌面安装的「DSH」独立窗口（WebAPK）里打开，而不是浏览器标签
+# DSH opener — open in the standalone DSH window installed on the home screen (WebAPK), not a browser tab
 #
-# 三个坑都在这里处理掉了：
-#   ① 系统没有默认浏览器：com.vivo.browser 与 DSH 的 WebAPK 都能处理 http://127.0.0.1:8080/，
-#      裸 VIEW 意图会弹选择框 → 容易被 vivo 浏览器接走。→ 必须「点名包」。
-#   ② Termux 以应用身份启动别的 App 会被 Android 后台启动限制**静默拦掉**
-#      （只打印 "Starting: Intent …" 却没有结果）。→ 有 adb 时一律经 adb 启动（shell 身份无此限制）。
-#   ③ WebAPK 升级会改包名（带 _vN 后缀）→ 缓存的包名失效时自动重新发现。
+# Three traps are handled here:
+#   ① no default browser is set: both com.vivo.browser and the DSH WebAPK can handle http://127.0.0.1:8080/,
+#      a bare VIEW intent pops a chooser → the vivo browser easily takes it. → the package must be named explicitly.
+#   ② when Termux launches another App as an app it is **silently blocked** by Android background start limits
+#      (it only prints "Starting: Intent …" with no result). → with adb available it always launches through adb (the shell identity has no such limit).
+#   ③ a WebAPK upgrade changes the package name (with a _vN suffix) → a stale cached name is rediscovered automatically.
 #
-# 用法：dsh-browser-open <url> [--quiet]
-URL="${1:?用法: dsh-browser-open <url>}"
+# Usage: dsh-browser-open <url> [--quiet]
+URL="${1:?Usage: dsh-browser-open <url>}"
 QUIET=0; [ "${2:-}" = "--quiet" ] && QUIET=1
 PWAFILE="$HOME/.dsh-pwa"
 say() { [ "$QUIET" = 1 ] || printf '%s\n' "$*"; }
@@ -19,7 +19,7 @@ if command -v adb >/dev/null 2>&1; then
   SERIAL=$(adb devices 2>/dev/null | awk 'NR>1 && $2=="device"{print $1; exit}')
 fi
 
-start_activity() {   # $1 = 包名（可空）
+start_activity() {   # $1 = package name (may be empty)
   local pkg="${1:-}" out
   if [ -n "$SERIAL" ]; then
     if [ -n "$pkg" ]; then out=$(timeout 25 adb -s "$SERIAL" shell am start -W -a android.intent.action.VIEW -d "$URL" -p "$pkg" 2>&1)
@@ -48,7 +48,7 @@ discover_pwa() {
 try_pwa() {
   [ -z "$1" ] && return 1
   start_activity "$1" || return 1
-  say "✔ 已在 DSH 独立窗口打开（$1${SERIAL:+ · 经 adb}）"
+  say "✔ opened in the standalone DSH window ($1${SERIAL:+ · via adb})"
   return 0
 }
 
@@ -58,9 +58,9 @@ if try_pwa "$PWA"; then exit 0; fi
 PWA="$(discover_pwa)"
 if try_pwa "$PWA"; then exit 0; fi
 
-say "⚠ 没能在 DSH 独立窗口打开（PWA 包未找到或被拦），改用 Chrome"
-if start_activity "com.android.chrome"; then say "✔ 已在 Chrome 打开（普通标签页）"; exit 0; fi
+say "⚠ could not open the standalone DSH window (PWA package missing or blocked); falling back to Chrome"
+if start_activity "com.android.chrome"; then say "✔ opened in Chrome (a normal tab)"; exit 0; fi
 
-say "⚠ Chrome 也不可用，交给系统默认（可能弹选择框）"
+say "⚠ Chrome is unavailable too; handing over to the system default (a chooser may pop up)"
 if [ -n "$SERIAL" ]; then adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "$URL" >/dev/null 2>&1; exit 0; fi
 exec termux-open-url "$URL"

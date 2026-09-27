@@ -1,17 +1,17 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# DSH 状态自动备份
-#   · 每次退出 DSH 时调用（由 ~/.shortcuts/tasks/2_关闭DSH.sh 触发）
-#   · 时间戳命名：dsh-state-YYYYMMDD-HHMMSS.tar.gz
-#   · 只保留最近 5 份，更早的自动删除
-#   · 内容：~/.dsh（排除 node_modules/cache/旧 profiles 备份/凭据文件）、~/.shortcuts、
-#     ~/.plugin-src、运维笔记、脱敏 .bashrc、插件清单快照
+# Automatic DSH state backup
+#   · runs on every DSH exit (triggered by ~/.shortcuts/tasks/2_shutdown-dsh.sh)
+#   · named by timestamp: dsh-state-YYYYMMDD-HHMMSS.tar.gz
+#   · keeps the newest 5 only; older ones are deleted automatically
+#   · Contents: ~/.dsh (minus node_modules/cache/old profiles backups/credential files), ~/.shortcuts,
+#     ~/.plugin-src, the ops journal, a sanitized .bashrc, a plugin list snapshot
 set -u
 
 HOME_DIR="/data/data/com.termux/files/home"
 DEST="${DSH_BACKUP_DEST:-$HOME_DIR/storage/downloads/dsh/备份}"
 DOCS="$HOME_DIR/storage/downloads/dsh/文档"
-# 保留策略（可用环境变量覆盖，方便调整/测试）：
-#   保留最近 KEEP_DAYS 天，另设硬上限 MAX_FILES 份防异常暴涨
+# Retention policy (overridable by env var, for easy tuning/testing):
+#   keep the last KEEP_DAYS days, plus a hard cap of MAX_FILES files to stop runaway growth
 KEEP_DAYS="${DSH_BACKUP_KEEP_DAYS:-30}"
 MAX_FILES="${DSH_BACKUP_MAX_FILES:-200}"
 STAMP="$(date '+%Y%m%d-%H%M%S')"
@@ -19,27 +19,27 @@ NAME="dsh-state-${STAMP}.tar.gz"
 
 mkdir -p "$DEST" "$DOCS"
 
-# 1) 插件清单快照（同时更新一份可随时查看的最新版到 文档/）
+# 1) plugin list snapshot (also refreshes an always-readable latest copy into 文档/)
 LIST="$HOME_DIR/.dsh-plugin-list.tmp"
 {
-  echo "# DSH 插件清单快照"
-  echo "生成时间: $(date '+%Y-%m-%d %H:%M:%S')"
+  echo "# DSH plugin list snapshot"
+  echo "generated: $(date '+%Y-%m-%d %H:%M:%S')"
   echo
-  echo "## 已装插件（profile: web）"
-  (cd "$HOME_DIR/.dsh/profiles/web" && timeout 60 dsh plugin --profile web list --depth 0 2>&1) || echo "(获取失败)"
+  echo "## installed plugins (profile: web)"
+  (cd "$HOME_DIR/.dsh/profiles/web" && timeout 60 dsh plugin --profile web list --depth 0 2>&1) || echo "(fetch failed)"
   echo
   echo "## package.json"
   cat "$HOME_DIR/.dsh/profiles/web/package.json" 2>/dev/null
 } > "$LIST" 2>&1
 cp -f "$LIST" "$DOCS/插件清单.txt"
 
-# 2) 暂存 _meta（脱敏 .bashrc + 插件清单）
+# 2) stage _meta (sanitized .bashrc + plugin list)
 STAGE="$(mktemp -d)"
 mkdir -p "$STAGE/_meta"
 cp -f "$LIST" "$STAGE/_meta/插件清单.txt"
-sed 's|^\(export DEEPSEEK_API_KEY=\).*|\1"<已脱敏：恢复后请自行填写>"|' "$HOME_DIR/.bashrc" > "$STAGE/_meta/bashrc.sanitized"
+sed 's|^\(export DEEPSEEK_API_KEY=\).*|\1"<redacted: fill it in after restore>"|' "$HOME_DIR/.bashrc" > "$STAGE/_meta/bashrc.sanitized"
 
-# 3) 一次打包（两个 -C 源：HOME 与暂存目录）
+# 3) pack in one pass (two -C sources: HOME and the staging dir)
 tar czf "$DEST/$NAME" \
   --exclude='node_modules' \
   --exclude='cache' \
@@ -53,7 +53,7 @@ rm -rf "$STAGE"
 
 SIZE="$(du -h "$DEST/$NAME" 2>/dev/null | cut -f1)"
 
-# 4) 保留策略：① 超过 KEEP_DAYS 天的删除 ② 超过 MAX_FILES 份时删最老的
+# 4) retention: ① delete anything older than KEEP_DAYS days ② when over MAX_FILES, delete the oldest
 DELETED=0
 while IFS= read -r oldfile; do
   [ -n "$oldfile" ] || continue
@@ -69,10 +69,10 @@ fi
 KEPT=$(ls -1t "$DEST"/dsh-state-*.tar.gz 2>/dev/null | wc -l)
 TOTAL_SIZE=$(du -sh "$DEST" 2>/dev/null | cut -f1)
 
-# 5) 记录日志
+# 5) write the log
 {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] 备份 $NAME (${SIZE:-?}, 状态=$STATUS)，清理旧备份 $DELETED 份，当前 $KEPT 份 / 共 ${TOTAL_SIZE:-?}（保留 ${KEEP_DAYS} 天，上限 ${MAX_FILES} 份）"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] backed up $NAME (${SIZE:-?}, status=$STATUS), removed $DELETED old backups, now $KEPT files / ${TOTAL_SIZE:-?} total (keeping ${KEEP_DAYS} days, cap ${MAX_FILES} files)"
 } >> "$DEST/备份日志.txt"
 
 rm -f "$LIST"
-echo "备份完成: $NAME ${SIZE:-}"
+echo "backup done: $NAME ${SIZE:-}"

@@ -1,16 +1,16 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-control —— 通过自看插件（dsh-selflook-local）遥控 DSH 页面
-# 用法：
-#   dsh-control probe <关键词>             列出匹配元素（可穿透 shadow DOM）
-#   dsh-control click text=<文字>          点击首个可见的、自身文字匹配的元素
-#   dsh-control click selector=<CSS选择器> 按选择器点击
-#   dsh-control click x,y                  按坐标点击
-#   dsh-control swipe <起点> <终点> [步数] 滑动手势（选择器 / x,y / text=文字）
-#   dsh-control scroll <选择器> top|bottom|by|to [值] [shot]
-#   dsh-control capture                    截图（兜底失败则文字快照）
-#   dsh-control eval '<js 表达式>'         在页面里求值并回传结果
-#   dsh-control '<原始 JSON 命令>'         直接下发
-# 可选环境变量：TIMEOUT=秒（默认 30）
+# dsh-control —— remote-control the DSH page through the self-look plugin (dsh-selflook-local)
+# Usage: 
+#   dsh-control probe <keyword>             list matching elements (pierces shadow DOM)
+#   dsh-control click text=<text>          tap the first visible element whose own text matches
+#   dsh-control click selector=<CSS selector> tap by selector
+#   dsh-control click x,y                  tap by coordinate
+#   dsh-control swipe <from> <to> [steps] swipe gesture (selector / x,y / text=<text>)
+#   dsh-control scroll <selector> top|bottom|by|to [value] [shot]
+#   dsh-control capture                    screenshot (falls back to a text snapshot if that fails)
+#   dsh-control eval '<js expression>'         evaluate in the page and return the result
+#   dsh-control '<raw JSON command>'         send it straight through
+# Optional env var: TIMEOUT=seconds (default 30)
 set -u
 CMD="$HOME/.dsh-look-cmd.json"
 RES="$HOME/.dsh-look-cmd-result.json"
@@ -24,7 +24,7 @@ kind = a[0] if a else ''
 rest = a[1:]
 
 def spec(s):
-    """选择器 / x,y 坐标 / text=文字 → 手势起终点"""
+    """selector / x,y coordinate / text=<text> → gesture start and end"""
     if s.startswith('text='):
         return {'text': s[5:]}
     if re.match(r'^-?\d+\s*,\s*-?\d+$', s):
@@ -49,7 +49,7 @@ elif kind == 'click':
         cmd["text"] = spec0
 elif kind == 'swipe':
     if len(rest) < 2:
-        print('用法: dsh-control swipe <起点> <终点> [步数]  （选择器 / x,y / text=文字）', file=sys.stderr)
+        print('Usage: dsh-control swipe <from> <to> [steps]  (selector / x,y / text=<text>)', file=sys.stderr)
         sys.exit(2)
     cmd = {"action": "swipe", "from": spec(rest[0]), "to": spec(rest[1]), "steps": int(rest[2]) if len(rest) > 2 else 16}
 elif kind == 'scroll':
@@ -65,7 +65,7 @@ elif kind == 'eval':
 elif kind.startswith('{'):
     cmd = json.loads(kind)
 else:
-    print('未知用法', file=sys.stderr); sys.exit(2)
+    print('unknown usage', file=sys.stderr); sys.exit(2)
 print(json.dumps(cmd, ensure_ascii=False))
 PY
 }
@@ -73,28 +73,28 @@ PY
 if [ $# -eq 0 ]; then sed -n '2,12p' "$0"; exit 2; fi
 
 JSON="$(build_json "$@")" || exit 2
-[ -z "$JSON" ] && { echo "命令构造失败"; exit 2; }
+[ -z "$JSON" ] && { echo "failed to build the command"; exit 2; }
 
-# 记录旧结果指纹
+# remember the old result fingerprint
 BEFORE="$(md5sum "$RES" 2>/dev/null | cut -d' ' -f1)"
 
-# 原子写入命令文件（先写临时文件再 mv，避免客户端读到半个文件）
+# atomic command file write (write a temp file then mv, so the client never reads half a file)
 printf '%s' "$JSON" > "$CMD.tmp" && mv "$CMD.tmp" "$CMD"
 
-# 等结果
+# wait for the result
 DEADLINE=$(( $(date +%s) + TIMEOUT ))
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do
   sleep 1
   AFTER="$(md5sum "$RES" 2>/dev/null | cut -d' ' -f1)"
   if [ -n "$AFTER" ] && [ "$AFTER" != "$BEFORE" ]; then
-    echo "命令: $JSON"
-    echo "--- 结果 ---"
+    echo "command: $JSON"
+    echo "--- result ---"
     cat "$RES"
     exit 0
   fi
 done
 
-echo "命令: $JSON"
-echo "⏱ 超时 ${TIMEOUT}s：页面可能未打开、未刷新到新版客户端，或命令没被消费"
-echo "命令文件当前内容: $(cat "$CMD" 2>/dev/null | head -c 200)"
+echo "command: $JSON"
+echo "⏱ timeout ${TIMEOUT}s: the page may be closed, not refreshed to the new client, or the command was never consumed"
+echo "current command file contents: $(cat "$CMD" 2>/dev/null | head -c 200)"
 exit 1

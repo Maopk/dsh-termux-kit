@@ -11,13 +11,16 @@ import android.os.Build;
 import android.os.IBinder;
 
 /**
- * 前台服务：让桥的进程不被系统/vivo 冻结。
+ * Foreground service: keeps the bridge process from being frozen by the system / vivo.
  *
- * 为什么需要它：无障碍服务本身是"后台服务"，手机闲置几分钟后会被厂商的省电策略冻结
- * （表现：8788 端口还在但不再应答、广播也收不到 → 连"自己叫醒自己"都做不到）。
- * 前台服务（带常驻通知）在 Android 的进程优先级里是最高的几档之一，不会被冻结。
+ * Why it is needed: an accessibility service is itself a "background service" and gets frozen by the
+ * vendor's battery saver after a few idle minutes (symptoms: port 8788 is still open but no longer
+ * answers, and broadcasts are not received either → it cannot even wake itself up). A foreground
+ * service (with a persistent notification) sits among the highest process priorities in Android and
+ * is not frozen.
  *
- * 通知内容与"紧急停止"按钮保持原样：点通知开 App，点按钮立即 panic。
+ * The notification content and the "emergency stop" button stay as they are: tapping the notification
+ * opens the app, tapping the button panics immediately.
  */
 public class BridgeForeground extends Service {
     @Override public IBinder onBind(Intent intent) { return null; }
@@ -27,7 +30,7 @@ public class BridgeForeground extends Service {
         try {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (Build.VERSION.SDK_INT >= 26) {
-                NotificationChannel ch = new NotificationChannel(BridgeService.CHANNEL, "DSH 桥",
+                NotificationChannel ch = new NotificationChannel(BridgeService.CHANNEL, "DSH Bridge",
                         NotificationManager.IMPORTANCE_LOW);
                 ch.setShowBadge(false);
                 nm.createNotificationChannel(ch);
@@ -42,28 +45,29 @@ public class BridgeForeground extends Service {
                     ? new Notification.Builder(this, BridgeService.CHANNEL)
                     : new Notification.Builder(this);
             b.setSmallIcon(android.R.drawable.presence_online)
-                    .setContentTitle("DSH 桥正在运行")
-                    .setContentText("监听 127.0.0.1:" + BridgeService.PORT + " · 音量+/- 按住 3 秒紧急停止")
+                    .setContentTitle("DSH Bridge is running")
+                    .setContentText("Listening on 127.0.0.1:" + BridgeService.PORT + " · hold volume +/- for 3s to stop")
                     .setOngoing(true)
                     .setContentIntent(pi)
                     .addAction(new Notification.Action.Builder(
                             Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
-                            "紧急停止", panicPi).build());
+                            "Emergency stop", panicPi).build());
             startForeground(BridgeService.NOTIF_ID, b.build());
         } catch (Throwable t) {
-            // 没有通知权限时也要能起来：退化成普通前台服务
+            // Must still come up without notification permission: degrade to a plain foreground service
             try {
                 Notification.Builder b = (Build.VERSION.SDK_INT >= 26)
                         ? new Notification.Builder(this, BridgeService.CHANNEL)
                         : new Notification.Builder(this);
-                b.setSmallIcon(android.R.drawable.presence_online).setContentTitle("DSH 桥正在运行");
+                b.setSmallIcon(android.R.drawable.presence_online).setContentTitle("DSH Bridge is running");
                 startForeground(BridgeService.NOTIF_ID, b.build());
-            } catch (Throwable t2) { /* 实在不行就算了，不影响无障碍功能 */ }
+            } catch (Throwable t2) { /* if it really will not work, never mind; accessibility still functions */ }
         }
-        // 不要 START_STICKY：前台服务只是无障碍服务的「防冻结外套」，
-        // 进程被杀后由系统重新绑定无障碍服务时的 onServiceConnected 再把它起回来；
-        // 若用 STICKY，进程被回收后它会自己复活并挂出「DSH 桥正在运行」通知，
-        // 而那时无障碍其实已经关了 —— 用户会看到「明明关了它自己又开」。
+        // Not START_STICKY: the foreground service is only the accessibility service's anti-freeze coat,
+        // and onServiceConnected brings it back when the system rebinds the accessibility service after
+        // the process is killed. With STICKY it would resurrect itself once the process is reclaimed and
+        // post a "DSH Bridge is running" notification while accessibility is actually off — users would
+        // see "I turned it off and it switched itself back on".
         return START_NOT_STICKY;
     }
 }

@@ -1,26 +1,26 @@
 #!/data/data/com.termux/files/usr/bin/python3
-"""dsh-tasksd —— 给网页界面用的「任务执行器」（只监听回环，白名单，带 token）。
+"""dsh-tasksd —— task runner for the web UI (loopback only, whitelist, token required).
 
-为什么需要它：手机端的 DSH 界面里想加"一键跑组件"的快捷按钮，但网页不能直接跑 shell。
-这里起一个只监听 127.0.0.1 的小服务，只接受**白名单里的 9 个组件脚本**，
-并且要求请求带 token（token 存 600 文件，网页通过 filepanel 的 readText 读到它）。
+Why: the DSH UI on the phone wants "one-click run" buttons for components, but a web page cannot run shell directly.
+This starts a small service bound to 127.0.0.1 only, accepting **the 9 whitelisted component scripts**,
+and requires a token on each request (the token lives in a 600 file that the page reads through filepanel readText).
 
-安全边界（如实说明）：
-  · 只 bind 127.0.0.1 —— 局域网/外部碰不到；
-  · CORS 只放行 DSH 自己的源（http://127.0.0.1:8080）；
-  · 必须带正确 token —— 手机上别的 App 即使能连回环，拿不到 token 也执行不了；
-  · 只能跑白名单里的脚本名，**不能传任意命令、不能传参数**（只允许附加 --dry-run）；
-  · 不保存任何凭据，token 由外部生成。
+Security boundary (stated honestly):
+  · binds 127.0.0.1 only — the LAN and the outside cannot reach it;
+  · CORS allows only the DSH origin (http://127.0.0.1:8080);
+  · a correct token is required — another App on the phone may reach loopback, but without the token it cannot execute anything;
+  · only whitelisted script names can run, **no arbitrary commands and no arguments** (only an added --dry-run);
+  · no credentials are stored; the token is generated outside.
 
-用法：
-  dsh-tasksd                 # 前台跑
-  dsh-tasksd --check         # 自检：token 在不在、端口能不能绑
-端到端：
+Usage: 
+  dsh-tasksd                 # run in the foreground
+  dsh-tasksd --check         # self-check: is the token there, can the port be bound
+End to end:
   curl -s 'http://127.0.0.1:8787/status?token=XXX'
-  curl -s 'http://127.0.0.1:8787/run?token=XXX&task=3_备份DSH'
-  curl -s 'http://127.0.0.1:8787/auth?token=XXX'                 # 密码使用权：只报存续
+  curl -s 'http://127.0.0.1:8787/run?token=XXX&task=3_backup-dsh'
+  curl -s 'http://127.0.0.1:8787/auth?token=XXX'                 # password usage right: reports status only
   curl -s -X POST -H 'content-type: application/json' -d '{"token":"XXX"}' \
-       'http://127.0.0.1:8787/auth/revoke'                        # 收回（删 600 文件）
+       'http://127.0.0.1:8787/auth/revoke'                        # revoke (deletes the 600 file)
 """
 import json
 import os
@@ -39,21 +39,21 @@ TOKEN_FILE = os.path.join(HOME, '.dsh-tasks-token')
 LOG = os.path.join(HOME, '.smoke', 'tasksd.log')
 PORT = 8787
 ORIGIN_OK = {'http://127.0.0.1:8080', 'http://localhost:8080'}
-# 白名单：只能是这些脚本名，别的一律拒绝（不允许路径、不允许任意命令）
+# Whitelist: only these script names; everything else is refused (no paths, no arbitrary commands)
 ALLOWED = {
-    '0_紧急停止', '1_启动DSH', '2_关闭DSH', '3_备份DSH', '4_软重启DSH',
-    '5_清理DSH', '6_硬重启DSH', '7_重连AI通道', '8_自动开无线调试',
-    '9_撤销密码授权',
+    '0_emergency-stop', '1_start-dsh', '2_shutdown-dsh', '3_backup-dsh', '4_soft-restart-dsh',
+    '5_cleanup-dsh', '6_hard-restart-dsh', '7_reconnect-ai', '8_enable-wireless-adb',
+    '9_revoke-pin',
 }
-# 虚拟任务：不是 .shortcuts/tasks 里的脚本，而是一条**绝对路径**命令（与控制台 App 同一套 id）。
-# 桥（无障碍回环）与 adb（无线调试）是两条独立通道 → 界面上分开，这里也就分开。
+# Virtual tasks: not scripts in .shortcuts/tasks but a command with an **absolute path** (same id set as the console App).
+# The bridge (accessibility loopback) and adb (wireless debugging) are two independent channels → separate in the UI, and separate here.
 VIRTUAL = {
     'bridge_wake':   [os.path.join(HOME, '.local/bin/dsh-bridge'), 'wake'],
     'bridge_status': [os.path.join(HOME, '.local/bin/dsh-bridge'), 'status'],
 }
 AUTH_HELPER = os.path.join(HOME, '.local/bin/dsh-auth-pass')
-# 这几个会改变运行状态（会断开当前会话），前端要给二次确认
-DANGEROUS = {'2_关闭DSH', '4_软重启DSH', '6_硬重启DSH', '0_紧急停止'}
+# These change the running state (they drop the current session), so the frontend must confirm first
+DANGEROUS = {'2_shutdown-dsh', '4_soft-restart-dsh', '6_hard-restart-dsh', '0_emergency-stop'}
 
 
 def log(msg):
@@ -107,7 +107,7 @@ def status():
         st['dsh']['http'] = out
     except Exception:
         st['dsh']['http'] = '?'
-    # 桥
+    # bridge
     st['bridge'] = {'port': port_open(8788)}
     try:
         r = subprocess.run([os.path.join(HOME, '.local/bin/droid-sock'), 'ping'],
@@ -124,7 +124,7 @@ def status():
         st['adb'] = {'devices': devs}
     except Exception:
         st['adb'] = {'devices': []}
-    # 组件日志里最近一次结果（用于显示"上次跑成没成功"）
+    # the last result in the component log (to show "did the last run succeed")
     st['tasks'] = {}
     for name in sorted(ALLOWED):
         p = os.path.join(HOME, '.smoke', 'widget-%s.log' % name)
@@ -132,7 +132,9 @@ def status():
             try:
                 tail = subprocess.run(['tail', '-c', '400', p], capture_output=True,
                                       text=True, timeout=5).stdout
-                m = re.findall(r'【[^】]+】(完成|失败|未执行)', tail)
+                m = _TERM = re.compile(r'(?:\[(?P<n1>[^\]]{1,60})\]\s*(?P<s1>done|failed|skipped)\b|【(?P<n2>[^】]{1,60})】\s*(?P<s2>完成|失败|未执行))')
+                _NORM = {'完成': 'done', '失败': 'failed', '未执行': 'skipped'}
+                res = [_NORM.get(m.group('s2') or m.group('s1'), m.group('s1')) for m in _TERM.finditer(tail)]
                 t = re.findall(r'^===== ([\d\-]+ [\d:]+)', tail, re.M)
                 st['tasks'][name] = {'last': m[-1] if m else None,
                                      'at': t[-1] if t else None}
@@ -147,19 +149,19 @@ def run_task(name, dry):
     elif name in ALLOWED:
         script = os.path.join(TASK_DIR, name + '.sh')
         if not os.path.isfile(script):
-            return 404, {'ok': False, 'error': '脚本不存在: %s' % name}
+            return 404, {'ok': False, 'error': 'script does not exist: %s' % name}
         cmd = ['bash', script] + (['--dry-run'] if dry else [])
     else:
-        return 400, {'ok': False, 'error': '不在白名单里: %s' % name}
+        return 400, {'ok': False, 'error': 'not in the whitelist: %s' % name}
     log('run %s dry=%s' % (name, dry))
     t0 = time.time()
     try:
-        # 用 setsid 脱离：跑「关闭/重启」这类组件时，本服务不能被一起带走
+        # Detach with setsid: when running close/restart components this service must not be taken down with them
         p = subprocess.run(['setsid'] + cmd, capture_output=True, text=True, timeout=300,
                            cwd=HOME, env={**os.environ, 'DSH_WIDGET_LOG': '1'})
         out = (p.stdout or '') + (p.stderr or '')
     except subprocess.TimeoutExpired:
-        out, p = '(超时 300s)', None
+        out, p = '(timeout 300s)', None
     dur = round(time.time() - t0, 1)
     tail = '\n'.join(out.strip().splitlines()[-40:])
     log('done %s rc=%s %.1fs' % (name, getattr(p, 'returncode', '?'), dur))
@@ -168,12 +170,12 @@ def run_task(name, dry):
 
 
 def auth_status():
-    """只看授权存续（helper 的 status 从不回显密码）。"""
+    """Report only whether authorization exists (helper status never echoes the password)."""
     try:
         p = subprocess.run([AUTH_HELPER, 'status'], capture_output=True, text=True, timeout=15)
         return {'authorized': p.returncode == 0, 'detail': (p.stdout or p.stderr).strip()}
     except Exception as e:
-        return {'authorized': False, 'detail': '读不到授权状态：%s' % e}
+        return {'authorized': False, 'detail': 'cannot read the authorization state: %s' % e}
 
 
 def auth_revoke():
@@ -183,20 +185,20 @@ def auth_revoke():
         return 200, {'ok': True, 'exit': p.returncode,
                      'output': ((p.stdout or '') + (p.stderr or '')).strip()}
     except Exception as e:
-        return 500, {'ok': False, 'error': '撤销失败：%s' % e}
+        return 500, {'ok': False, 'error': 'revoke failed: %s' % e}
 
 
 def auth_set(digits):
-    """写入 6 位密码。**注意：不记日志、不回显、不放进任何响应字段。**"""
+    """Write the 6 digits. **Note: no logging, no echo, no field in any response.**"""
     if not re.fullmatch(r'[0-9]{6}', digits or ''):
-        return 400, {'ok': False, 'error': '只接受 6 位数字'}
+        return 400, {'ok': False, 'error': 'only 6 digits are accepted'}
     try:
         p = subprocess.run([AUTH_HELPER, 'set'], input=digits, capture_output=True, text=True, timeout=30)
-        log('auth set rc=%s (值不入日志)' % p.returncode)   # ← 只有这一行，且不含值
+        log('auth set rc=%s (the value never enters the log)' % p.returncode)   # ← this is the only line, and it holds no value
         return 200, {'ok': p.returncode == 0, 'exit': p.returncode,
                      'output': ((p.stdout or '') + (p.stderr or '')).strip()}
     except Exception as e:
-        return 500, {'ok': False, 'error': '写入失败：%s' % e}
+        return 500, {'ok': False, 'error': 'write failed: %s' % e}
 
 
 class H(BaseHTTPRequestHandler):
@@ -234,7 +236,7 @@ class H(BaseHTTPRequestHandler):
         q = parse_qs(u.query)
         tok = (q.get('token') or [self.headers.get('x-dsh-token', '')])[0]
         if not token_ok(tok):
-            return self._json(401, {'ok': False, 'error': 'token 不对或缺失'})
+            return self._json(401, {'ok': False, 'error': 'token is wrong or missing'})
         if u.path == '/status':
             return self._json(200, {'ok': True, 'status': status()})
         if u.path == '/tasks':
@@ -248,19 +250,19 @@ class H(BaseHTTPRequestHandler):
             dry = (q.get('dry') or ['0'])[0] in ('1', 'true', 'yes')
             code, obj = run_task(name, dry)
             return self._json(code, obj)
-        return self._json(404, {'ok': False, 'error': '未知路径'})
+        return self._json(404, {'ok': False, 'error': 'unknown path'})
 
     def do_POST(self):
         n = int(self.headers.get('content-length') or 0)
         if n > 65536:
-            return self._json(413, {'ok': False, 'error': 'body 太大'})
+            return self._json(413, {'ok': False, 'error': 'body too large'})
         raw = self.rfile.read(n) if n else b'{}'
         try:
             body = json.loads(raw.decode('utf-8') or '{}')
         except Exception:
-            return self._json(400, {'ok': False, 'error': 'body 不是 JSON'})
+            return self._json(400, {'ok': False, 'error': 'body is not JSON'})
         if not token_ok(body.get('token') or self.headers.get('x-dsh-token', '')):
-            return self._json(401, {'ok': False, 'error': 'token 不对或缺失'})
+            return self._json(401, {'ok': False, 'error': 'token is wrong or missing'})
         path = urlparse(self.path).path
         if path == '/run':
             code, obj = run_task(body.get('task', ''), bool(body.get('dry')))
@@ -271,26 +273,26 @@ class H(BaseHTTPRequestHandler):
         if path == '/auth/set':
             code, obj = auth_set((body.get('pass') or '').strip())
             return self._json(code, obj)
-        return self._json(404, {'ok': False, 'error': '未知路径'})
+        return self._json(404, {'ok': False, 'error': 'unknown path'})
 
 
 def main():
     if '--check' in sys.argv:
         t = ensure_token()
-        print('token 文件: %s (%s…)' % (TOKEN_FILE, t[:6]))
+        print('token file: %s (%s…)' % (TOKEN_FILE, t[:6]))
         try:
             s = socket.socket()
             s.bind(('127.0.0.1', PORT))
             s.close()
-            print('端口 %d 可绑定 ✔' % PORT)
+            print('port %d can be bound ✔' % PORT)
         except Exception as e:
-            print('端口 %d 绑定失败: %s' % (PORT, e))
-        print('白名单 %d 个组件 ✔' % len(ALLOWED))
+            print('port %d failed to bind: %s' % (PORT, e))
+        print('%d whitelisted components ✔' % len(ALLOWED))
         return 0
     ensure_token()
     srv = ThreadingHTTPServer(('127.0.0.1', PORT), H)
-    log('tasksd 启动，监听 127.0.0.1:%d' % PORT)
-    print('dsh-tasksd 监听 127.0.0.1:%d（token: %s）' % (PORT, TOKEN_FILE))
+    log('tasksd started, listening on 127.0.0.1:%d' % PORT)
+    print('dsh-tasksd listening on 127.0.0.1:%d (token: %s)' % (PORT, TOKEN_FILE))
     srv.serve_forever()
 
 

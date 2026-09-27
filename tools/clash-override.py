@@ -1,15 +1,15 @@
 #!/data/data/com.termux/files/usr/bin/python3
-"""clash-override.py —— 用 DSH 桥给 Clash Meta 的「覆写」表单填值（带校验，防点飘）。
+"""clash-override.py —— fill in the Clash Meta 覆写 form through the DSH bridge (with verification, so taps do not drift).
 
-为什么要写脚本：这个表单是"列表套对话框"——输入框的确认按钮在 y≈1271，
-列表的确认按钮在 y≈2931，按文字找「确认」会撞车（我已经踩过一次，把 fallback 弄成了"置空"）。
-所以这里一律**按坐标点**，并且每一步都 dump 回来校验，不符合预期就停下报错。
+Why a script: this form is a "list inside a dialog" — the input box confirm button sits at y≈1271,
+and the list confirm button sits at y≈2931, so finding 确认 by text collides (I hit this once and turned fallback into "clearing the field").
+So everything here taps **by coordinate**, dumps back for verification after every step, and stops with an error when the result does not match.
 
-用法：
-  clash-override.py audit                     # 列出所有字段当前值
+Usage: 
+  clash-override.py audit                     # list the current value of every field
   clash-override.py list "Fallback Name Server" "https://1.1.1.1/dns-query" "https://dns.google/dns-query"
   clash-override.py enum "增强模式" fake-ip
-  clash-override.py open "Name Server"        # 只打开某字段（调试用）
+  clash-override.py open "Name Server"        # just open one field (for debugging)
 """
 import os
 import re
@@ -20,16 +20,16 @@ import time
 SOCK = os.path.expanduser('~/.local/bin/droid-sock')
 UITAP = os.path.expanduser('~/.local/bin/dsh-uitap')
 
-# 从实测 dump 里量出来的固定坐标
-BTN_NEW = (1317, 265)        # 列表对话框右上「新建」
-EDIT_BOX = (720, 1055)       # 输入对话框的输入框
-BTN_INPUT_OK = (1164, 1271)  # 输入对话框「确认」
+# fixed coordinates measured from real dumps
+BTN_NEW = (1317, 265)        # the 新建 button at the top right of the list dialog
+EDIT_BOX = (720, 1055)       # the text field of the input dialog
+BTN_INPUT_OK = (1164, 1271)  # 确认 in the input dialog
 BTN_INPUT_CANCEL = (894, 1271)
-BTN_LIST_OK = (1256, 2931)   # 列表对话框「确认」
+BTN_LIST_OK = (1256, 2931)   # 确认 in the list dialog
 BTN_LIST_CANCEL = (926, 2931)
 BTN_LIST_RESET = (184, 2931)
-FIRST_ROW_DEL = (1317, 438)  # 第一行的「删除」
-ROW_H = 233                  # 行高（条目间距）
+FIRST_ROW_DEL = (1317, 438)  # the 删除 button on the first row
+ROW_H = 233                  # row height (spacing between entries)
 
 LABELS = ['HTTP 端口', 'Socks 端口', 'Redirect 端口', 'TProxy 端口', '复合端口', '认证',
           '允许来自局域网的连接', 'IPv6', '监听地址', 'External Controller',
@@ -66,7 +66,7 @@ def nodes(kw=''):
 
 
 def dialog_title():
-    """对话框标题：y≈265 的 TextView；没有对话框时返回 None。"""
+    """Title of the dialog: the TextView at y≈265; returns None when no dialog is open."""
     for n in nodes():
         if 240 <= n['y'] <= 300 and n['cls'] == 'TextView' and n['text']:
             return n['text']
@@ -87,7 +87,7 @@ def close_dialog():
 
 
 def clear_rows():
-    """把列表里已有条目全删掉（每删一条，后面的行会上移一个行高）。"""
+    """Delete every existing entry in the list (each removal shifts the rows below up by one row height)."""
     removed = 0
     while removed < 40:
         dels = [n for n in nodes() if n['desc'] == '删除']
@@ -99,7 +99,7 @@ def clear_rows():
 
 
 def add_row(value):
-    """新建一条并写入 value，返回是否确认成功。"""
+    """Create one entry and write value into it; returns whether the confirm succeeded."""
     tap(*BTN_NEW)
     time.sleep(0.8)
     tap(*EDIT_BOX)
@@ -115,36 +115,36 @@ def add_row(value):
 
 def list_set(label, values):
     if not open_field(label):
-        print('✘ 打不开字段: %s（当前标题 %s）' % (label, dialog_title()))
+        print('✘ cannot open field: %s (current title %s)' % (label, dialog_title()))
         return 1
-    print('  已进入: %s' % label)
+    print('  entered: %s' % label)
     n = clear_rows()
     if n:
-        print('  清掉旧条目 %d 条' % n)
+        print('  cleared %d old entries' % n)
     for v in values:
         if not add_row(v):
-            print('✘ 写入失败: %s' % v)
+            print('✘ write failed: %s' % v)
             close_dialog()
             return 1
         print('  + %s' % v)
     cnt = len([x for x in nodes() if x['desc'] == '删除'])
     if cnt != len(values):
-        print('✘ 条目数不对：期望 %d，实际 %d' % (len(values), cnt))
+        print('✘ wrong entry count: expected %d, got %d' % (len(values), cnt))
         close_dialog()
         return 1
     tap(*BTN_LIST_OK)
     time.sleep(1.5)
-    print('  ✔ %s = %d 个条目' % (label, cnt))
+    print('  ✔ %s = %d entries' % (label, cnt))
     return 0
 
 
 def enum_set(label, choice):
     if not open_field(label):
-        print('✘ 打不开字段: %s' % label)
+        print('✘ cannot open field: %s' % label)
         return 1
     opts = [n for n in nodes() if n['text'] == choice]
     if not opts:
-        print('✘ 选项里没有「%s」，当前可见：%s' % (choice, [n['text'] for n in nodes()][:12]))
+        print('✘ option %s is not in the list; currently visible: %s' % (choice, [n['text'] for n in nodes()][:12]))
         close_dialog()
         return 1
     tap(opts[0]['x'], opts[0]['y'])
@@ -172,12 +172,12 @@ def main():
     if a[0] == 'audit':
         audit(); return 0
     if a[0] == 'open':
-        print('标题:', open_field(a[1]) and dialog_title() or '未打开'); return 0
+        print('Title:', open_field(a[1]) and dialog_title() or 'not open'); return 0
     if a[0] == 'list':
         return list_set(a[1], a[2:])
     if a[0] == 'enum':
         return enum_set(a[1], a[2])
-    print('未知用法'); return 2
+    print('unknown usage'); return 2
 
 
 if __name__ == '__main__':

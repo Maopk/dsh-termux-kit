@@ -1,10 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-eval —— 在 DSH 页面里执行一段 JS 并把结果取回来
-# 用法：
-#   dsh-eval <js文件>          # 文件内容作为 async 函数体，最后 return 结果
-#   dsh-eval -                 # 从标准输入读
-# 例：echo 'return document.title' | dsh-eval -
-# 可选：TIMEOUT=秒（默认 30）
+# dsh-eval —— run a snippet of JS inside the DSH page and bring the result back
+# Usage: 
+#   dsh-eval <js file>          # the file body becomes an async function body; return the result at the end
+#   dsh-eval -                 # read from stdin
+# Example: echo 'return document.title' | dsh-eval -
+# Optional: TIMEOUT=seconds (default 30)
 set -u
 CMD="$HOME/.dsh-look-cmd.json"
 RES="$HOME/.dsh-look-cmd-result.json"
@@ -15,10 +15,10 @@ if [ "${1:-}" = "-" ]; then
 elif [ -n "${1:-}" ] && [ -f "${1:-}" ]; then
   CODE="$(cat "$1")"
 else
-  echo "用法: dsh-eval <js文件> | dsh-eval -" >&2
+  echo "Usage: dsh-eval <js file> | dsh-eval -" >&2
   exit 2
 fi
-[ -z "$CODE" ] && { echo "代码为空" >&2; exit 2; }
+[ -z "$CODE" ] && { echo "empty code" >&2; exit 2; }
 
 JSON="$(python3 -c '
 import json,sys
@@ -41,12 +41,12 @@ try:
 except Exception:
     print(raw[:4000]); sys.exit()
 if d.get("ok") is not True:
-    print("❌ 执行失败:", d.get("error")); print(str(d.get("stack") or "")[:800]); sys.exit(1)
+    print("❌ execution failed:", d.get("error")); print(str(d.get("stack") or "")[:800]); sys.exit(1)
 v=d.get("value")
 print(v if isinstance(v,str) else json.dumps(v, ensure_ascii=False, indent=1))
 ' < "$RES"
     exit 0
   fi
 done
-echo "⏱ 超时 ${TIMEOUT}s：页面未响应（未打开 / 未刷新到新版客户端）" >&2
+echo "⏱ timeout ${TIMEOUT}s: the page did not respond (not open / not refreshed to the new client)" >&2
 exit 1

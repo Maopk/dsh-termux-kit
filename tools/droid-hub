@@ -1,9 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# droid-hub —— 无 Wi-Fi / 无 root 时的备选通道：通过共享目录与 AutoX.js 桥接脚本通信
-#   Termux 写 /sdcard/dsh-droid/cmd.json → AutoX.js 执行 → 写 /sdcard/dsh-droid/res.json
-# 前提：AutoX.js 已安装、无障碍已开、/sdcard/dsh-droid/bridge.js 正在运行
-# 用法与 droid 一致：droid-hub tap X Y | swipe x1 y1 x2 y2 [ms] | text '文字' | key back|home|enter
-#                    droid-hub shot [路径] | ui [关键词] | find '文字' [--tap] | start <包名> | cur | ping
+# droid-hub —— fallback channel with no Wi-Fi and no root: talk to an AutoX.js bridge script through a shared directory
+#   Termux writes /sdcard/dsh-droid/cmd.json → AutoX.js runs it → writes /sdcard/dsh-droid/res.json
+# Needs AutoX.js installed, accessibility on, and /sdcard/dsh-droid/bridge.js running
+# Same usage as droid: droid-hub tap X Y | swipe x1 y1 x2 y2 [ms] | text 'text' | key back|home|enter
+#                    droid-hub shot [path] | ui [keyword] | find 'text' [--tap] | start <package> | cur | ping
 set -u
 DIR="$HOME/storage/shared/dsh-droid"
 CMD="$DIR/cmd.json"
@@ -32,7 +32,7 @@ elif kind == 'start':  cmd.update(action='start', value=a[1])
 elif kind == 'cur':    cmd.update(action='cur')
 elif kind == 'ping':   cmd.update(action='ping')
 else:
-    print(json.dumps({'ok': False, 'error': '未知用法: ' + kind})); sys.exit(2)
+    print(json.dumps({'ok': False, 'error': 'unknown usage: ' + kind})); sys.exit(2)
 open(d + '/cmd.json', 'w').write(json.dumps(cmd, ensure_ascii=False))
 print(json.dumps(cmd, ensure_ascii=False))
 PY
@@ -55,14 +55,14 @@ except Exception: print("")
   python3 - "$RES" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
-print('结果:', '✅' if d.get('ok') else '❌', d.get('error') or '')
+print('result:', '✅' if d.get('ok') else '❌', d.get('error') or '')
 data = d.get('data')
 if isinstance(data, dict):
     if 'nodes' in data:
         for n in data['nodes']:
             c = n.get('center')
             print(f"  [{c[0]},{c[1]}] {n.get('cls',''):<16} text={n.get('text','')[:40]!r} desc={n.get('desc','')[:26]!r} id={n.get('id','')[-26:]}")
-        print(f"  共 {data.get('count')} 个节点")
+        print(f"  {data.get('count')} nodes")
     else:
         print('  ', json.dumps(data, ensure_ascii=False)[:600])
 PY
@@ -72,10 +72,10 @@ import json,sys
 d=json.load(open(sys.argv[1],encoding="utf-8"))
 print((d.get("data") or {}).get("path",""))
 ' "$RES")"
-    [ -n "$P" ] && echo "  截图位于: $P  (Termux 路径: $HOME/storage/shared${P#/sdcard})"
+    [ -n "$P" ] && echo "  screenshot at: $P  (Termux path: $HOME/storage/shared${P#/sdcard})"
   fi
   exit 0
 done
-echo "⏱ 超时：桥接脚本似乎没在运行。请在 AutoX.js 里打开 /sdcard/dsh-droid/bridge.js 并点运行。" >&2
-echo "自检：ls -l $DIR ; cat $DIR/bridge.log | tail -5" >&2
+echo "⏱ Timeout: the bridge script does not seem to be running. Open /sdcard/dsh-droid/bridge.js in AutoX.js and tap run." >&2
+echo "Self-check: ls -l $DIR ; cat $DIR/bridge.log | tail -5" >&2
 exit 1

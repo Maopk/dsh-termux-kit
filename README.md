@@ -17,8 +17,8 @@ Everything is built on **Termux + an Accessibility service + the official `RUN_C
 | `widgets/` | 9 Termux home-screen task widgets + the shared library `common.sh` |
 | `tools/` | 26 command-line tools (start, backup, install APKs, tap UI by text, Clash self-check, …) |
 | `plugins/` | 3 DSH page plugins (phone task panel / AI self-look & remote control / file panel) |
-| `tests/selftest.sh` | Self-test suite: 58 checks (syntax → dry-run → regression → real run → cold-start sandbox) |
-| `docs/` | Operations notes (evidence + post-mortems for every trap hit) and the architecture/data-flow doc |
+| `tests/selftest.sh` | Self-test suite: 60 checks (syntax → dry-run → regression → real run → cold-start sandbox) |
+| `docs/` | [`operations.md`](docs/operations.md) — how to diagnose the recurring failures · [`architecture.md`](docs/architecture.md) — one-page architecture & data flow · `DSH运维笔记.md` — the raw Chinese engineering journal behind them |
 | `dist/` | Prebuilt APKs + SHA256 |
 
 ---
@@ -63,15 +63,15 @@ Two more steps after installing:
 
 | Widget | What it does |
 |---|---|
-| `1_启动DSH` | Starts DSH and waits for **real readiness** (token line in the log + URL returns 200 + process alive) before opening the browser |
-| `2_关闭DSH` | Stops the service **and closes the DSH window** (adb first; without adb it drives the Accessibility bridge to press Back — it no longer fakes success). Keeps **Termux alive by default** (`--close-termux` closes it too, since the Console app needs Termux to refresh). `--keep-bridge` keeps the bridge |
-| `3_备份DSH` | Packages and verifies the archive (`zstd -t` + entry count) |
-| `4_软重启DSH` / `6_硬重启DSH` | Restart via SIGTERM / SIGKILL (takes the lock *before* acting, so double-taps can't kill the instance it just started) |
-| `5_清理DSH` | Cleans the kit's own artifacts: **my screenshots are deleted by default**, keeps 5 state packs and **1 full snapshot**; your files are untouched (oddly-named images I produce can be claimed via `图片/.dsh-images.list`) |
-| `7_重连AI通道` | Recovers adb and the bridge, and says clearly which of the two failed |
-| `8_自动开无线调试` | Semi-automatically enables Wireless debugging and connects adb (if Wi-Fi is off it opens the settings page, waits for your tap, then continues) |
-| `9_撤销密码授权` | Revokes the “AI may use your lock-screen PIN for system verification” grant |
-| `0_紧急停止` | One-tap kill switch: revokes all AI control (bridge, token, adb wireless debugging) |
+| `1_start-dsh` | Starts DSH and waits for **real readiness** (token line in the log + URL returns 200 + process alive) before opening the browser |
+| `2_shutdown-dsh` | Stops the service **and closes the DSH window** (adb first; without adb it drives the Accessibility bridge to press Back — it no longer fakes success). Keeps **Termux alive by default** (`--close-termux` closes it too, since the Console app needs Termux to refresh). `--keep-bridge` keeps the bridge |
+| `3_backup-dsh` | Packages and verifies the archive (`zstd -t` + entry count) |
+| `4_soft-restart-dsh` / `6_hard-restart-dsh` | Restart via SIGTERM / SIGKILL (takes the lock *before* acting, so double-taps can't kill the instance it just started) |
+| `5_cleanup-dsh` | Cleans the kit's own artifacts: **my screenshots are deleted by default**, keeps 5 state packs and **1 full snapshot**; your files are untouched (oddly-named images I produce can be claimed via `图片/.dsh-images.list`) |
+| `7_reconnect-ai` | Recovers adb and the bridge, and says clearly which of the two failed |
+| `8_enable-wireless-adb` | Semi-automatically enables Wireless debugging and connects adb (if Wi-Fi is off it opens the settings page, waits for your tap, then continues) |
+| `9_revoke-pin` | Revokes the “AI may use your lock-screen PIN for system verification” grant |
+| `0_emergency-stop` | One-tap kill switch: revokes all AI control (bridge, token, adb wireless debugging) |
 
 Every widget supports `--dry-run` (print only, execute nothing).
 
@@ -81,6 +81,7 @@ Every widget supports `--dry-run` (print only, execute nothing).
 - Buttons are **grouped by function**: `Start·Stop` / `Channels (adb and bridge kept separate)` / `Maintenance` / `Emergency`.
 - **Logs** live on their own screen: command sent, result, exit code, raw output; the button shows an unread badge.
 - “PIN usage rights” is a **switch**: on = the AI may use your 6-digit lock-screen PIN to pass system verification; off = revoked immediately.
+- **Language switch** (System / 中文 / English) under Maintenance: it writes the shared `~/.dsh-lang`, so the app, the DSH page panel and the 10 widgets all follow the same choice. Source text is English; Chinese comes from a built-in table (see [`docs/i18n.md`](docs/i18n.md)).
 - Dangerous actions (restart / shutdown / emergency stop / revoke) require confirmation.
 - Timeouts are per task (backup 420s / restart 300s / queries 25s with one automatic resend), and timeout messages state the real reason (e.g. “the phone was busy”).
 - It requests exactly one permission: `com.termux.permission.RUN_COMMAND`. No storage, network, accessibility or overlay permissions.
@@ -114,11 +115,11 @@ Every long-lived channel ships with a way for **you** to take it back in one ste
 
 | Channel | What it grants | How to revoke |
 |---|---|---|
-| Accessibility bridge | Read screen, tap, swipe, type | Widget `0_紧急停止` / `dsh-bridge stop` / turn the Accessibility switch off in system settings |
+| Accessibility bridge | Read screen, tap, swipe, type | Widget `0_emergency-stop` / `dsh-bridge stop` / turn the Accessibility switch off in system settings |
 | Loopback token | Credential to call the bridge | Delete `~/.dsh-bridge-token` |
 | adb wireless debugging | Shell-level power (the strongest) | `droid-panic` / turn Wireless debugging off / reboot the phone |
 | Page remote control | Clicking around your DSH page | Write `{"enabled": false}` into `~/.dsh-mobile-ui.json` |
-| PIN usage rights | Passing system verification with your lock-screen PIN | Console switch / widget `9_撤销密码授权` / `rm ~/.dsh-auth-pass` |
+| PIN usage rights | Passing system verification with your lock-screen PIN | Console switch / widget `9_revoke-pin` / `rm ~/.dsh-auth-pass` |
 
 The PIN is stored only in `~/.dsh-auth-pass` (`chmod 600`) and read only when passing system verification **on your behalf** — never to unlock the phone and browse its contents, never for payments, never for anything outside the task you asked for.
 

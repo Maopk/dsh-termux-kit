@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 无障碍服务声明：只要求「读窗口内容 + 执行手势 + 截图 + 按键过滤（用于音量键紧急停止）」
-     按键过滤不是为了记录你打什么字，只用来识别「音量+ 与 音量- 同时按住」这个救援手势。 -->
+<!-- Accessibility service declaration: asks only for read window content + perform gestures + take screenshots + key-event filtering (for the volume-key emergency stop)
+     Key filtering is not there to record what you type; it only recognizes the rescue gesture of holding volume-up and volume-down together. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"

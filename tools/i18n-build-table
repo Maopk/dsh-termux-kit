@@ -1,0 +1,124 @@
+#!/data/data/com.termux/files/usr/bin/python3
+"""i18n-build-table —— build the English → Chinese lookup table (for widgets/i18n.sh and the App)
+
+Idea: the strings are English now and the Chinese originals live in git. **git diff is naturally aligned** —
+a `-Chinese` / `+English` pair sitting next to each other in one hunk is a match, far more reliable than pairing by order of appearance
+(translation often merges two lines into one or splits them, so pairing by order drifts across a whole file).
+
+Usage: 
+  i18n-build-table                     # print a bash array (paste it into widgets/i18n.sh)
+  i18n-build-table --write             # write into the table in widgets/i18n.sh
+  i18n-build-table --report            # coverage report
+  i18n-build-table --json              # print JSON (to generate the App Java table)
+  i18n-build-table --since <rev>       # which revision to compare against (default HEAD)
+  i18n-build-table --paths <a,b,...>   # only process these files
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TARGET = os.path.join(REPO, 'widgets', 'i18n.sh')
+HAN = re.compile(r'[\u4e00-\u9fff]')
+STR_RE = re.compile(r"""['"]([^'"]{3,300})['"]""")
+
+OLD_NAME = {
+    'widgets/0_emergency-stop.sh': 'widgets/0_紧急停止.sh',
+    'widgets/1_start-dsh.sh': 'widgets/1_启动DSH.sh',
+    'widgets/2_shutdown-dsh.sh': 'widgets/2_关闭DSH.sh',
+    'widgets/3_backup-dsh.sh': 'widgets/3_备份DSH.sh',
+    'widgets/4_soft-restart-dsh.sh': 'widgets/4_软重启DSH.sh',
+    'widgets/5_cleanup-dsh.sh': 'widgets/5_清理DSH.sh',
+    'widgets/6_hard-restart-dsh.sh': 'widgets/6_硬重启DSH.sh',
+    'widgets/7_reconnect-ai.sh': 'widgets/7_重连AI通道.sh',
+    'widgets/8_enable-wireless-adb.sh': 'widgets/8_自动开无线调试.sh',
+    'widgets/9_revoke-pin.sh': 'widgets/9_撤销密码授权.sh',
+}
+
+
+def git(*args):
+    return subprocess.run(['git', '-C', REPO] + list(args), capture_output=True, text=True, timeout=60).stdout
+
+
+def pairs_from_diff(rev, relpath):
+    d = git('diff', '-U0', rev, '--', OLD_NAME.get(relpath, relpath))
+    if not d:
+        d = git('diff', '-U0', rev, '--', relpath)
+    res, minus, plus = [], [], []
+
+    def flush():
+        if minus and plus:
+            zh = [s for line in minus for s in STR_RE.findall(line) if HAN.search(s)]
+            en = [s for line in plus for s in STR_RE.findall(line) if not HAN.search(s)]
+            if len(zh) == len(en) and zh:
+                res.extend(zip(en, zh))
+            elif len(zh) == 1 and len(en) == 1:
+                res.append((en[0], zh[0]))
+        minus.clear(); plus.clear()
+
+    for line in d.split('\n'):
+        if line.startswith('@@'):
+            flush(); continue
+        if line.startswith('-') and not line.startswith('---'):
+            minus.append(line[1:])
+        elif line.startswith('+') and not line.startswith('+++'):
+            plus.append(line[1:])
+        elif line.startswith(' '):
+            flush()
+    flush()
+    return res
+
+
+def main():
+    a = sys.argv[1:]
+    rev = a[a.index('--since') + 1] if '--since' in a else 'HEAD'
+    paths = [p for p in a[a.index('--paths') + 1].split(',') if p] if '--paths' in a else None
+    if paths is None:
+        files = [f for f in git('diff', '--name-only', rev).split('\n')
+                 if f and (f.endswith('.sh') or f.startswith(('widgets/', 'tools/')))
+                 and 'i18n-build-table' not in f]
+    else:
+        files = paths
+
+    allpairs, per_file = {}, {}
+    for f in files:
+        ps = pairs_from_diff(rev, f)
+        if ps:
+            per_file[f] = len(ps)
+            for en, zh in ps:
+                allpairs.setdefault(en, zh)
+
+    if '--json' in a:
+        print(json.dumps(allpairs, ensure_ascii=False, indent=1)); return 0
+    if '--report' in a:
+        print(f'matched {len(allpairs)} entries (from {len(per_file)} files)')
+        for f, n in sorted(per_file.items(), key=lambda kv: -kv[1]):
+            print(f'  {n:4d}  {f}')
+        return 0
+
+    def sq(v):
+        """Single-quote for bash. Inside '...' neither $ nor backticks are expanded, so a message
+        that happens to contain $(...) or a backtick stays literal — double quotes broke the
+        generated file once (syntax error), which is exactly what this avoids."""
+        return "'" + v.replace("'", "'\\''") + "'"
+
+    block = 'declare -A DSH_ZH=(\n' + '\n'.join(
+        '  [%s]=%s' % (sq(e), sq(z)) for e, z in sorted(allpairs.items())) + '\n)\n'
+    if '--write' not in a:
+        print(block); print(f'# {len(allpairs)} entries', file=sys.stderr); return 0
+    src = open(TARGET, encoding='utf-8').read()
+    src = re.sub(r'declare -A DSH_ZH=\(.*?\n\)\n', block, src, count=1, flags=re.S)
+    open(TARGET, 'w', encoding='utf-8').write(src)
+    chk = subprocess.run(['bash', '-n', TARGET], capture_output=True, text=True)
+    if chk.returncode != 0:
+        print('generated table failed bash -n — aborting', file=sys.stderr)
+        print(chk.stderr.strip(), file=sys.stderr)
+        return 2
+    print(f'wrote {len(allpairs)} entries to {TARGET} (bash -n OK)')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

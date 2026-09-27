@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-selflook —— 触发 DSH 界面自截图，并等待结果
-# 依赖：动态插件 look-1（self-look）处于运行状态，且 DSH 页面在浏览器中打开
-# 用法：dsh-selflook [等待秒数]
+# dsh-selflook —— trigger a DSH UI self-screenshot and wait for the result
+# Needs the dynamic plugin look-1 (self-look) running, with the DSH page open in a browser
+# Usage: dsh-selflook [wait seconds]
 set -u
 
 HOME_DIR="/data/data/com.termux/files/home"
@@ -12,15 +12,15 @@ WAIT="${1:-40}"
 OLD="$(cat "$LAST" 2>/dev/null || echo '')"
 touch "$REQ"
 
-echo "已触发截图请求，等待结果（最多 ${WAIT}s）…"
+echo "screenshot requested, waiting for the result (up to ${WAIT}s)…"
 for i in $(seq 1 "$WAIT"); do
   sleep 1
   NEW="$(cat "$LAST" 2>/dev/null || echo '')"
   if [ -n "$NEW" ] && [ "$NEW" != "$OLD" ] && [ -s "$NEW" ]; then
-    echo "新截图: $NEW ($(du -h "$NEW" 2>/dev/null | cut -f1))"
+    echo "new screenshot: $NEW ($(du -h "$NEW" 2>/dev/null | cut -f1))"
     exit 0
   fi
 done
 
-echo "超时：未收到截图。请检查 ① 插件 look-1 是否已批准运行 ② DSH 页面是否在浏览器中打开" >&2
+echo "Timeout: no screenshot arrived. Check ① whether plugin look-1 is approved and running ② whether the DSH page is open in a browser" >&2
 exit 1

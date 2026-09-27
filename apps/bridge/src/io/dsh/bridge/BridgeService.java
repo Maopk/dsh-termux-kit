@@ -40,16 +40,16 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * DSH 桥 —— 无障碍服务（自建，源码全公开）。
+ * DSH Bridge — the accessibility service (self-built, source fully public).
  *
- * 通信：只监听 127.0.0.1:8788，按行收发 JSON，每个请求都要带正确 token。
+ * Communication: listens on 127.0.0.1:8788 only, exchanges line-based JSON, and every request must carry the right token.
  *
- * 自救设计（冗余撤销，四层都在这个文件里）：
- *   ① 音量+ 与 音量- 同时按住 3 秒 → 立即 panic()：关端口 + 关闭自身无障碍（不用看屏幕）
- *   ② 常驻通知栏「DSH 桥正在运行」，带「紧急停止」按钮
- *   ③ 空闲看门狗：超过 N 分钟没有合法指令 → 自动停止监听（默认 30 分钟，可在 App 里调/关）
- *   ④ 任何时刻 App 界面上的大红按钮也是一样的 panic()
- * 另外：本 App **没有开机自启**（无 BOOT_COMPLETED 接收器），重启手机后不会自己跑起来。
+ * Self-rescue design (redundant revocation, all four layers live in this file):
+ *   ① Hold volume-up and volume-down together for 3s → panic() at once: close the port + disable its own accessibility (no need to look at the screen)
+ *   ② A persistent "DSH Bridge is running" notification, with an "emergency stop" button
+ *   ③ Idle watchdog: no valid command for N minutes → stop listening automatically (default 30 min, adjustable/disableable in the app)
+ *   ④ The big red button on the app screen performs the same panic() at any time
+ * Also: this app has **no boot autostart** (no BOOT_COMPLETED receiver); it does not come up by itself after a phone restart.
  */
 public class BridgeService extends AccessibilityService {
 
@@ -58,16 +58,16 @@ public class BridgeService extends AccessibilityService {
     public static final String CHANNEL = "dsh-bridge";
     public static final int NOTIF_ID = 8788;
 
-    /** 供通知栏按钮 / 外部调用的当前实例 */
+    /** Current instance, for the notification button / outside callers */
     public static volatile BridgeService INSTANCE;
 
-    /** 本版本支持的动作（caps 会原样返回，避免小组件靠猜版本） */
+    /** Actions supported by this version (caps returns them verbatim so widgets need not guess the version) */
     public static final String[] ACTIONS = {
         "ping", "caps", "cur", "netstate", "adbwifi", "stop", "sleep", "panic",
         "shot", "tap", "longpress", "swipe", "text", "key", "ui", "start"
     };
 
-    /** 动态读版本号：改 manifest 后不会像写死字符串那样停留在旧版本 */
+    /** Reads the version dynamically: after a manifest bump it will not stay stuck on the old version the way a hard-coded string does */
     static String verName(android.content.Context c) {
         try {
             return c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName;
@@ -85,7 +85,7 @@ public class BridgeService extends AccessibilityService {
 
     private final Runnable holdCheck = new Runnable() {
         @Override public void run() {
-            if (volUp && volDown) panic("音量键紧急停止");
+            if (volUp && volDown) panic("volume-key emergency stop");
         }
     };
 
@@ -95,16 +95,17 @@ public class BridgeService extends AccessibilityService {
                 int idleMin = getSharedPreferences(PREFS, MODE_PRIVATE).getInt("idleMin", 30);
                 if (idleMin > 0 && running
                         && System.currentTimeMillis() - lastRequestAt > idleMin * 60000L) {
-                    stopListening("空闲 " + idleMin + " 分钟无指令，已自动停止监听");
+                    stopListening("idle for " + idleMin + " min with no commands; listening stopped automatically");
                 }
-            } catch (Throwable t) { /* 忽略 */ }
+            } catch (Throwable t) { /* ignore */ }
             handler.postDelayed(this, 60000);
         }
     };
 
-    // ---------- 生命周期 ----------
-    /** 用户是否明确要求"停着"（软停/sleep 都会置位）。置位后系统重新绑定本服务时**不再自动开监听**，
-     *  否则就出现"明明关了它自己又开"。清位只由 resumeListening()（广播唤醒）做。 */
+    // ---------- Lifecycle ----------
+    /** Whether the user explicitly asked for it to "stay stopped" (both a soft stop and sleep set this).
+     *  Once set, rebinding this service no longer starts listening automatically, otherwise you get
+     *  "I turned it off and it switched itself back on". Only resumeListening() (the wake broadcast) clears it. */
     static boolean userPaused(Context c) {
         return c.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean("userPaused", false);
     }
@@ -122,22 +123,22 @@ public class BridgeService extends AccessibilityService {
                 info.flags |= AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
                 setServiceInfo(info);
             }
-        } catch (Throwable t) { /* 忽略 */ }
-        // 关键：被用户停过（软停/sleep）→ 系统重绑也不许自己开监听/起常驻通知
+        } catch (Throwable t) { /* ignore */ }
+        // Key: if the user stopped it (soft stop / sleep), a system rebind must not start listening or raise the persistent notification by itself
         if (userPaused(this)) {
             running = false;
-            Toast.makeText(this, "DSH 桥保持停止（你之前关过它）；点组件 1/7/8 可恢复", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "DSH Bridge stays stopped (you turned it off earlier); tap widgets 1/7/8 to resume", Toast.LENGTH_SHORT).show();
             return;
         }
         startListening();
-        // 起前台服务：防止被系统/厂商省电策略冻结（否则连广播唤醒都收不到）
+        // Start the foreground service: prevents freezing by system/vendor battery savers (otherwise even the wake broadcast is missed)
         try {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(new Intent(this, BridgeForeground.class));
             else startService(new Intent(this, BridgeForeground.class));
-        } catch (Throwable t) { /* 失败不影响无障碍功能 */ }
+        } catch (Throwable t) { /* failure does not affect accessibility */ }
         handler.removeCallbacks(idleWatch);
         handler.postDelayed(idleWatch, 60000);
-        Toast.makeText(this, "DSH 桥已启动：音量+/- 同时按住 3 秒可紧急停止", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "DSH Bridge started: hold volume +/- together for 3s for emergency stop", Toast.LENGTH_LONG).show();
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
@@ -145,51 +146,51 @@ public class BridgeService extends AccessibilityService {
 
     @Override
     public boolean onUnbind(Intent intent) {
-        stopListening("无障碍已关闭");
+        stopListening("accessibility turned off");
         INSTANCE = null;
         return super.onUnbind(intent);
     }
 
     @Override
     public void onDestroy() {
-        stopListening("服务销毁");
+        stopListening("service destroyed");
         INSTANCE = null;
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
 
-    // ---------- 自救 ----------
-    /** 硬停止：关端口 + 关闭自身无障碍服务（需要重新在系统设置里开启才能再用） */
+    // ---------- Self-rescue ----------
+    /** Hard stop: close the port + disable its own accessibility service (it must be re-enabled in system settings before it can be used again) */
     public void panic(String reason) {
-        stopListening("紧急停止：" + reason);
+        stopListening("Emergency stop: " + reason);
         try {
-            Toast.makeText(this, "DSH 桥已紧急停止（" + reason + "）", Toast.LENGTH_LONG).show();
-        } catch (Throwable t) { /* 忽略 */ }
-        try { disableSelf(); } catch (Throwable t) { /* 忽略 */ }
+            Toast.makeText(this, "DSH Bridge emergency-stopped (" + reason + ")", Toast.LENGTH_LONG).show();
+        } catch (Throwable t) { /* ignore */ }
+        try { disableSelf(); } catch (Throwable t) { /* ignore */ }
     }
 
-    /** 软停止：只关端口，保留无障碍服务（重新打开 App 即可恢复监听） */
+    /** Soft stop: closes the port only, keeps the accessibility service (reopen the app to resume listening) */
     public void stopListening(String why) {
         running = false;
         lastRequestAt = System.currentTimeMillis();
-        try { if (serverSocket != null) serverSocket.close(); } catch (Throwable t) { /* 忽略 */ }
+        try { if (serverSocket != null) serverSocket.close(); } catch (Throwable t) { /* ignore */ }
         serverSocket = null;
-        try { stopService(new Intent(this, BridgeForeground.class)); } catch (Throwable t) { /* 忽略 */ }
+        try { stopService(new Intent(this, BridgeForeground.class)); } catch (Throwable t) { /* ignore */ }
         if (why != null && !why.isEmpty()) {
-            try { Toast.makeText(this, "DSH 桥：" + why, Toast.LENGTH_SHORT).show(); } catch (Throwable t) { }
+            try { Toast.makeText(this, "DSH Bridge: " + why, Toast.LENGTH_SHORT).show(); } catch (Throwable t) { }
         }
     }
 
-    /** 重新开始监听（广播唤醒/App 回到前台时调用）。会清掉"用户要求停着"的标记。 */
+    /** Starts listening again (called on a wake broadcast / when the app returns to the foreground). Clears the "user asked it to stay stopped" flag. */
     public void resumeListening() {
         setUserPaused(this, false);
         lastRequestAt = System.currentTimeMillis();
         startListening();
-        // 起前台服务：防止被系统/厂商省电策略冻结（否则连广播唤醒都收不到）
+        // Start the foreground service: prevents freezing by system/vendor battery savers (otherwise even the wake broadcast is missed)
         try {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(new Intent(this, BridgeForeground.class));
             else startService(new Intent(this, BridgeForeground.class));
-        } catch (Throwable t) { /* 失败不影响无障碍功能 */ }
+        } catch (Throwable t) { /* failure does not affect accessibility */ }
     }
 
     public boolean isListening() {
@@ -209,7 +210,7 @@ public class BridgeService extends AccessibilityService {
     }
 
 
-    // ---------- 音量键救援手势 ----------
+    // ---------- Volume-key rescue gesture ----------
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
         int c = event.getKeyCode();
@@ -218,10 +219,10 @@ public class BridgeService extends AccessibilityService {
         if (c == KeyEvent.KEYCODE_VOLUME_UP) volUp = down; else volDown = down;
         handler.removeCallbacks(holdCheck);
         if (volUp && volDown) handler.postDelayed(holdCheck, 3000);
-        return false;   // 不拦截，音量键照常工作
+        return false;   // don't intercept; volume keys keep working
     }
 
-    // ---------- 服务端循环 ----------
+    // ---------- Server loop ----------
     private void serve() {
         try {
             serverSocket = new ServerSocket(PORT, 16, InetAddress.getByName("127.0.0.1"));
@@ -231,13 +232,13 @@ public class BridgeService extends AccessibilityService {
                     s = serverSocket.accept();
                     handle(s);
                 } catch (Throwable t) {
-                    // 端口被 close 时会抛异常，正常退出
+                    // Closing the port throws here; that is a normal exit
                 } finally {
                     if (s != null) { try { s.close(); } catch (Throwable t) { } }
                 }
             }
         } catch (Throwable t) {
-            // 端口占用等
+            // port already in use, etc.
         }
     }
 
@@ -250,8 +251,8 @@ public class BridgeService extends AccessibilityService {
         JSONObject res = new JSONObject();
         String token = getSharedPreferences(PREFS, MODE_PRIVATE).getString("token", "");
         try {
-            if (token.isEmpty()) throw new Exception("App 还没初始化，请先打开 DSH 桥 一次");
-            if (!token.equals(req.optString("token"))) throw new Exception("token 不对");
+            if (token.isEmpty()) throw new Exception("The app is not initialized yet; open DSH Bridge once first");
+            if (!token.equals(req.optString("token"))) throw new Exception("Wrong token");
             lastRequestAt = System.currentTimeMillis();
             res.put("ok", true);
             res.put("data", exec(req));
@@ -264,7 +265,7 @@ public class BridgeService extends AccessibilityService {
         os.flush();
     }
 
-    // ---------- 动作 ----------
+    // ---------- Actions ----------
     private JSONObject exec(JSONObject req) throws Exception {
         String a = req.optString("action");
         JSONObject d = new JSONObject();
@@ -276,51 +277,51 @@ public class BridgeService extends AccessibilityService {
             d.put("listening", running);
             d.put("ver", verName(this));
             d.put("paused", userPaused(this));
-            // 服务上下文不能 getDisplay()（会抛 "Context not associated with a display"），改用资源度量
+            // A service context cannot call getDisplay() (it throws "Context not associated with a display"); use resource metrics instead
             android.util.DisplayMetrics m = getResources().getDisplayMetrics();
             d.put("w", m.widthPixels);
             d.put("h", m.heightPixels);
             return d;
         }
 
-        if (a.equals("caps")) {           // 能力清单：小组件据此判断新旧版本，不靠猜
+        if (a.equals("caps")) {           // capability list: widgets use this to tell versions apart instead of guessing
             JSONArray arr = new JSONArray();
             for (String s : ACTIONS) arr.put(s);
             d.put("actions", arr);
             d.put("ver", verName(this));
-            d.put("sleep", true);         // 支持「真停」（关端口+停前台+关无障碍，不会自恢复）
-            d.put("wake_reauth", true);   // 支持带 token 的唤醒重新授权无障碍
-            d.put("stop_is_durable", true); // stop 软停后**不会**被系统重绑自动拉起来（v1.8）
+            d.put("sleep", true);         // supports a "real stop" (close port + stop foreground + disable accessibility, no self-recovery)
+            d.put("wake_reauth", true);   // supports a token-carrying wake to re-authorize accessibility
+            d.put("stop_is_durable", true); // after a soft stop the system rebind does **not** pull it back up (v1.8)
             return d;
         }
 
-        if (a.equals("sleep")) {          // 真停：关端口 + 停前台服务 + 关闭自身无障碍
+        if (a.equals("sleep")) {          // real stop: close port + stop foreground service + disable its own accessibility
             setUserPaused(this, true);
             handler.post(new Runnable() { @Override public void run() {
-                stopListening("收到休眠指令：已彻底停止（不会自恢复）");
-                try { disableSelf(); } catch (Throwable t) { /* 忽略 */ }
+                stopListening("sleep command received: fully stopped (no self-recovery)");
+                try { disableSelf(); } catch (Throwable t) { /* ignore */ }
             }});
             d.put("slept", true);
             return d;
         }
 
-        if (a.equals("stop")) {           // 软停：关端口 + 记住"别再自己开"（进程留着，广播一叫就回来）
+        if (a.equals("stop")) {           // soft stop: close port + remember "do not start yourself again" (process stays; one broadcast brings it back)
             setUserPaused(this, true);
-            handler.post(new Runnable() { @Override public void run() { stopListening("收到停止指令（已记住：不自动恢复）"); } });
+            handler.post(new Runnable() { @Override public void run() { stopListening("stop command received (remembered: no automatic recovery)"); } });
             d.put("stopped", true);
             d.put("paused", true);
             return d;
         }
 
-        if (a.equals("panic")) {          // 硬停：关端口 + 关闭无障碍
-            handler.post(new Runnable() { @Override public void run() { panic("收到遥控紧急停止"); } });
+        if (a.equals("panic")) {          // hard stop: close port + disable accessibility
+            handler.post(new Runnable() { @Override public void run() { panic("remote emergency stop received"); } });
             d.put("panicked", true);
             return d;
         }
 
         if (a.equals("cur")) { d.put("pkg", currentPkg()); return d; }
 
-        // ---- 网络状态：Wi-Fi 开关 + 是否真的能上网（直连测试，不依赖任何 API）----
+        // ---- Network state: Wi-Fi switch + whether the internet really works (direct connect test, no API involved) ----
         if (a.equals("netstate")) {
             try {
                 d.put("wifi_on", android.provider.Settings.Global.getInt(getContentResolver(), "wifi_on", -1));
@@ -341,13 +342,13 @@ public class BridgeService extends AccessibilityService {
             return d;
         }
 
-        // ---- 开关「无线调试」：唯一需要 WRITE_SECURE_SETTINGS 的地方 ----
+        // ---- Toggling wireless debugging: the only place that needs WRITE_SECURE_SETTINGS ----
         if (a.equals("adbwifi")) {
             int v = req.optInt("value", 1);
             try {
                 android.provider.Settings.Global.putInt(getContentResolver(), "adb_wifi_enabled", v == 0 ? 0 : 1);
             } catch (Throwable t2) {
-                throw new Exception("需要 WRITE_SECURE_SETTINGS（用 adb: pm grant io.dsh.bridge android.permission.WRITE_SECURE_SETTINGS）: " + t2.getMessage());
+                throw new Exception("Needs WRITE_SECURE_SETTINGS (via adb: pm grant io.dsh.bridge android.permission.WRITE_SECURE_SETTINGS): " + t2.getMessage());
             }
             int now = android.provider.Settings.Global.getInt(getContentResolver(), "adb_wifi_enabled", -1);
             d.put("adb_wifi", now);
@@ -380,7 +381,7 @@ public class BridgeService extends AccessibilityService {
                 AccessibilityNodeInfo root = getRootInActiveWindow();
                 focus = root == null ? null : root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
             }
-            if (focus == null) throw new Exception("当前没有聚焦的输入框");
+            if (focus == null) throw new Exception("No input field is focused right now");
             Bundle args = new Bundle();
             args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, v);
             d.put("ok", focus.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args));
@@ -443,14 +444,14 @@ public class BridgeService extends AccessibilityService {
         if (a.equals("start")) {
             String pkg = req.optString("value", "");
             Intent it = getPackageManager().getLaunchIntentForPackage(pkg);
-            if (it == null) throw new Exception("找不到应用: " + pkg);
+            if (it == null) throw new Exception("App not found: " + pkg);
             it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(it);
             d.put("launched", pkg);
             return d;
         }
 
-        throw new Exception("未知动作: " + a);
+        throw new Exception("Unknown action: " + a);
     }
 
     private static String cut(String s, int n) {
@@ -480,7 +481,7 @@ public class BridgeService extends AccessibilityService {
     }
 
     private String screenshotBase64() throws Exception {
-        if (Build.VERSION.SDK_INT < 30) throw new Exception("系统低于 Android 11，不支持无障碍截图");
+        if (Build.VERSION.SDK_INT < 30) throw new Exception("Android 11 or newer is required for accessibility screenshots");
         final CountDownLatch latch = new CountDownLatch(1);
         final String[] out = new String[1];
         final String[] err = new String[1];
@@ -490,7 +491,7 @@ public class BridgeService extends AccessibilityService {
                     Bitmap hw = Bitmap.wrapHardwareBuffer(result.getHardwareBuffer(), result.getColorSpace());
                     Bitmap sw = hw == null ? null : hw.copy(Bitmap.Config.ARGB_8888, false);
                     result.getHardwareBuffer().close();
-                    if (sw == null) { err[0] = "截图转换失败"; }
+                    if (sw == null) { err[0] = "Screenshot conversion failed"; }
                     else {
                         ByteArrayOutputStream bos = new ByteArrayOutputStream();
                         sw.compress(Bitmap.CompressFormat.PNG, 100, bos);
@@ -501,12 +502,12 @@ public class BridgeService extends AccessibilityService {
                 finally { latch.countDown(); }
             }
             @Override public void onFailure(int errorCode) {
-                err[0] = "截图失败 code=" + errorCode;
+                err[0] = "Screenshot failed code=" + errorCode;
                 latch.countDown();
             }
         });
         latch.await(10, TimeUnit.SECONDS);
-        if (out[0] == null) throw new Exception(err[0] == null ? "截图超时" : err[0]);
+        if (out[0] == null) throw new Exception(err[0] == null ? "Screenshot timed out" : err[0]);
         return out[0];
     }
 }

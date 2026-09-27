@@ -1,13 +1,13 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# droid-panic —— 紧急停止：一次性撤销 AI 对这台手机的所有控制手段
-# 不需要看屏幕、不需要 DSH 页面；Termux 桌面小组件「0_紧急停止」就是调它。
+# droid-panic —— emergency stop: revoke every way the AI can control this phone in one shot
+# No screen and no DSH page needed; the Termux home-screen widget 0_emergency-stop calls it.
 #
-# 做的事（从上到下都在做，任何一步失败都继续）：
-#   ① 让「DSH 桥」自杀：关掉 127.0.0.1:8788 端口 + 关闭它自己的无障碍服务
-#   ② 吊销 token（删掉 ~/.dsh-bridge-token）—— 就算桥还在监听也发不出合法指令
-#   ③ 清空 AutoX 桥的指令文件（共享目录通道静默）
-#   ④ 杀掉我这边可能还挂着的等待/循环进程
-#   ⑤ 弹出系统无障碍设置页，方便你一眼确认「DSH 桥」是关的
+# What it does (top to bottom, and it keeps going even if a step fails):
+#   ① make the 「DSH 桥」 kill itself: close port 127.0.0.1:8788 + shut down its own accessibility service
+#   ② revoke the token (delete ~/.dsh-bridge-token) — even a listening bridge can no longer send valid commands
+#   ③ clear the AutoX bridge command file (the shared-directory channel goes quiet)
+#   ④ kill any waiting/looping processes still hanging on my side
+#   ⑤ open the system accessibility settings so you can confirm at a glance that 「DSH 桥」 is off
 set -u
 BRIDGE_TOKEN="$HOME/.dsh-bridge-token"
 SHARED="$HOME/storage/shared/dsh-droid"
@@ -16,61 +16,61 @@ LOG="$HOME/.droid-panic.log"
 note() { printf '%s\n' "$*"; printf '[%s] %s\n' "$(date '+%F %T')" "$*" >> "$LOG"; }
 
 {
-  echo "==================== 紧急停止 $(date '+%F %T') ===================="
-  note "① 通知 DSH 桥自杀"
+  echo "==================== EMERGENCY STOP $(date '+%F %T') ===================="
+  note "① telling the DSH bridge to kill itself"
   if [ -x "$HOME/.local/bin/droid-sock" ]; then
     if timeout 8 "$HOME/.local/bin/droid-sock" panic >/dev/null 2>&1; then
-      note "   ✔ 桥已收到 panic：端口关闭 + 无障碍已自行关闭"
+      note "   ✔ bridge received panic: port closed + accessibility shut itself down"
     else
-      note "   · 桥没响应（可能本来就没在跑）"
+      note "   · bridge did not respond (it probably was not running)"
     fi
   fi
 
-  note "② 吊销 token"
+  note "② revoking the token"
   if [ -f "$BRIDGE_TOKEN" ]; then
-    mv -f "$BRIDGE_TOKEN" "$BRIDGE_TOKEN.revoked-$(date +%s)" 2>/dev/null && note "   ✔ 已吊销（原 token 改名保留备查）"
+    mv -f "$BRIDGE_TOKEN" "$BRIDGE_TOKEN.revoked-$(date +%s)" 2>/dev/null && note "   ✔ revoked (the old token is renamed and kept for reference)"
   else
-    note "   · 没有 token 文件（本来就没授权过）"
+    note "   · no token file (it was never authorized)"
   fi
 
-  note "③ 清空共享目录指令通道（AutoX 桥）"
+  note "③ clearing the shared-directory command channel (AutoX bridge)"
   if [ -d "$SHARED" ]; then
-    : > "$SHARED/cmd.json" 2>/dev/null && note "   ✔ cmd.json 已清空"
-    echo '{"ok":false,"error":"已紧急停止"}' > "$SHARED/res.json" 2>/dev/null
+    : > "$SHARED/cmd.json" 2>/dev/null && note "   ✔ cmd.json cleared"
+    echo '{"ok":false,"error":"emergency stop engaged"}' > "$SHARED/res.json" 2>/dev/null
   fi
 
-  note "④ 结束我这边的等待/循环进程"
+  note "④ ending waiting/looping processes on my side"
   KILLED=0
   for pat in "auto-look.sh" "droid-hub" "dsh-control" "dsh-eval" "watch-look.sh" "relaunch-watch.sh"; do
     for pid in $(ps -ef 2>/dev/null | grep "[${pat:0:1}]${pat:1}" | awk '{print $2}'); do
       kill "$pid" 2>/dev/null && KILLED=$((KILLED+1))
     done
   done
-  note "   ✔ 已结束 $KILLED 个相关进程"
+  note "   ✔ ended $KILLED related processes"
 
-  note "⑤ 打开无障碍设置页"
+  note "⑤ opening the accessibility settings page"
   if [ "${PANIC_NO_UI:-0}" = "1" ]; then
-    note "   · 已跳过（PANIC_NO_UI=1，仅自检用）"
+    note "   · skipped (PANIC_NO_UI=1, self-test only)"
   else
-    am start -a android.settings.ACCESSIBILITY_SETTINGS >/dev/null 2>&1 && note "   ✔ 已弹出（确认「DSH 桥」是关闭状态）"
+    am start -a android.settings.ACCESSIBILITY_SETTINGS >/dev/null 2>&1 && note "   ✔ opened (verify that 「DSH 桥」 is off)"
   fi
 
   cat <<'TIP'
 
 ──────────────────────────────────────────────
- 已紧急停止。AI 对手机的控制通道全部切断：
-   · 端口 127.0.0.1:8788 已关
-   · DSH 桥的无障碍服务已自行关闭
-   · token 已吊销
-   · 共享目录指令通道已清空
+ Emergency stop engaged. Every AI control channel to this phone is cut:
+   · port 127.0.0.1:8788 closed
+   · the DSH bridge accessibility service shut itself down
+   · token revoked
+   · shared-directory command channel cleared
 
- 如果手机还在自己动，按顺序再来：
-   A. 音量 + 和音量 − 同时按住 3 秒（App 内置救援手势）
-   B. 通知栏「DSH 桥正在运行」→ 紧急停止
-   C. 重启手机（本 App 不会开机自启，自动化随之归零）
-   D. 安全模式：长按电源键 → 长按「关机」→ 选安全模式
-      （第三方 App 全部停用，彻底拿回控制权）
-   E. 最后手段：卸载可疑 App / 恢复出厂（先跑小组件 3_备份DSH）
+ If the phone is still moving on its own, go through these in order:
+   A. hold volume + and volume − together for 3 seconds (built-in rescue gesture in the App)
+   B. the notification 「DSH 桥正在运行」 → emergency stop
+   C. reboot the phone (this App does not autostart, so the automation resets to zero)
+   D. Safe mode: long-press power → long-press 「关机」 → choose safe mode
+      (all third-party Apps are disabled and you fully regain control)
+   E. last resort: uninstall the suspicious App / factory reset (run widget 3_backup-dsh first)
 ──────────────────────────────────────────────
 TIP
 } 2>&1 | tee -a "$LOG"

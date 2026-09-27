@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# droid-pair —— 一次搞定无线调试配对与连接（只需你提供 6 位配对码，端口自动找）
-# 用法：droid-pair <6位配对码>          （配对对话框必须开着）
-#       droid-pair                      只做「重新连接」（已配对过时用）
+# droid-pair —— pair and connect wireless debugging in one shot (just give the 6-digit code; ports are found automatically)
+# Usage: droid-pair <6-digit pairing code>          (the pairing dialog must be open)
+#       droid-pair                      just reconnect (use when already paired)
 set -u
 CODE="${1:-}"
 
@@ -35,37 +35,37 @@ MANUAL_PORT="${2:-}"
 if [ -n "$CODE" ]; then
   if [ -n "$MANUAL_PORT" ]; then
     PAIR="127.0.0.1:$MANUAL_PORT"
-    echo "① 使用你给的配对端口: $PAIR"
+    echo "① using the pairing port you gave: $PAIR"
   else
-  echo "① 找配对端口（mDNS，最多 22 秒）…"
+  echo "① looking for the pairing port (mDNS, up to 22s)…"
   PAIR="$(find_port pairing)"
   if [ -z "$PAIR" ]; then
-    echo "❌ 没发现配对服务。可以改成手工指定端口：droid-pair <配对码> <配对端口>"
+    echo "❌ no pairing service found. You can pass the ports by hand: droid-pair <code> <pairing port>"
     exit 1
   fi
   fi
-  echo "   配对服务: $PAIR"
-  echo "② 配对（配对码 $CODE）"
+  echo "   pairing service: $PAIR"
+  echo "② pairing (code $CODE)"
   adb pair "${PAIR%:*}:${PAIR##*:}" "$CODE" 2>&1 | tail -3
 else
-  echo "① 跳过配对，直接重连"
+  echo "① skipping pairing, reconnecting directly"
 fi
 
-echo "③ 找连接端口 …"
+echo "③ looking for the connect port …"
 CONN="$(find_port connect)"
 CONN="${CONN:-192.168.1.100:43321}"
-echo "   连接目标: $CONN"
+echo "   connect target: $CONN"
 adb connect "$CONN" 2>&1 | tail -2
 sleep 1
 
-echo "④ 设备状态"
+echo "④ device state"
 adb devices -l | tail -n +2
 if adb devices | awk 'NR>1 && $2=="device"' | grep -q .; then
-  echo "⑤ 验证 shell"
+  echo "⑤ verify shell"
   adb shell echo "adb-ok: \$(getprop ro.product.model)" 2>&1 | tail -1
   echo
-  echo "✅ 无线调试通道打通。接下来可选：固定端口（关掉 Wi-Fi 也能用，重启前有效）"
-  echo "   执行：adb tcpip 5555 && adb connect 127.0.0.1:5555"
+  echo "✅ wireless debugging channel is up. Optional next step: fix the port (works with Wi-Fi off, until reboot)"
+  echo "   Run: adb tcpip 5555 && adb connect 127.0.0.1:5555"
 else
-  echo "⚠️ 还没连上。若显示 unauthorized，请在手机屏幕上点『允许调试』；若显示 offline，重开一次无线调试再试。"
+  echo "⚠️ not connected yet. If it says unauthorized, tap 『允许调试』 on the phone screen; if it says offline, toggle wireless debugging off and on and retry."
 fi

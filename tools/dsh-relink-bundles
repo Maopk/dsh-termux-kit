@@ -1,16 +1,16 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-relink-bundles —— 把 DSH 运行时的内置 bundle 重新链回 profile 的 node_modules
+# dsh-relink-bundles —— re-link the built-in DSH runtime bundles back into the profile node_modules
 #
-# 为什么需要（2026-09-26 真踩）：
-#   `@deepseek-ai/dsh-base` 与 `@deepseek-ai/dsh-web-app` 这两个 bundle **不是 pnpm 依赖**
-#   （profile 的 package.json / pnpm-lock.yaml 里都没有它们），它们是指向 DSH 运行时的软链。
-#   所以只要在 profile 目录里跑一次普通的 `pnpm install`，pnpm 就会把它们当"多余的包"剪掉：
+# Why this exists (really hit on 2026-09-26):
+#   `@deepseek-ai/dsh-base` and `@deepseek-ai/dsh-web-app` are **not pnpm dependencies**
+#   (they are in neither the profile package.json nor pnpm-lock.yaml); they are symlinks into the DSH runtime.
+#   so one ordinary `pnpm install` in the profile dir makes pnpm prune them as "extra packages":
 #     Packages: +3 -19
-#   → 客户端 bundle（那 60 个内置客户端模块）就拼不出来 → 页面报
+#   → the client bundle (those 60 built-in client modules) cannot be assembled → the page reports
 #     「Failed to load plugins … client-modules: bundle script /plugins/??… failed to load」
-#   （服务端对 /plugins/??… 直接 404，浏览器自然加载不了。）
+#   (the server returns 404 for /plugins/??…, so the browser cannot load it.)
 #
-# 用法：dsh-relink-bundles [--check]      # --check 只检查、不改（给自检套件用）
+# Usage: dsh-relink-bundles [--check]      # --check check only, change nothing (for the self-test suite)
 set -u
 RT="${DSH_RUNTIME:-$HOME/.local/opt/dsh-termux-runtime/work}"
 PROFILE="${DSH_PROFILE_DIR:-$HOME/.dsh/profiles/web}"
@@ -22,20 +22,20 @@ for p in $PKGS; do
   src="$RT/node_modules/@deepseek-ai/$p"
   dst="$PROFILE/node_modules/@deepseek-ai/$p"
   if [ ! -d "$src" ]; then
-    printf '✘ 运行时里就没有 %s（%s）—— 先修 DSH 运行时\n' "$p" "$src" >&2
+    printf '✘ the runtime does not have %s (%s) — fix the DSH runtime first\n' "$p" "$src" >&2
     miss=$((miss+1)); continue
   fi
   if [ -e "$dst" ]; then
-    printf '✔ %s 已在（%s）\n' "$p" "$(readlink "$dst" 2>/dev/null || echo 目录)"
+    printf '✔ %s is present (%s)\n' "$p" "$(readlink "$dst" 2>/dev/null || echo dir)"
   elif [ "$CHECK" = 1 ]; then
-    printf '✘ %s 缺失：%s（跑一次 dsh-relink-bundles 修）\n' "$p" "$dst" >&2
+    printf '✘ %s missing: %s (run dsh-relink-bundles once to fix)\n' "$p" "$dst" >&2
     miss=$((miss+1))
   else
     mkdir -p "$(dirname "$dst")"
-    ln -sfn "$src" "$dst" && printf '＋ 已补链 %s → %s\n' "$dst" "$src"
+    ln -sfn "$src" "$dst" && printf '＋ re-linked %s → %s\n' "$dst" "$src"
   fi
 done
-# 顺带把 bundles 清单里其它包的存在性也看一眼（少哪个一眼能看出）
+# Also check that the other packages in the bundles list exist (a missing one is obvious at a glance)
 python3 - "$PROFILE" <<'PY' 2>/dev/null || true
 import json, os, sys
 prof = sys.argv[1]
@@ -46,9 +46,9 @@ except Exception:
 bs = ((d.get('dsh') or {}).get('profile') or {}).get('bundles') or []
 missing = [b for b in bs if not os.path.exists(os.path.join(prof, 'node_modules', b, 'package.json'))]
 if missing:
-    print('⚠ bundles 里还缺：' + ', '.join(missing))
+    print('⚠ still missing from bundles: ' + ', '.join(missing))
 else:
-    print('✔ bundles 清单 %d 个全部就位' % len(bs))
+    print('✔ all %d entries of the bundles list are in place' % len(bs))
 PY
 [ "$miss" = 0 ] || exit 1
-printf '\n提示：补链后**刷新页面**即可（不必重启 DSH —— 路由是按请求现拼 bundle 的）。\n'
+printf '\nNote: after re-linking, just **refresh the page** (no DSH restart needed — the route assembles the bundle per request).\n'

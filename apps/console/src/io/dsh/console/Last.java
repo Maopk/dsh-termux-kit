@@ -3,7 +3,7 @@ package io.dsh.console;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-/** 上一次结果的本地缓存（进程被杀也不丢，小部件重绘时直接拿来用）。 */
+/** Local cache of the last result (survives the process being killed; the widget redraws straight from it). */
 final class Last {
     private static final String P = "dsh-console";
     static void set(Context c, String text) {
@@ -19,7 +19,7 @@ final class Last {
         prefs(c).edit().putString("pending", label == null ? "" : label)
                 .putLong("pendingAt", System.currentTimeMillis()).apply();
     }
-    /** 返回"正在执行：X"里的 X；没有或已过期(>3分钟)则返回 null。 */
+    /** Returns the X in Lang.t("Running: X"); null when it is absent or expired (>3 minutes). */
     static String pending(Context c) {
         String p = prefs(c).getString("pending", "");
         long at = prefs(c).getLong("pendingAt", 0);

@@ -1,0 +1,30 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# dsh-lang — read or write the kit's language setting (shared by the apps, the DSH page panel and every script)
+#
+# The single source of truth is ~/.dsh-lang, holding one line: zh / en / auto.
+# The Console app's language switch writes this same file through the RUN_COMMAND channel
+# (the app cannot touch Termux's private directory directly), so all three stay in agreement.
+#
+# Usage:
+#   dsh-lang              # print the effective language: zh | en
+#   dsh-lang get          # same
+#   dsh-lang mode         # print the stored setting (may be "auto")
+#   dsh-lang set zh|en|auto
+#   dsh-lang list         # the three modes, for a UI that wants to cycle them
+set -u
+HOME_DIR="/data/data/com.termux/files/home"
+for f in "$HOME_DIR/.local/share/dsh-widgets/i18n.sh" "$(dirname "$0")/../widgets/i18n.sh"; do
+  [ -f "$f" ] && . "$f" && break
+done
+command -v dsh_lang >/dev/null 2>&1 || { echo "✘ i18n.sh not found (install widgets/i18n.sh to ~/.local/share/dsh-widgets/)" >&2; exit 2; }
+
+case "${1:-get}" in
+  get)  dsh_lang; echo ;;
+  mode) v=$(head -1 "$HOME_DIR/.dsh-lang" 2>/dev/null | tr -d '[:space:]'); echo "${v:-auto}" ;;
+  set)
+    v="${2:-}"
+    if dsh_lang_set "$v"; then printf 'language set to %s (effective: %s)\n' "$v" "$(dsh_lang)"
+    else printf '✘ usage: dsh-lang set zh|en|auto\n' >&2; exit 2; fi ;;
+  list) printf 'auto zh en\n' ;;
+  *) sed -n '2,15p' "$0"; exit 2 ;;
+esac

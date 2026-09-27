@@ -7,14 +7,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 
-/** 接收 Termux 回传的命令结果（stdout/stderr/exitCode），缓存并刷新小部件。 */
+/** Receives command results sent back by Termux (stdout/stderr/exitCode), caches them and refreshes the widget. */
 public class TaskResultReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context ctx, Intent intent) {
         if (intent == null) return;
         String cmdId = intent.getStringExtra("cmdId");
         String label = intent.getStringExtra("label");
-        // 结果 bundle 的键是短名 "result"（新版 Termux；长名是旧版遗留，两个都试）
+        // The result bundle key is the short name "result" (newer Termux; the long name is a legacy
+        // leftover — try both)
         Bundle b = intent.getBundleExtra("result");
         if (b == null) b = intent.getBundleExtra(TermuxRunner.E_RESULT);
         String out = "";
@@ -26,22 +27,24 @@ public class TaskResultReceiver extends BroadcastReceiver {
             code = (int) num(b, "exitCode", -1);
             if (out.isEmpty() && !err.isEmpty()) out = err;
             else if (!err.isEmpty()) out = out + "\n" + err;
-            // ⚠ 别再拿 "err" 当消息：按 TermuxConstants，bundle 里 `err` 是 **int** 错误码
-            //   （`errmsg` 才是字符串）。v0.5 实机上线后日志里就出现了 "[errmsg] -1" 这种鬼东西
-            //   —— 用户只会以为出了错。现在只认**真的有文字**的 errmsg。
+            // ⚠ Don't treat "err" as the message any more: per TermuxConstants, `err` in the bundle is an
+            //   **int** error code (`errmsg` is the string). After v0.5 shipped, the log filled up with
+            //   junk like "[errmsg] -1" — users just assume something broke. Only a **truly textual**
+            //   errmsg counts now.
             if (errmsg.isEmpty()) errmsg = str(b, "err");
             if (!errmsg.isEmpty() && !errmsg.trim().matches("-?\\d+")) out = out + "\n[errmsg] " + errmsg.trim();
         } else {
-            out = "(没有收到结果 bundle；可能是 Termux 未授权或 allow-external-apps 未开)\n" + intent.getExtras();
+            out = "(no result bundle received; Termux may not be authorized or allow-external-apps is off)\n" + intent.getExtras();
         }
         Last.setPending(ctx, null);
         out = out.trim();
 
         boolean isStatus = "status".equals(cmdId) || intent.getBooleanExtra("isStatus", false);
-        // ⚠ 截断规则不一样：任务输出看**尾部**（最近的几行最有用），
-        //   而状态是**一整个 JSON**，从尾部切会把头切掉 → 解析必失败。
-        //   实测踩到：状态包长到 6463 字节时，被切掉头部的片段让 App 显示「状态解析失败：
-        //   Value asks" of type java.lang.String cannot be converted to JSONObject」。
+        // ⚠ Truncation rules differ: task output keeps the **tail** (the latest lines are the useful
+        //   ones), while status is **one whole JSON**, and cutting it from the tail removes its head →
+        //   parsing always fails. Measured: when the status payload grew to 6463 bytes, the headless
+        //   fragment made the app display "Status parse failed: Value asks" of type java.lang.String
+        //   cannot be converted to JSONObject".
         if (out.length() > (isStatus ? 200000 : 4000)) {
             out = isStatus ? out.substring(0, 200000) : out.substring(out.length() - 4000);
         }
@@ -49,11 +52,12 @@ public class TaskResultReceiver extends BroadcastReceiver {
         if (isStatus) {
             Last.setStatus(ctx, out);
         } else {
-            Last.set(ctx, "【" + (label == null ? cmdId : label) + "】exit=" + code + "\n" + out);
-            // 任务跑完后顺手再刷一次状态（脚本收尾时自己也发布过，这里保证界面同步）
-            TermuxRunner.run(ctx, "status", "刷新状态", TermuxRunner.statusCmd(), true);
+            Last.set(ctx, "[" + (label == null ? cmdId : label) + "] exit=" + code + "\n" + out);
+            // Refresh status once more after a task finishes (the script publishes its own when it
+            // wraps up; this keeps the UI in sync)
+            TermuxRunner.run(ctx, "status", Lang.t("Refresh status"), TermuxRunner.statusCmd(), true);
         }
-        // 通知小部件重绘
+        // Notify the widget to redraw
         try {
             AppWidgetManager m = AppWidgetManager.getInstance(ctx);
             int[] ids = m.getAppWidgetIds(new ComponentName(ctx, DshWidget.class));
@@ -62,8 +66,9 @@ public class TaskResultReceiver extends BroadcastReceiver {
                         .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
                 ctx.sendBroadcast(u);
             }
-        } catch (Throwable t) { /* 没有部件就算了 */ }
-        // 通知界面（如果正开着）：把结果本身也带过去，界面才能显示"完成/退出码/输出"
+        } catch (Throwable t) { /* no widget, never mind */ }
+        // Notify the UI (if it is open): carry the result itself along so the UI can show "done / exit
+        // code / output"
         try {
             Intent ui = new Intent("io.dsh.console.UI_REFRESH").setPackage(ctx.getPackageName())
                     .putExtra("cmdId", cmdId)

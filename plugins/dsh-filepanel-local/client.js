@@ -66,7 +66,7 @@ window.__ModuleLoader__.load({
         res = await resp.json()
       }
       if (!res || res.ok === false) {
-        throw new Error((res && res.error) ? res.error : '操作失败')
+        throw new Error((res && res.error) ? res.error : 'Operation failed')
       }
       return res
     }
@@ -127,7 +127,7 @@ window.__ModuleLoader__.load({
       return new Promise((resolve, reject) => {
         const r = new FileReader()
         r.onload = () => { const s = String(r.result || ''); resolve(s.slice(s.indexOf(',') + 1)) }
-        r.onerror = () => reject(new Error('读取文件失败'))
+        r.onerror = () => reject(new Error('Failed to read file'))
         r.readAsDataURL(file.slice(start, end))
       })
     }
@@ -200,7 +200,7 @@ window.__ModuleLoader__.load({
       const startedAt = Date.now()
       const throwCancelled = async () => {
         await call('panel.uploadAbort', { root, path }).catch(() => {})
-        throw Object.assign(new Error('已取消'), { code: 'CANCELLED' })
+        throw Object.assign(new Error('Cancelled'), { code: 'CANCELLED' })
       }
       try {
         for (let start = 0; start < total; start += CHUNK) {
@@ -399,7 +399,7 @@ window.__ModuleLoader__.load({
 
       function goUp() {
         if (!path) return
-        if (path === root) { flash('err', '已在工作区根目录'); return }
+        if (path === root) { flash('err', 'Already at workspace root'); return }
         load(parentOf(path))
       }
 
@@ -418,7 +418,7 @@ window.__ModuleLoader__.load({
         try {
           const res = await call('panel.search', { root, query: q.trim(), maxResults: 200 })
           setSearchResults(res.results)
-        } catch (e) { flash('err', (e && e.message) || '搜索失败') } finally { setSearching(false) }
+        } catch (e) { flash('err', (e && e.message) || 'Search failed') } finally { setSearching(false) }
       }
 
       function onSearchInput(v) {
@@ -435,7 +435,7 @@ window.__ModuleLoader__.load({
         try {
           const res = await call('panel.list', { root, path: dir })
           setMoveDlg((d) => d ? { ...d, dir: res.path, dirs: res.entries.filter((x) => x.type === 'directory') } : d)
-        } catch (e) { flash('err', (e && e.message) || '加载失败') }
+        } catch (e) { flash('err', (e && e.message) || 'Load failed') }
       }
       function openMoveDlg(mode, paths) {
         setMoveDlg({ mode, paths, dir: path || root, dirs: [] })
@@ -448,9 +448,9 @@ window.__ModuleLoader__.load({
           else await call('panel.copy', { root, paths: moveDlg.paths, dest: moveDlg.dir })
           const n = moveDlg.paths.length
           setMoveDlg(null); setSelected([])
-          flash('ok', (moveDlg.mode === 'move' ? '已移动 ' : '已复制 ') + n + ' 项')
+          flash('ok', (moveDlg.mode === 'move' ? 'Moved ' : 'Copied ') + n + ' items')
           load(path)
-        } catch (e) { flash('err', (e && e.message) || '操作失败') }
+        } catch (e) { flash('err', (e && e.message) || 'Operation failed') }
       }
 
       async function batchDownload() {
@@ -462,9 +462,9 @@ window.__ModuleLoader__.load({
       async function doUnzip(entry) {
         try {
           await call('panel.unzip', { root, zipPath: entry.path, destDir: path })
-          flash('ok', '已解压到当前目录')
+          flash('ok', 'Extracted here')
           load(path)
-        } catch (e) { flash('err', (e && e.message) || '解压失败') }
+        } catch (e) { flash('err', (e && e.message) || 'Extraction failed') }
       }
 
       async function openPreview(entry) {
@@ -494,7 +494,7 @@ window.__ModuleLoader__.load({
         if (!preview) return
         try {
           await call('panel.writeText', { root, path: preview.path, content: draft })
-          flash('ok', '已保存 ' + preview.name)
+          flash('ok', 'Saved ' + preview.name)
           setEditing(false)
           setPreview({ ...preview, content: draft })
           load(path)
@@ -508,7 +508,7 @@ window.__ModuleLoader__.load({
           if (creating === 'file') await call('panel.writeText', { root, path: path + '/' + name, content: '' })
           else if (creating === 'dir') await call('panel.createDir', { root, path: path + '/' + name })
           else if (creating === 'zip') await call('panel.zip', { root, paths: selected.length ? selected : [path], zipName: name })
-          setCreating(null); setCreateName(''); flash('ok', '已创建 ' + name); load(path)
+          setCreating(null); setCreateName(''); flash('ok', 'Created ' + name); load(path)
         } catch (e) { flash('err', e.message || String(e)) }
       }
 
@@ -517,7 +517,7 @@ window.__ModuleLoader__.load({
         if (!name || !renaming) return
         try {
           await call('panel.rename', { root, path: renaming.path, newName: name })
-          setRenaming(null); flash('ok', '已重命名'); load(path)
+          setRenaming(null); flash('ok', 'Renamed'); load(path)
         } catch (e) { flash('err', e.message || String(e)) }
       }
 
@@ -528,10 +528,10 @@ window.__ModuleLoader__.load({
             for (const p of selected) await call('panel.remove', { root, path: p })
             const n = selected.length
             setSelected([])
-            flash('ok', '已删除 ' + n + ' 项')
+            flash('ok', 'Deleted ' + n + ' items')
           } else {
             await call('panel.remove', { root, path: confirm.path })
-            flash('ok', '已删除 ' + confirm.name)
+            flash('ok', 'Deleted ' + confirm.name)
           }
           setConfirm(null); load(path)
         } catch (e) { flash('err', e.message || String(e)); setConfirm(null) }
@@ -544,7 +544,7 @@ window.__ModuleLoader__.load({
           const a = document.createElement('a')
           a.href = url; a.download = entry.name
           document.body.appendChild(a); a.click(); a.remove()
-        } catch (e) { flash('err', (e && e.message) || '下载失败') }
+        } catch (e) { flash('err', (e && e.message) || 'Download failed') }
       }
 
       async function openInBrowser(entry) {
@@ -554,13 +554,13 @@ window.__ModuleLoader__.load({
           const a = document.createElement('a')
           a.href = url; a.target = '_blank'; a.rel = 'noopener'
           document.body.appendChild(a); a.click(); a.remove()
-        } catch (e) { flash('err', (e && e.message) || '打开失败') }
+        } catch (e) { flash('err', (e && e.message) || 'Open failed') }
       }
 
       function copyPath(entry) {
         if (navigator && navigator.clipboard) {
-          navigator.clipboard.writeText(entry.path).then(() => flash('ok', '已复制路径')).catch(() => flash('err', '复制失败'))
-        } else flash('err', '剪贴板不可用')
+          navigator.clipboard.writeText(entry.path).then(() => flash('ok', 'Path copied')).catch(() => flash('err', 'Copy failed'))
+        } else flash('err', 'Clipboard unavailable')
       }
 
       function startUploads(files) {
@@ -570,19 +570,19 @@ window.__ModuleLoader__.load({
         const next = (i) => {
           if (cancelRef.current) {
             setUpload(null)
-            flash('ok', '已取消上传')
+            flash('ok', 'Upload cancelled')
             return
           }
           if (i >= files.length) {
             setUpload(null)
-            flash(failed ? 'err' : 'ok', '上传完成：成功 ' + (files.length - failed) + ' 个，失败 ' + failed + ' 个')
+            flash(failed ? 'err' : 'ok', 'Upload finished: ' + (files.length - failed) + ' ok, ' + failed + ' failed')
             load(path)
             return
           }
           const f = files[i]
           const full = path + '/' + f.name
           const doNext = () => next(i + 1)
-          if (f.size > 2 * 1024 * 1024 * 1024) { failed++; flash('err', f.name + ' 超过 2GB，已跳过'); return doNext() }
+          if (f.size > 2 * 1024 * 1024 * 1024) { failed++; flash('err', f.name + ' exceeds 2GB, skipped'); return doNext() }
           uploadFile(root, full, f, (sent, total, startedAt) => {
             const secs = (Date.now() - startedAt) / 1000
             setUpload({ name: f.name, sent, total, speed: speedText(secs > 0 ? sent / secs : 0) })
@@ -592,11 +592,11 @@ window.__ModuleLoader__.load({
           }, (err) => {
             setUpload(null)
             if (err && err.code === 'CANCELLED') {
-              flash('ok', '已取消上传')
+              flash('ok', 'Upload cancelled')
               return
             }
             failed++
-            flash('err', f.name + ' 失败：' + ((err && err.message) || err))
+            flash('err', f.name + ' failed: ' + ((err && err.message) || err))
             doNext()
           })
         }
@@ -615,7 +615,7 @@ window.__ModuleLoader__.load({
           h('button', {
             key: 'tab',
             style: tabHover ? { ...S.tab, ...S.tabActive } : S.tab,
-            title: '文件面板：移到最右侧悬停，或点击此处打开',
+            title: 'File panel: hover the far right edge, or click here to open',
             onMouseEnter: () => { setTabHover(true); scheduleOpen() },
             onMouseLeave: () => { setTabHover(false); cancelOpen() },
             onClick: openNow,
@@ -645,13 +645,13 @@ window.__ModuleLoader__.load({
             ? h('input', { className: 'fp-input', style: { flex: 1, minWidth: 0 }, autoFocus: true, value: renameDraft, onChange: (e) => setRenameDraft(e.target.value), onClick: (e) => e.stopPropagation(), onKeyDown: (e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(null) } })
             : h('span', { style: S.name, title: entry.name }, entry.name),
           h('span', { style: S.size }, entry.type === 'file' ? formatSize(entry.size) : ''),
-          entry.type === 'file' ? h('button', { className: 'fp-act', title: '下载', style: { flex: 'none', color: 'var(--dsw-alias-label-primary)', fontWeight: 500 }, onClick: (e) => { e.stopPropagation(); download(entry) } }, h(Icon, { name: 'download', size: 13 })) : null,
+          entry.type === 'file' ? h('button', { className: 'fp-act', title: 'Download', style: { flex: 'none', color: 'var(--dsw-alias-label-primary)', fontWeight: 500 }, onClick: (e) => { e.stopPropagation(); download(entry) } }, h(Icon, { name: 'download', size: 13 })) : null,
           h('span', { className: 'fp-row-actions', onClick: (e) => e.stopPropagation() },
-            h('button', { className: 'fp-act', title: '在浏览器中打开', onClick: () => openInBrowser(entry) }, h(Icon, { name: 'external', size: 12 })),
-            entry.type === 'file' && extOf(entry.name) === 'zip' ? h('button', { className: 'fp-act', title: '解压到当前目录', onClick: () => doUnzip(entry) }, h(Icon, { name: 'unzip', size: 12 })) : null,
-            h('button', { className: 'fp-act', title: '重命名', onClick: () => { setRenaming({ path: entry.path, name: entry.name }); setRenameDraft(entry.name) } }, h(Icon, { name: 'rename', size: 12 })),
-            h('button', { className: 'fp-act', title: '复制路径', onClick: () => copyPath(entry) }, h(Icon, { name: 'copy', size: 12 })),
-            h('button', { className: 'fp-act danger', title: '删除', onClick: () => setConfirm({ path: entry.path, name: entry.name }) }, h(Icon, { name: 'trash', size: 12 })),
+            h('button', { className: 'fp-act', title: 'Open in browser', onClick: () => openInBrowser(entry) }, h(Icon, { name: 'external', size: 12 })),
+            entry.type === 'file' && extOf(entry.name) === 'zip' ? h('button', { className: 'fp-act', title: 'Extract here', onClick: () => doUnzip(entry) }, h(Icon, { name: 'unzip', size: 12 })) : null,
+            h('button', { className: 'fp-act', title: 'Rename', onClick: () => { setRenaming({ path: entry.path, name: entry.name }); setRenameDraft(entry.name) } }, h(Icon, { name: 'rename', size: 12 })),
+            h('button', { className: 'fp-act', title: 'Copy path', onClick: () => copyPath(entry) }, h(Icon, { name: 'copy', size: 12 })),
+            h('button', { className: 'fp-act danger', title: 'Delete', onClick: () => setConfirm({ path: entry.path, name: entry.name }) }, h(Icon, { name: 'trash', size: 12 })),
           ),
         )
       })
@@ -681,16 +681,16 @@ window.__ModuleLoader__.load({
       if (preview) {
         if (preview.kind === 'image') {
           previewBody = h('div', { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: 12 } },
-            h('img', { src: preview.url, alt: preview.name, style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 4 }, onError: () => flash('err', '图片加载失败') }),
+            h('img', { src: preview.url, alt: preview.name, style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 4 }, onError: () => flash('err', 'Image failed to load') }),
           )
         } else if (preview.kind === 'pdf') {
           previewBody = h('div', { style: { flex: 1, overflow: 'hidden' } },
             h('iframe', { src: preview.url, title: preview.name, style: { width: '100%', height: '100%', border: 'none', background: '#fff' } }),
           )
         } else if (preview.loading) {
-          previewBody = h('div', { style: S.empty }, '加载中…')
+          previewBody = h('div', { style: S.empty }, 'Loading…')
         } else if (preview.tooLarge) {
-          previewBody = h('div', { style: S.empty }, '文件较大（' + formatSize(preview.size) + '），已跳过预览，可点击「下载」查看')
+          previewBody = h('div', { style: S.empty }, 'File too large (' + formatSize(preview.size) + '), preview skipped, tap Download to view')
         } else if (preview.error) {
           previewBody = h('div', { style: S.empty }, preview.error)
         } else if (editing) {
@@ -722,13 +722,13 @@ window.__ModuleLoader__.load({
         h('div', { style: { ...S.drawer, width } },
           h('div', {
             style: S.resizeHandle,
-            title: '拖动调整宽度',
+            title: 'Drag to resize',
             onMouseDown: startResize,
             onMouseEnter: () => setGripHover(true),
             onMouseLeave: () => setGripHover(false),
           }, h('div', { style: gripHover ? { ...S.resizeGrip, background: 'var(--dsw-alias-brand-primary)' } : S.resizeGrip })),
           h('div', { style: S.header },
-            h('span', { style: S.headerTitle }, h(Icon, { name: 'folder', size: 15 }), '文件'),
+            h('span', { style: S.headerTitle }, h(Icon, { name: 'folder', size: 15 }), 'Files'),
             h('div', { style: S.breadcrumb },
               crumbList.map((c, i, arr) => {
                 const isLast = i === arr.length - 1
@@ -738,34 +738,34 @@ window.__ModuleLoader__.load({
                 )
               }),
             ),
-            h(Btn, { iconOnly: true, title: '关闭', onClick: closeNow }, h(Icon, { name: 'close', size: 15 })),
+            h(Btn, { iconOnly: true, title: 'Close', onClick: closeNow }, h(Icon, { name: 'close', size: 15 })),
           ),
           h('div', { style: S.toolbar },
-            h(Btn, { iconOnly: true, title: '返回上级目录', onClick: goUp }, h(Icon, { name: 'up', size: 14 })),
-            h(Btn, { iconOnly: true, title: '刷新', onClick: () => load(path) }, h(Icon, { name: 'refresh', size: 14 })),
-            h(Btn, { title: '新建文件', onClick: () => { setCreating('file'); setCreateName('') } }, h(Icon, { name: 'plusFile', size: 13 }), '新建文件'),
-            h(Btn, { title: '新建文件夹', onClick: () => { setCreating('dir'); setCreateName('') } }, h(Icon, { name: 'plusFolder', size: 13 }), '新建文件夹'),
-            h('label', { className: 'fp-btn', title: '上传文件', style: { cursor: 'pointer' } },
+            h(Btn, { iconOnly: true, title: 'Go up', onClick: goUp }, h(Icon, { name: 'up', size: 14 })),
+            h(Btn, { iconOnly: true, title: 'Refresh', onClick: () => load(path) }, h(Icon, { name: 'refresh', size: 14 })),
+            h(Btn, { title: 'New file', onClick: () => { setCreating('file'); setCreateName('') } }, h(Icon, { name: 'plusFile', size: 13 }), 'New file'),
+            h(Btn, { title: 'New folder', onClick: () => { setCreating('dir'); setCreateName('') } }, h(Icon, { name: 'plusFolder', size: 13 }), 'New folder'),
+            h('label', { className: 'fp-btn', title: 'Upload files', style: { cursor: 'pointer' } },
               h(Icon, { name: 'upload', size: 13 }),
-              '上传',
+              'Upload',
               h('input', { type: 'file', multiple: true, style: { display: 'none' }, onChange: onFiles }),
             ),
-            h('input', { className: 'fp-input', style: { flex: 1, minWidth: 110 }, placeholder: globalSearch ? '搜索整个工作区（名称 / 内容）…' : '搜索当前目录…', value: filter, onChange: (e) => onSearchInput(e.target.value) }),
-            h(Btn, { on: globalSearch, iconOnly: true, title: '全局搜索', onClick: () => { if (globalSearch) exitGlobal(); else { setGlobalSearch(true); setFilter(''); setSearchResults(null) } } }, h(Icon, { name: 'search', size: 14 })),
+            h('input', { className: 'fp-input', style: { flex: 1, minWidth: 110 }, placeholder: globalSearch ? 'Search entire workspace (name / content)…' : 'Search current folder…', value: filter, onChange: (e) => onSearchInput(e.target.value) }),
+            h(Btn, { on: globalSearch, iconOnly: true, title: 'Global search', onClick: () => { if (globalSearch) exitGlobal(); else { setGlobalSearch(true); setFilter(''); setSearchResults(null) } } }, h(Icon, { name: 'search', size: 14 })),
           ),
           selected.length > 0 ? h('div', { style: S.batchBar },
-            h('span', { style: S.batchCount }, '已选 ' + selected.length + ' 项'),
-            h(Btn, { title: '下载所选文件', onClick: batchDownload }, h(Icon, { name: 'download', size: 13 }), '下载'),
-            h(Btn, { title: '打包为 zip', onClick: () => { setCreating('zip'); setCreateName('archive.zip') } }, h(Icon, { name: 'archive', size: 13 }), '打包'),
-            h(Btn, { title: '移动到…', onClick: () => openMoveDlg('move', selected) }, h(Icon, { name: 'move', size: 13 }), '移动'),
-            h(Btn, { title: '复制到…', onClick: () => openMoveDlg('copy', selected) }, h(Icon, { name: 'copy', size: 13 }), '复制'),
-            h(Btn, { danger: true, title: '删除所选', onClick: () => setConfirm({ batch: true, count: selected.length }) }, h(Icon, { name: 'trash', size: 13 }), '删除'),
-            h(Btn, { title: '取消选择', onClick: () => setSelected([]) }, '清除'),
+            h('span', { style: S.batchCount }, 'Selected ' + selected.length + ' items'),
+            h(Btn, { title: 'Download selected files', onClick: batchDownload }, h(Icon, { name: 'download', size: 13 }), 'Download'),
+            h(Btn, { title: 'Pack as zip', onClick: () => { setCreating('zip'); setCreateName('archive.zip') } }, h(Icon, { name: 'archive', size: 13 }), 'Zip'),
+            h(Btn, { title: 'Move to…', onClick: () => openMoveDlg('move', selected) }, h(Icon, { name: 'move', size: 13 }), 'Move'),
+            h(Btn, { title: 'Copy to…', onClick: () => openMoveDlg('copy', selected) }, h(Icon, { name: 'copy', size: 13 }), 'Copy'),
+            h(Btn, { danger: true, title: 'Delete selected', onClick: () => setConfirm({ batch: true, count: selected.length }) }, h(Icon, { name: 'trash', size: 13 }), 'Delete'),
+            h(Btn, { title: 'Clear selection', onClick: () => setSelected([]) }, 'Clear'),
           ) : null,
           creating ? h('div', { style: S.createRow },
-            h('input', { className: 'fp-input', style: { flex: 1, minWidth: 0 }, placeholder: creating === 'file' ? '文件名，如 notes.md' : (creating === 'dir' ? '文件夹名' : '压缩包名，如 archive.zip'), value: createName, autoFocus: true, onChange: (e) => setCreateName(e.target.value), onKeyDown: (e) => { if (e.key === 'Enter') createEntry(); if (e.key === 'Escape') { setCreating(null); setCreateName('') } } }),
-            h(Btn, { kind: 'primary', onClick: createEntry }, h(Icon, { name: 'check', size: 13 }), '创建'),
-            h(Btn, { onClick: () => { setCreating(null); setCreateName('') } }, '取消'),
+            h('input', { className: 'fp-input', style: { flex: 1, minWidth: 0 }, placeholder: creating === 'file' ? 'File name, e.g. notes.md' : (creating === 'dir' ? 'Folder name' : 'Archive name, e.g. archive.zip'), value: createName, autoFocus: true, onChange: (e) => setCreateName(e.target.value), onKeyDown: (e) => { if (e.key === 'Enter') createEntry(); if (e.key === 'Escape') { setCreating(null); setCreateName('') } } }),
+            h(Btn, { kind: 'primary', onClick: createEntry }, h(Icon, { name: 'check', size: 13 }), 'Create'),
+            h(Btn, { onClick: () => { setCreating(null); setCreateName('') } }, 'Cancel'),
           ) : null,
           h('div', {
             className: 'fp-scroll',
@@ -775,10 +775,10 @@ window.__ModuleLoader__.load({
             onDrop: (e) => { e.preventDefault(); setDragOver(false); const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []); if (files.length) startUploads(files) },
           },
             globalSearch
-              ? (searching ? h('div', { style: S.empty }, '搜索中…')
-                : (searchResults === null ? h('div', { style: S.empty }, '输入关键词搜索整个工作区（含文件内容）') : (searchResults.length ? resultRows : h('div', { style: S.empty }, '没有匹配的结果'))))
+              ? (searching ? h('div', { style: S.empty }, 'Searching…')
+                : (searchResults === null ? h('div', { style: S.empty }, 'Type a keyword to search the whole workspace (including file contents)') : (searchResults.length ? resultRows : h('div', { style: S.empty }, 'No matching results'))))
               : (error ? h('div', { style: S.empty }, error) :
-                rows.length ? rows : h('div', { style: S.empty }, q ? '没有匹配的文件' : (dragOver ? '松开上传到这里' : '空目录（可将文件拖入此处上传）'))),
+                rows.length ? rows : h('div', { style: S.empty }, q ? 'No matching files' : (dragOver ? 'Drop to upload here' : 'Empty folder (drop files here to upload)'))),
           ),
           preview ? h('div', { style: S.preview },
             h('div', { style: S.previewHead },
@@ -786,50 +786,50 @@ window.__ModuleLoader__.load({
               h('span', { style: S.size }, preview.size ? formatSize(preview.size) : ''),
               preview.kind === 'text' && !preview.error ? (editing
                 ? [
-                    h(Btn, { key: 'save', kind: 'primary', onClick: saveDraft }, h(Icon, { name: 'save', size: 13 }), '保存'),
-                    h(Btn, { key: 'cancel', onClick: () => { setEditing(false); setDraft('') } }, '取消编辑'),
+                    h(Btn, { key: 'save', kind: 'primary', onClick: saveDraft }, h(Icon, { name: 'save', size: 13 }), 'Save'),
+                    h(Btn, { key: 'cancel', onClick: () => { setEditing(false); setDraft('') } }, 'Cancel edit'),
                   ]
-                : h(Btn, { key: 'edit', onClick: () => { setEditing(true); setDraft(preview.content || '') }, iconOnly: true, title: '编辑 (Ctrl+S 保存)' }, h(Icon, { name: 'edit', size: 13 }))) : null,
-              h(Btn, { onClick: () => download(preview), iconOnly: true, title: '下载' }, h(Icon, { name: 'download', size: 13 })),
-              h(Btn, { iconOnly: true, title: '关闭预览', onClick: () => { setPreview(null); setEditing(false) } }, h(Icon, { name: 'close', size: 13 })),
+                : h(Btn, { key: 'edit', onClick: () => { setEditing(true); setDraft(preview.content || '') }, iconOnly: true, title: 'Edit (Ctrl+S to save)' }, h(Icon, { name: 'edit', size: 13 }))) : null,
+              h(Btn, { onClick: () => download(preview), iconOnly: true, title: 'Download' }, h(Icon, { name: 'download', size: 13 })),
+              h(Btn, { iconOnly: true, title: 'Close preview', onClick: () => { setPreview(null); setEditing(false) } }, h(Icon, { name: 'close', size: 13 })),
             ),
             previewBody,
           ) : null,
           upload ? h('div', { style: S.progressWrap },
             h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 } },
-              h('div', { style: { ...S.progressText, marginBottom: 0, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, '上传 ' + upload.name + ' — ' + uploadPct + '% · ' + upload.speed + ' · ' + formatSize(upload.sent) + ' / ' + formatSize(upload.total)),
-              h(Btn, { iconOnly: true, title: '取消上传', onClick: () => { cancelRef.current = true; setUpload(null); flash('ok', '已取消上传') } }, h(Icon, { name: 'close', size: 13 })),
+              h('div', { style: { ...S.progressText, marginBottom: 0, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, 'Uploading ' + upload.name + ' — ' + uploadPct + '% · ' + upload.speed + ' · ' + formatSize(upload.sent) + ' / ' + formatSize(upload.total)),
+              h(Btn, { iconOnly: true, title: 'Cancel upload', onClick: () => { cancelRef.current = true; setUpload(null); flash('ok', 'Upload cancelled') } }, h(Icon, { name: 'close', size: 13 })),
             ),
             h('div', { style: S.progressTrack },
               h('div', { style: { ...S.progressBar, width: uploadPct + '%' } }),
             ),
           ) : null,
-          h('div', { style: { ...S.status, ...(status ? (status.kind === 'ok' ? S.statusOk : S.statusErr) : {}) } }, status ? status.text : (globalSearch ? '全局搜索模式' : (path ? path : (root ? '' : '未选择工作区'))) ),
+          h('div', { style: { ...S.status, ...(status ? (status.kind === 'ok' ? S.statusOk : S.statusErr) : {}) } }, status ? status.text : (globalSearch ? 'Global search mode' : (path ? path : (root ? '' : 'No workspace selected'))) ),
           confirm ? h('div', { style: S.modal },
             h('div', { style: S.modalBox },
-              h('div', { style: S.modalTitle }, confirm.batch ? '确认删除 ' + confirm.count + ' 项？' : '确认删除'),
-              h('div', null, confirm.batch ? '选中的 ' + confirm.count + ' 项将被永久删除，此操作不可撤销。' : '确定要删除 ', confirm.batch ? null : h('strong', null, confirm.name), confirm.batch ? null : ' 吗？此操作不可撤销。'),
+              h('div', { style: S.modalTitle }, confirm.batch ? 'Delete ' + confirm.count + ' items?' : 'Confirm delete'),
+              h('div', null, confirm.batch ? 'The ' + confirm.count + ' selected items will be permanently deleted. This cannot be undone.' : 'Delete ', confirm.batch ? null : h('strong', null, confirm.name), confirm.batch ? null : '? This cannot be undone.'),
               h('div', { style: S.modalActions },
-                h(Btn, { onClick: () => setConfirm(null) }, '取消'),
-                h(Btn, { kind: 'primary', danger: true, onClick: doDelete }, h(Icon, { name: 'trash', size: 13 }), '删除'),
+                h(Btn, { onClick: () => setConfirm(null) }, 'Cancel'),
+                h(Btn, { kind: 'primary', danger: true, onClick: doDelete }, h(Icon, { name: 'trash', size: 13 }), 'Delete'),
               ),
             ),
           ) : null,
           moveDlg ? h('div', { style: S.modal },
             h('div', { style: { ...S.modalBox, width: 380 } },
-              h('div', { style: S.modalTitle }, (moveDlg.mode === 'move' ? '移动到' : '复制到') + '（' + moveDlg.paths.length + ' 项）'),
+              h('div', { style: S.modalTitle }, (moveDlg.mode === 'move' ? 'Move to' : 'Copy to') + ' (' + moveDlg.paths.length + ' items)'),
               h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 } },
-                h(Btn, { iconOnly: true, title: '返回上级', onClick: () => { if (moveDlg.dir !== root) loadMoveDirs(parentOf(moveDlg.dir)) } }, h(Icon, { name: 'up', size: 13 })),
+                h(Btn, { iconOnly: true, title: 'Go up', onClick: () => { if (moveDlg.dir !== root) loadMoveDirs(parentOf(moveDlg.dir)) } }, h(Icon, { name: 'up', size: 13 })),
                 h('span', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 } }, moveDlg.dir),
               ),
               h('div', { className: 'fp-scroll', style: S.dirList },
                 moveDlg.dirs.length
                   ? moveDlg.dirs.map((d) => h('div', { key: d.path, className: 'fp-dir', onClick: () => loadMoveDirs(d.path) }, h(Icon, { name: 'folder', size: 14, style: { color: 'var(--dsw-alias-brand-primary)' } }), h('span', { style: S.name }, d.name)))
-                  : h('div', { style: S.empty }, '没有子目录'),
+                  : h('div', { style: S.empty }, 'No subfolders'),
               ),
               h('div', { style: S.modalActions },
-                h(Btn, { onClick: () => setMoveDlg(null) }, '取消'),
-                h(Btn, { kind: 'primary', onClick: doMoveCopy }, moveDlg.mode === 'move' ? '移动到这里' : '复制到这里'),
+                h(Btn, { onClick: () => setMoveDlg(null) }, 'Cancel'),
+                h(Btn, { kind: 'primary', onClick: doMoveCopy }, moveDlg.mode === 'move' ? 'Move here' : 'Copy here'),
               ),
             ),
           ) : null,

@@ -1,67 +1,67 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-snapshot —— 「把全部东西装进一个文件」的现实版本（完整快照 / 换机迁移）
+# dsh-snapshot —— the practical everything-in-one-file tool (full snapshot / migrating to a new phone)
 #
-# 和 dsh-backup 的区别：
-#   dsh-backup   只存**状态**（会话/设置/插件清单/笔记），约 11-14MB，每次关 DSH 自动跑；
-#   dsh-snapshot 存**整个环境**（Termux 前缀 2.6G + DSH 运行时 495M + ~/.dsh + 我写的运维层），
-#                压缩后约 1~1.5GB —— 换机/重装后一条命令还原，不用重新联网装依赖。
+# Difference from dsh-backup:
+#   dsh-backup   stores only **state** (sessions/settings/plugin list/notes), about 11-14MB, runs automatically on every DSH shutdown;
+#   dsh-snapshot stores the **whole environment** (Termux prefix 2.6G + DSH runtime 495M + ~/.dsh + the ops layer I wrote),
+#                about 1~1.5GB compressed — one command restores it on a new phone or a reinstall, with no online dependency install.
 #
-# 用法：
-#   dsh-snapshot                 # 打包（默认不含 pnpm store 等缓存）
-#   dsh-snapshot --with-store    # 连 pnpm store(约 674MB) 一起打，还原后完全离线可用
-#   dsh-snapshot --out DIR       # 指定输出目录（默认 备份/系统备份/）
-#   dsh-snapshot --list          # 列出已有完整快照
-#   dsh-snapshot --verify FILE   # 只校验某个快照
+# Usage: 
+#   dsh-snapshot                 # pack (excludes caches such as the pnpm store by default)
+#   dsh-snapshot --with-store    # include the pnpm store (about 674MB); after restore it works fully offline
+#   dsh-snapshot --out DIR       # set the output directory (default 备份/系统备份/)
+#   dsh-snapshot --list          # list existing full snapshots
+#   dsh-snapshot --verify FILE   # verify one snapshot only
 #
-# 还原（同版本 Termux 装好后，无需 root）：
+# Restore (after installing the same Termux version; no root needed):
 #   pkg install -y zstd
 #   tar -I zstd -xf /sdcard/Download/dsh/备份/系统备份/dsh-full-*.tar.zst -C /
-#   bash ~/.shortcuts/tasks/1_启动DSH.sh
+#   bash ~/.shortcuts/tasks/1_start-dsh.sh
 set -u
 
 HOME_DIR="/data/data/com.termux/files/home"
 PREFIX_DIR="/data/data/com.termux/files/usr"
-# 2026-09-27 改：完整快照放进「备份/系统备份/」，与自动状态备份（dsh-state-*）分开 ——
-#   原来它直接落在 备份/ 根下，和一个空的「系统备份/」子目录并存，看着像放错了地方。
+# 2026-09-27 change: full snapshots go into 备份/系统备份/, separate from the automatic state backups (dsh-state-*) —
+#   it used to land directly in the 备份/ root next to an empty 系统备份/ subdirectory, which looked like a mistake.
 DEST="${DSH_BACKUP_DEST:-$HOME_DIR/storage/downloads/dsh/备份/系统备份}"
 STAMP="$(date '+%Y%m%d-%H%M%S')"
 NAME="dsh-full-${STAMP}.tar.zst"
-KEEP="${DSH_SNAPSHOT_KEEP:-3}"        # 完整快照很占地方：默认只留最近 3 份
-META_DIR="$HOME_DIR/.snapshot-meta"   # 临时目录，装完就删（会被塞进归档的 META/）
+KEEP="${DSH_SNAPSHOT_KEEP:-3}"        # full snapshots are big: keep only the newest 3 by default
+META_DIR="$HOME_DIR/.snapshot-meta"   # temp dir, deleted after packing (its contents go into META/ inside the archive)
 
 WITH_STORE=0; OUT="$DEST"; VERIFY_ONLY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --with-store) WITH_STORE=1 ;;
     --out) OUT="$2"; shift ;;
-    --list) ls -lh "$DEST"/dsh-full-*.tar.zst 2>/dev/null || echo "（还没有完整快照）"; exit 0 ;;
+    --list) ls -lh "$DEST"/dsh-full-*.tar.zst 2>/dev/null || echo "(no full snapshot yet)"; exit 0 ;;
     --verify) VERIFY_ONLY="$2"; shift ;;
     -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
-    *) echo "未知参数: $1"; exit 2 ;;
+    *) echo "unknown argument: $1"; exit 2 ;;
   esac
   shift
 done
 
 ZSTD="$(command -v zstd 2>/dev/null || true)"
 [ -x "$ZSTD" ] || ZSTD="$PREFIX_DIR/glibc/bin/zstd"
-[ -x "$ZSTD" ] || { echo "✘ 找不到 zstd（pkg install zstd）"; exit 1; }
+[ -x "$ZSTD" ] || { echo "✘ zstd not found (pkg install zstd)"; exit 1; }
 
 T0=$(date +%s)
 say() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*"; }
 human() { numfmt --to=iec "$1" 2>/dev/null || echo "$1 B"; }
 
-# ── 校验：完整读一遍（zstd 自带 CRC，能读完=数据完整）+ 条目数 + sha256 ──
+# ── verify: read the whole stream (zstd has a CRC, so reading it through means the data is intact) + entry count + sha256 ──
 verify() {
   local f="$1"
-  [ -f "$f" ] || { echo "   ✘ 文件不存在: $f"; return 1; }
-  say "校验 $(basename "$f")（$(human "$(stat -c%s "$f")")）…"
-  # zstd -t 会把整个流解一遍并校验 CRC/长度：截断或损坏必定非 0
+  [ -f "$f" ] || { echo "   ✘ file does not exist: $f"; return 1; }
+  say "verifying $(basename "$f") ($(human "$(stat -c%s "$f")"))…"
+  # zstd -t decompresses the whole stream and checks CRC/length: truncation or corruption always gives non-zero
   if ! "$ZSTD" -t "$f" >/dev/null 2>&1; then
-    echo "   ✘ 完整性检查失败（压缩流被截断或损坏）"; return 1
+    echo "   ✘ integrity check failed (the compressed stream is truncated or corrupt)"; return 1
   fi
   local n; n=$("$ZSTD" -dc "$f" 2>/dev/null | tar -tf - 2>/dev/null | wc -l)
-  if [ "$n" -lt 1000 ]; then echo "   ✘ 归档异常：只有 $n 个条目"; return 1; fi
-  echo "   ✔ 完整性通过（zstd -t 退出 0），含 $n 个条目"
+  if [ "$n" -lt 1000 ]; then echo "   ✘ archive looks wrong: only $n entries"; return 1; fi
+  echo "   ✔ integrity passed (zstd -t exit 0), with $n entries"
   echo "   sha256: $(sha256sum "$f" | cut -c1-32)…"
   return 0
 }
@@ -71,35 +71,35 @@ ARCHIVE="$OUT/$NAME"
 PART="${ARCHIVE}.part"
 mkdir -p "$OUT" "$HOME_DIR/.smoke"
 
-# ── 先把「还原说明 + 清单」写到一个会被打进包里的临时目录 ──
+# ── first write the restore instructions + manifest into a temp dir that is packed into the archive ──
 rm -rf "$META_DIR"; mkdir -p "$META_DIR/META"
 {
-  echo "# DSH 完整快照 · 还原说明"
+  echo "# DSH full snapshot · restore instructions"
   echo
-  echo "生成时间: $(date '+%F %T')"
-  echo "来源设备: $(getprop ro.product.model 2>/dev/null) / Android $(getprop ro.build.version.release 2>/dev/null) / $(getprop ro.product.cpu.abi 2>/dev/null)"
-  echo "pnpm store: $([ "$WITH_STORE" = 1 ] && echo '已包含（可离线重装依赖）' || echo '未包含（下次 pnpm install 需联网）')"
+  echo "generated: $(date '+%F %T')"
+  echo "source device: $(getprop ro.product.model 2>/dev/null) / Android $(getprop ro.build.version.release 2>/dev/null) / $(getprop ro.product.cpu.abi 2>/dev/null)"
+  echo "pnpm store: $([ "$WITH_STORE" = 1 ] && echo 'included (dependencies can be reinstalled offline)' || echo 'not included (the next pnpm install needs network)')"
   echo
-  echo "## 还原步骤（先装同版本 Termux，无需 root）"
+  echo "## Restore steps (install the same Termux version first; no root needed)"
   echo '```bash'
   echo "pkg install -y zstd"
-  echo "tar -I zstd -xf <这个文件> -C /"
-  echo "bash ~/.shortcuts/tasks/1_启动DSH.sh"
+  echo "tar -I zstd -xf <this file> -C /"
+  echo "bash ~/.shortcuts/tasks/1_start-dsh.sh"
   echo '```'
   echo
-  echo "## 说明"
-  echo "- 归档里全是 /data/data/com.termux/... 的绝对路径；owner 记作 0，解包时非 root 会自动落成当前 Termux 的 UID。"
-  echo "- 不含：storage/（你的手机存储）、~/.smoke（缓存）、~/.npm、~/.cache、~/.dsh/profiles.bak-*。"
-  echo "- ⚠ 凭据（.credentials.yaml、桥 token）**在包内** —— 这是完整快照，请当敏感文件保管。"
+  echo "## Notes"
+  echo "- the archive holds only absolute /data/data/com.termux/... paths; owner is recorded as 0 and unpacks as the current Termux UID when not root."
+  echo "- excluded: storage/ (your phone storage), ~/.smoke (cache), ~/.npm, ~/.cache, ~/.dsh/profiles.bak-*."
+  echo "- ⚠ credentials (.credentials.yaml, bridge token) are **inside the archive** — this is a full snapshot, so treat it as a sensitive file."
 } > "$META_DIR/META/RESTORE.md"
 {
-  echo "生成时间: $(date '+%F %T')"
+  echo "generated: $(date '+%F %T')"
   echo
-  echo "== 各部分体积 =="
+  echo "== size of each part =="
   du -sh "$PREFIX_DIR" "$HOME_DIR/.dsh" "$HOME_DIR/.local/opt/dsh-termux-runtime" \
         "$HOME_DIR/.local/bin" "$HOME_DIR/.local/share/dsh-widgets" "$HOME_DIR/.shortcuts" 2>/dev/null
   echo
-  echo "== 关键版本 =="
+  echo "== key versions =="
   echo "node: $(node -v 2>/dev/null)"
   echo "dsh : $(dsh --version 2>/dev/null | tail -1)"
   echo "python: $(python3 -V 2>/dev/null)"
@@ -112,19 +112,19 @@ EXCLUDES=(
   "--exclude=home/.dsh/profiles.bak-*"
   "--exclude=home/.smoke"
   "--exclude=home/storage"
-  # 注意：不要 exclude home/.snapshot-meta —— tar 的 --exclude 对命令行成员同样生效，
-  # 会把要打进包的 META/ 一起排掉（踩过）
+  # Note: do not exclude home/.snapshot-meta — tar --exclude applies to command-line members too,
+  # so it would drop the META/ we want to pack (we hit this)
   "--exclude=*/tmp/*"
   "--exclude=*.sock"
 )
 [ "$WITH_STORE" = 1 ] || EXCLUDES+=("--exclude=home/.local/share/pnpm")
 
-say "① 打包（zstd -T0 -3；源约 3.9GB，预计几分钟）"
-say "   输出：$ARCHIVE"
-say "   pnpm store：$([ "$WITH_STORE" = 1 ] && echo '包含' || echo '排除（--with-store 可包含）')"
+say "① packing (zstd -T0 -3; about 3.9GB of source, a few minutes)"
+say "   output: $ARCHIVE"
+say "   pnpm store: $([ "$WITH_STORE" = 1 ] && echo 'included' || echo 'excluded (--with-store includes it)')"
 
 cd / || exit 1
-# owner/group 记 0：Termux 的 UID 是安装时分配的，记 0 才能在换机后由当前 UID 正常落地
+# record owner/group as 0: the Termux UID is assigned at install time, and recording 0 lets the current UID unpack it after a phone swap
 nice -n 10 tar \
   --owner=0 --group=0 --numeric-owner \
   --warning=no-file-changed --warning=no-file-ignored \
@@ -146,25 +146,25 @@ nice -n 10 tar \
   2> "$HOME_DIR/.smoke/snapshot-warn.log"
 RC=$?
 rm -rf "$META_DIR"
-# GNU tar：0=完全正常，1=有文件在读取时被改动（DSH 正在写会话/日志，属正常），≥2=致命
+# GNU tar: 0=fully fine, 1=a file changed while being read (DSH is writing sessions/logs, normal), ≥2=fatal
 if [ "$RC" -ge 2 ]; then
-  echo "✘ tar 退出码 $RC（致命）"; tail -3 "$HOME_DIR/.smoke/snapshot-warn.log" 2>/dev/null
+  echo "✘ tar exit code $RC (fatal)"; tail -3 "$HOME_DIR/.smoke/snapshot-warn.log" 2>/dev/null
   rm -f "$PART"; exit 1
 fi
-[ "$RC" = 1 ] && say "   ⚠ tar 报告有文件在读取时被改动（DSH 正在写会话）——归档仍然完整，见下一步校验"
+[ "$RC" = 1 ] && say "   ⚠ tar reported files changed while being read (DSH is writing sessions) — the archive is still intact; see the verification step"
 mv -f "$PART" "$ARCHIVE"
 
-say "② 校验（完整读一遍，zstd 会校验 CRC）"
-verify "$ARCHIVE" || { echo "✘ 校验失败 → 删掉这个不可信的归档"; rm -f "$ARCHIVE"; exit 1; }
+say "② verify (read it all back; zstd checks the CRC)"
+verify "$ARCHIVE" || { echo "✘ verification failed → deleting this untrustworthy archive"; rm -f "$ARCHIVE"; exit 1; }
 
-say "③ 保留策略（完整快照只留最近 $KEEP 份）"
+say "③ retention (full snapshots keep only the newest $KEEP)"
 ls -1t "$OUT"/dsh-full-*.tar.zst 2>/dev/null | tail -n +$((KEEP+1)) | while read -r f; do
-  rm -f "$f" && say "   删除旧快照 $(basename "$f")"
+  rm -f "$f" && say "   deleting old snapshot $(basename "$f")"
 done
 
 SZ=$(stat -c%s "$ARCHIVE")
-say "④ 完成，用时 $(( $(date +%s) - T0 ))s"
+say "④ done in $(( $(date +%s) - T0 ))s"
 echo
-echo "   快照：$ARCHIVE"
-echo "   大小：$(human "$SZ")（源数据约 3.9GB）"
-echo "   还原：tar -I zstd -xf \"$ARCHIVE\" -C /"
+echo "   snapshot: $ARCHIVE"
+echo "   size: $(human "$SZ") (about 3.9GB of source data)"
+echo "   restore: tar -I zstd -xf \"$ARCHIVE\" -C /"

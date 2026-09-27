@@ -16,23 +16,23 @@ window.__ModuleLoader__.load({
       const TASKSD = 'http://127.0.0.1:8787';
       const HOME = '/data/data/com.termux/files/home';
 
-      // 组件清单：label 是给人看的，id 是白名单里的名字（dsh-tasksd 只认这些；
-      // bridge_wake / bridge_status 是 tasksd 的"虚拟任务"，与控制台 App 用同一套 id）。
-      // **按功能分类**（用户在控制台提的要求，这里保持一致），**桥与 adb 严格分开**。
-      const CATS = ['启动 / 停止', '通道（adb 与桥分开）', '维护', '紧急'];
+      // Component list: label is what people see, id is the name in the allowlist (dsh-tasksd only accepts these;
+      // bridge_wake / bridge_status are tasksd's "virtual tasks", sharing the same ids as the console app).
+      // **Grouped by function** (as requested in the console; kept consistent here), **bridge and adb strictly separate**.
+      const CATS = ['Start / Stop', 'Channels (adb and bridge separate)', 'Maintenance', 'Emergency'];
       const TASKS = [
-        { id: '1_启动DSH', cat: '启动 / 停止', label: '启动 DSH', icon: '▶', hint: '已在跑则直接开页面' },
-        { id: '4_软重启DSH', cat: '启动 / 停止', label: '软重启', icon: '↻', hint: 'SIGTERM 后重启', danger: true },
-        { id: '6_硬重启DSH', cat: '启动 / 停止', label: '硬重启', icon: '⛔', hint: '-9 强杀后重启', danger: true },
-        { id: '2_关闭DSH', cat: '启动 / 停止', label: '关闭 DSH', icon: '■', hint: '停服务并关浏览器', danger: true },
-        { id: '8_自动开无线调试', cat: '通道（adb 与桥分开）', label: '连 adb', icon: '⚡', hint: '只走无线调试（需要可用 Wi-Fi）' },
-        { id: 'bridge_wake', cat: '通道（adb 与桥分开）', label: '唤醒桥', icon: '🌉', hint: '只走无障碍回环，不需要网络' },
-        { id: 'bridge_status', cat: '通道（adb 与桥分开）', label: '看桥状态', icon: '🔎', hint: '只查桥：端口 / 应答 / 版本' },
-        { id: '7_重连AI通道', cat: '通道（adb 与桥分开）', label: '全部恢复（adb + 桥）', icon: '🔗', hint: '两条都要时才用' },
-        { id: '3_备份DSH', cat: '维护', label: '备份', icon: '💾', hint: '打包并校验归档' },
-        { id: '5_清理DSH', cat: '维护', label: '清理', icon: '🧹', hint: '只删我的产物' },
-        { id: '9_撤销密码授权', cat: '紧急', label: '收回密码使用权', icon: '🔑', hint: '删掉存着的密码，AI 立刻用不了' },
-        { id: '0_紧急停止', cat: '紧急', label: '紧急停止', icon: '🛑', hint: '撤销 AI 对手机的控制', danger: true },
+        { id: '1_start-dsh', cat: 'Start / Stop', label: 'Start DSH', icon: '▶', hint: 'Opens the page if already running' },
+        { id: '4_soft-restart-dsh', cat: 'Start / Stop', label: 'Soft restart', icon: '↻', hint: 'Restart after SIGTERM', danger: true },
+        { id: '6_hard-restart-dsh', cat: 'Start / Stop', label: 'Hard restart', icon: '⛔', hint: 'Restart after kill -9', danger: true },
+        { id: '2_shutdown-dsh', cat: 'Start / Stop', label: 'Stop DSH', icon: '■', hint: 'Stops the service and closes the browser', danger: true },
+        { id: '8_enable-wireless-adb', cat: 'Channels (adb and bridge separate)', label: 'Connect adb', icon: '⚡', hint: 'Wireless debugging only (needs working Wi-Fi)' },
+        { id: 'bridge_wake', cat: 'Channels (adb and bridge separate)', label: 'Wake bridge', icon: '🌉', hint: 'Accessibility loopback only, no network needed' },
+        { id: 'bridge_status', cat: 'Channels (adb and bridge separate)', label: 'Bridge status', icon: '🔎', hint: 'Bridge only: port / response / version' },
+        { id: '7_reconnect-ai', cat: 'Channels (adb and bridge separate)', label: 'Restore all (adb + bridge)', icon: '🔗', hint: 'Use only when you need both' },
+        { id: '3_backup-dsh', cat: 'Maintenance', label: 'Backup', icon: '💾', hint: 'Pack and verify the archive' },
+        { id: '5_cleanup-dsh', cat: 'Maintenance', label: 'Cleanup', icon: '🧹', hint: 'Deletes only my artifacts' },
+        { id: '9_revoke-pin', cat: 'Emergency', label: 'Revoke password access', icon: '🔑', hint: 'Deletes the stored password; the AI loses it at once' },
+        { id: '0_emergency-stop', cat: 'Emergency', label: 'Emergency stop', icon: '🛑', hint: 'Revokes AI control of the phone', danger: true },
       ];
 
       const CSS = `
@@ -91,7 +91,7 @@ window.__ModuleLoader__.load({
 .mb-btn-inline { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 12px;
   border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: transparent;
   color: var(--dsw-alias-label-primary); font-size: 12.5px; cursor: pointer; }
-/* ── 手机端触屏微调（只加不删，随时可关：把 ~/.dsh-mobile-ui.json 里 enabled 改成 false）── */
+/* ── mobile touch tweaks (add-only, reversible any time: set enabled to false in ~/.dsh-mobile-ui.json) ── */
 @media (pointer: coarse) {
   header button, nav button, [class*="sidebarCol"] button { min-width: 42px; min-height: 42px; }
   [class*="composerSeat"] { padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)) !important; }
@@ -100,7 +100,7 @@ window.__ModuleLoader__.load({
 }
 `;
 
-      // ── 样式注入（可撤销）──
+      // ── style injection (reversible) ──
       const STYLE_ID = 'dsh-mobile-local';
       if (document.querySelector('style[data-plugin-css="' + STYLE_ID + '"]') === null) {
         const tag = document.createElement('style');
@@ -110,17 +110,17 @@ window.__ModuleLoader__.load({
         if (ctx.effect) ctx.effect(() => () => tag.remove());
       }
 
-      // ── 与 filepanel 的 RPC（用它读 token，避免自己造宿主路由）──
-      // ⚠ 坑：filepanel 的 resolveWithin 只把 path 单独 resolve（**不拼 root**），
-      //   再用 contains(root, target) 校验 → path 必须传**绝对路径**，
-      //   传相对路径会被解析到工作区外并报"路径不在工作区内"（我踩过）。
+      // ── RPC with filepanel (use it to read the token instead of building a host route) ──
+      // ⚠ Pitfall: filepanel's resolveWithin resolves path on its own (**without joining root**),
+      //   then validates with contains(root, target) → path must be **absolute**;
+      //   a relative path resolves outside the workspace and reports "path is not inside the workspace" (I hit this).
       async function rpc(method, args) {
         const resp = await fetch('/__dsh__/filepanel/rpc', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ method, args }),
         });
         const res = await resp.json();
-        if (!res || res.ok === false) throw new Error((res && res.error) || 'RPC 失败');
+        if (!res || res.ok === false) throw new Error((res && res.error) || 'RPC failed');
         return res;
       }
 
@@ -129,7 +129,7 @@ window.__ModuleLoader__.load({
         if (TOKEN_CACHE) return TOKEN_CACHE;
         const r = await rpc('panel.readText', { root: HOME, path: HOME + '/.dsh-tasks-token' });
         TOKEN_CACHE = String(r.content || '').trim();
-        if (!TOKEN_CACHE) throw new Error('读不到 ~/.dsh-tasks-token');
+        if (!TOKEN_CACHE) throw new Error('cannot read ~/.dsh-tasks-token');
         return TOKEN_CACHE;
       }
 
@@ -145,7 +145,7 @@ window.__ModuleLoader__.load({
         return resp.json();
       }
 
-      // ── 任务面板 ──
+      // ── task panel ──
       function Lamp(props) {
         return h('span', { className: 'mb-lamp' },
           h('i', { className: 'mb-dot ' + (props.on ? 'on' : 'off') }),
@@ -167,10 +167,10 @@ window.__ModuleLoader__.load({
           try {
             const rs = await Promise.all([api('/status'), api('/auth')]);
             setStatus(rs[0].status); setAuth(rs[1].auth);
-          } catch (e) { setErr('读状态失败：' + (e.message || e)); }
+          } catch (e) { setErr('Failed to read status: ' + (e.message || e)); }
         }, []);
 
-        // 授权走 POST（token 放 body）：收回/写入都由 tasksd 落到 dsh-auth-pass，密码不写日志
+        // Authorization goes through POST (token in the body): tasksd writes both revoke and set to dsh-auth-pass, and the password is never logged
         const apiPost = useCallback(async (path, body) => {
           const t = await token();
           const resp = await fetch(TASKSD + path, {
@@ -184,15 +184,15 @@ window.__ModuleLoader__.load({
 
         const doRevoke = useCallback(async () => {
           setBusy('auth'); setErr(''); setOut('');
-          try { const r = await apiPost('/auth/revoke'); setOut('【收回密码使用权】\n' + (r.output || '(无输出)')); setAuthArmed(''); await load(); }
-          catch (e) { setErr('收回失败：' + (e.message || e)); }
+          try { const r = await apiPost('/auth/revoke'); setOut('[Revoke password access]\n' + (r.output || '(no output)')); setAuthArmed(''); await load(); }
+          catch (e) { setErr('Revoke failed: ' + (e.message || e)); }
           setBusy('');
         }, [apiPost, load]);
 
         const doAuthorize = useCallback(async () => {
           setBusy('auth'); setErr(''); setOut('');
-          try { const r = await apiPost('/auth/set', { pass: pw }); setOut('【授权 AI 使用你的密码】\n' + (r.output || '(无输出)')); setAuthArmed(''); setPw(''); await load(); }
-          catch (e) { setErr('授权失败：' + (e.message || e)); }
+          try { const r = await apiPost('/auth/set', { pass: pw }); setOut('[Authorize the AI to use your password]\n' + (r.output || '(no output)')); setAuthArmed(''); setPw(''); await load(); }
+          catch (e) { setErr('Authorization failed: ' + (e.message || e)); }
           setBusy('');
         }, [apiPost, load, pw]);
 
@@ -203,9 +203,9 @@ window.__ModuleLoader__.load({
           setArmed(''); setBusy(task.id); setOut(''); setErr('');
           try {
             const r = await api('/run?task=' + encodeURIComponent(task.id));
-            setOut('【' + task.label + '】用时 ' + r.seconds + 's，退出码 ' + r.exit + '\n' + (r.output || '(无输出)'));
+            setOut('[' + task.label + '] took ' + r.seconds + 's, exit code ' + r.exit + '\n' + (r.output || '(no output)'));
             load();
-          } catch (e) { setErr('执行失败：' + (e.message || e)); }
+          } catch (e) { setErr('Run failed: ' + (e.message || e)); }
           setBusy('');
         }, [armed, load]);
 
@@ -218,13 +218,13 @@ window.__ModuleLoader__.load({
           h('div', { className: 'mb-mask', onClick: props.onClose }),
           h('div', { className: 'mb-sheet', onClick: (e) => e.stopPropagation() },
             h('div', { className: 'mb-head' },
-              h('span', { className: 'mb-title' }, '任务'),
-              h('button', { className: 'mb-close', onClick: load, title: '刷新状态' }, '刷新'),
-              h('button', { className: 'mb-close', onClick: props.onClose }, '关闭')),
+              h('span', { className: 'mb-title' }, 'Tasks'),
+              h('button', { className: 'mb-close', onClick: load, title: 'Refresh status' }, 'Refresh'),
+              h('button', { className: 'mb-close', onClick: props.onClose }, 'Close')),
             h('div', { className: 'mb-lamps' },
-              h(Lamp, { on: dshOn, text: 'DSH ' + (s.dsh && s.dsh.http ? s.dsh.http : (dshOn ? '在跑' : '停了')) }),
-              h(Lamp, { on: brOn, text: '桥 ' + (s.bridge && s.bridge.ver ? 'v' + s.bridge.ver : (brOn ? '在' : '无')) }),
-              h(Lamp, { on: adbOn, text: 'adb ' + (adbOn ? s.adb.devices[0] : '未连') })),
+              h(Lamp, { on: dshOn, text: 'DSH ' + (s.dsh && s.dsh.http ? s.dsh.http : (dshOn ? 'running' : 'stopped')) }),
+              h(Lamp, { on: brOn, text: 'bridge ' + (s.bridge && s.bridge.ver ? 'v' + s.bridge.ver : (brOn ? 'up' : 'none')) }),
+              h(Lamp, { on: adbOn, text: 'adb ' + (adbOn ? s.adb.devices[0] : 'not connected') })),
             CATS.map((cat) => {
               const list = TASKS.filter((t) => t.cat === cat);
               if (!list.length) return null;
@@ -233,7 +233,7 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'mb-grid' },
                   list.map((t) => {
                     const st = (s.tasks || {})[t.id] || {};
-                    const badge = st.last === '完成' ? ' · 上次✔' : (st.last ? ' · 上次' + st.last : '');
+                    const badge = st.last === 'done' ? ' · last ✔' : (st.last ? ' · last ' + st.last : '');
                     return h('button', {
                       key: t.id,
                       className: 'mb-task' + (t.danger ? ' danger' : '') + (armed === t.id ? ' armed' : ''),
@@ -242,11 +242,11 @@ window.__ModuleLoader__.load({
                     },
                       h('span', { className: 'mb-ic' }, t.icon),
                       h('span', { className: 'mb-txt' },
-                        h('span', { className: 'mb-name' }, busy === t.id ? t.label + ' …' : (armed === t.id ? '再点一次确认' : t.label)),
+                        h('span', { className: 'mb-name' }, busy === t.id ? t.label + ' …' : (armed === t.id ? 'Tap again to confirm' : t.label)),
                         h('span', { className: 'mb-hint' }, t.hint + badge)))
                   })),
-                // 维护类下面挂「密码使用权」开关（与控制台 App 里的语义完全一致）
-                cat === '维护' ? h('div', { className: 'mb-auth' },
+                // The Maintenance group carries the "password access" switch (exactly the same semantics as in the console app)
+                cat === 'Maintenance' ? h('div', { className: 'mb-auth' },
                   h('div', { className: 'mb-auth-row' },
                     h('label', { className: 'mb-auth-lab' },
                       h('input', {
@@ -255,49 +255,49 @@ window.__ModuleLoader__.load({
                         disabled: busy !== '' || !auth,
                         onChange: (e) => setAuthArmed(e.target.checked ? 'set' : 'revoke'),
                       }),
-                      h('span', null, '密码使用权')),
+                      h('span', null, 'Password access')),
                     h('span', { className: 'mb-auth-state' + (auth && auth.authorized ? ' on' : '') },
-                      auth ? (auth.authorized ? '已授权' : '未授权') : '读取中…')),
-                  h('div', { className: 'mb-hint' }, '开＝AI 可用你那 6 位锁屏密码替你过身份验证（装包、解除设置限制等）；关＝立刻收回'),
+                      auth ? (auth.authorized ? 'Authorized' : 'Not authorized') : 'Loading…')),
+                  h('div', { className: 'mb-hint' }, 'On = the AI can use your 6-digit lock-screen password to pass verification for you (installing packages, removing settings restrictions, etc.); Off = revoke immediately'),
                   authArmed === 'revoke' ? h('div', { className: 'mb-auth-ask' },
-                    h('span', null, '收回后 AI 不能再动用这个密码（装包的「安全验证」等会停在你这儿）。'),
-                    h('button', { className: 'mb-btn-inline', disabled: busy !== '', onClick: doRevoke }, '确认收回'),
-                    h('button', { className: 'mb-btn-inline', disabled: busy !== '', onClick: () => setAuthArmed('') }, '取消')) : null,
+                    h('span', null, 'Once revoked, the AI can no longer use this password (installing packages will stop at the security check for you to handle).'),
+                    h('button', { className: 'mb-btn-inline', disabled: busy !== '', onClick: doRevoke }, 'Confirm revoke'),
+                    h('button', { className: 'mb-btn-inline', disabled: busy !== '', onClick: () => setAuthArmed('') }, 'Cancel')) : null,
                   authArmed === 'set' ? h('div', { className: 'mb-auth-ask' },
-                    h('span', null, '输入 6 位锁屏密码（只写进 600 文件，不进日志）：'),
+                    h('span', null, 'Enter the 6-digit lock-screen password (written only to the 600 file, never logged):'),
                     h('input', {
                       className: 'mb-pw', type: 'password', inputMode: 'numeric', maxLength: 6, value: pw,
                       onChange: (e) => setPw(String(e.target.value || '').replace(/\D/g, '').slice(0, 6)),
                     }),
-                    h('button', { className: 'mb-btn-inline', disabled: busy !== '' || pw.length !== 6, onClick: doAuthorize }, '授权'),
-                    h('button', { className: 'mb-btn-inline', disabled: busy !== '', onClick: () => { setAuthArmed(''); setPw(''); } }, '取消')) : null,
+                    h('button', { className: 'mb-btn-inline', disabled: busy !== '' || pw.length !== 6, onClick: doAuthorize }, 'Authorize'),
+                    h('button', { className: 'mb-btn-inline', disabled: busy !== '', onClick: () => { setAuthArmed(''); setPw(''); } }, 'Cancel')) : null,
                   auth ? h('div', { className: 'mb-hint' }, auth.detail) : null) : null);
             }),
             err ? h('div', { className: 'mb-out' }, '⚠ ' + err) : null,
             out ? h('div', { className: 'mb-out' }, out) : null,
             h('div', { className: 'mb-lamps', style: { marginTop: '10px' } },
-              h('span', { className: 'mb-hint' }, '危险动作（重启/关闭/紧急停止）需要点两次确认；这些和桌面小组件是同一批脚本。'
-                + '密码使用权的收回入口有三个：这个开关 / 小组件 9_撤销密码授权 / rm ~/.dsh-auth-pass。'))))
+              h('span', { className: 'mb-hint' }, 'Dangerous actions (restart / stop / emergency stop) need a second tap to confirm; these are the same scripts as the home-screen widgets. '
+                + 'You can revoke password access in three ways: this switch / widget 9_revoke-pin / rm ~/.dsh-auth-pass.'))))
       }
 
       function Fab() {
         const [open, setOpen] = useState(false);
         return h(React.Fragment, null,
-          h('button', { className: 'mb-fab', title: '任务快捷按钮', onClick: () => setOpen(true) }, '☰'),
+          h('button', { className: 'mb-fab', title: 'Task shortcuts', onClick: () => setOpen(true) }, '☰'),
           open ? h(TaskSheet, { onClose: () => setOpen(false) }) : null)
       }
 
-      // 每个插槽注册都单独 try/catch：一个插槽不存在也不能连累另一个、更不能把页面搞崩
+      // Each slot registration has its own try/catch: one missing slot must not affect the other, let alone crash the page
       function trySlot(slot, id, render) {
         try {
           ctx.slots.inject(slot, () => ctx.slots.register({ name: slot, id: id }, render))
         } catch (e) {
-          console.warn('[mobileui] 插槽 ' + slot + ' 注册失败：', e && e.message)
+          console.warn('[mobileui] slot ' + slot + ' failed to register:', e && e.message)
         }
       }
 
-      // ── 总开关：~/.dsh-mobile-ui.json 里 {"enabled": false} 即整体停用（刷新生效）──
-      // 默认开；读不到文件也保持开（新装就能用）。这是给用户留的"一键撤销"。
+      // ── master switch: {"enabled": false} in ~/.dsh-mobile-ui.json disables everything (takes effect on refresh) ──
+      // On by default; stays on when the file cannot be read (works right after install). This is the user's "one-switch undo".
       let ENABLED = true
       const styleTag = document.querySelector('style[data-plugin-css="' + STYLE_ID + '"]')
 
@@ -317,9 +317,9 @@ window.__ModuleLoader__.load({
           if (cfg && cfg.enabled === false) {
             ENABLED = false
             unmount()
-            console.log('[mobileui] 已被 ~/.dsh-mobile-ui.json 停用')
+            console.log('[mobileui] disabled by ~/.dsh-mobile-ui.json')
           }
-        } catch (e) { /* 没有这个文件就是默认开 */ }
+        } catch (e) { /* no such file means it stays on by default */ }
       })()
 
       console.log('[mobileui] client ready')

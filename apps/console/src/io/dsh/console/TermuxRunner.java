@@ -6,10 +6,11 @@ import android.content.Intent;
 import android.os.Build;
 
 /**
- * 与 Termux 的唯一通道：com.termux.RUN_COMMAND。
+ * The only channel to Termux: com.termux.RUN_COMMAND.
  *
- * 为什么用这条：不需要存储权限（读不到 Termux 私有文件，但可以让它把结果**回传**给我们）、
- * 不需要网络、不需要无障碍。前提是 Termux 侧 allow-external-apps=true（本机已开）。
+ * Why this one: no storage permission needed (Termux's private files stay unreadable, but it can
+ * **send results back** to us), no network, no accessibility. The prerequisite is
+ * allow-external-apps=true on the Termux side (already enabled on this device).
  */
 final class TermuxRunner {
     static final String PKG = "com.termux";
@@ -27,14 +28,14 @@ final class TermuxRunner {
     static final String BASH = "/data/data/com.termux/files/usr/bin/bash";
     static final String PERM = "com.termux.permission.RUN_COMMAND";
 
-    /** 跑一条 shell 命令；结果通过 PendingIntent 回传给 TaskResultReceiver。 */
+    /** Runs one shell command; the result comes back to TaskResultReceiver through a PendingIntent. */
     static boolean run(Context ctx, String cmdId, String label, String command, boolean isStatus) {
         try {
             Intent r = new Intent(ctx, TaskResultReceiver.class);
             r.setAction("io.dsh.console.RESULT." + cmdId + "." + System.currentTimeMillis());
             r.putExtra("cmdId", cmdId).putExtra("label", label).putExtra("isStatus", isStatus);
             int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_ONE_SHOT;
-            if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE; // Termux 要往里塞结果
+            if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE; // Termux needs to put its result inside
             PendingIntent pi = PendingIntent.getBroadcast(ctx, (int) (System.currentTimeMillis() & 0x7fffffff), r, flags);
 
             Intent i = new Intent();
@@ -49,7 +50,7 @@ final class TermuxRunner {
             ctx.startService(i);
             return true;
         } catch (Throwable t) {
-            Last.set(ctx, "启动 Termux 命令失败：" + t);
+            Last.set(ctx, "Failed to start the Termux command: " + t);
             return false;
         }
     }
@@ -65,10 +66,11 @@ final class TermuxRunner {
         } catch (Throwable t) { return false; }
     }
 
-    // ---- 常用命令 ----
+    // ---- Common commands ----
     static String statusCmd() {
-        // --brief：不要每个任务的 tail。实测完整包 6463 字节、--brief 只有 1560，
-        // 而 App 侧的回传有长度上限（见 TaskResultReceiver）——包太大就会被截断、JSON 解析失败。
+        // --brief: skip the per-task tail. Measured: the full payload is 6463 bytes, --brief only 1560,
+        // while callbacks on the app side have a length cap (see TaskResultReceiver) — anything too big
+        // gets truncated and JSON parsing fails.
         return HOME + "/.local/bin/dsh-status-pub --json --brief";
     }
     static String taskCmd(String id) {

@@ -1,24 +1,24 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-auth-pass —— 「AI 能不能动用你的锁屏密码」这一授权的存续管理（自救通道的一部分）
+# dsh-auth-pass —— manages whether the AI may use your lockscreen password (part of the self-rescue channel)
 #
-# 语义（2026-09-26 用户纠正）：那 6 位**不是安装专用**，它是**系统身份验证的通用凭据**——
-#   装 APK 要过「安全验证」、解除应用"设置限制"、开发者选项里的敏感确认……都会弹它。
-#   这个文件代表的是：**AI 被允许在替你过身份验证时使用这个密码**。
-#   撤销（删掉这个文件）＝ AI 立刻失去使用资格，所有需要它代过验证的动作都会停住。
-# 把它放在一个 chmod 600 的独立小文件里，**撤销 = 删掉这个文件**：
-#   一步到位、不需要看屏幕、不需要点任何按钮，也不需要 AI 配合。
+# Semantics (corrected by the user on 2026-09-26): those 6 digits are **not install-only**, they are a **general system-auth credential** —
+#   installing an APK needs 「安全验证」, lifting an app "restriction", sensitive confirms in developer options ... all of them ask for it.
+#   This file means: **the AI is allowed to use this password when passing authentication for you**.
+#   Revoking it (deleting this file) = the AI loses the right at once, and every action that needs it to pass auth stops.
+# It lives in its own small chmod 600 file, so **revoke = delete this file**:
+#   One step, no screen, no buttons to tap, and no cooperation from the AI needed.
 #
-#   status          看有没有授权（存在 / 权限 / 写入时间 / 位数）——**绝不回显密码本身**
-#   revoke | off    撤销授权：先覆写再删除，然后复核"确实没了"
-#   set             从 stdin 读 6 位数字并写入（600）；不是 6 位数字就拒绝
-#   digits          把 6 位打到 stdout（不带换行）——只给"逐位点数字键盘"的自动化用
-#   path            打印文件路径
+#   status          show whether authorization exists (file / mode / write time / digit count) — **never echoes the password itself**
+#   revoke | off    revoke authorization: overwrite, then delete, then verify that it is "really gone"
+#   set             read 6 digits from stdin and write them (600); anything else is refused
+#   digits          print the 6 digits to stdout (no newline) — only for automation that "taps the keypad digit by digit"
+#   path            print the file path
 #
-# 沙箱：DSH_AUTH_PASS_FILE=/某个/临时路径 可换文件（自检套件用它测 revoke，避免误删真授权）
+# Sandbox: DSH_AUTH_PASS_FILE=/some/tmp/path swaps the file (the self-test suite uses it to test revoke without deleting the real one)
 set -u
 PASS_FILE="${DSH_AUTH_PASS_FILE:-${DSH_INSTALL_PASS_FILE:-$HOME/.dsh-auth-pass}}"
 OLD_PASS="$HOME/.dsh-install-pass"
-# 迁移：老的 .dsh-install-pass 如果还在、新文件还没有，就搬过来（名字变了，语义没变）
+# Migration: if the old .dsh-install-pass is still there and the new file is not, it is moved over (name changed, meaning unchanged)
 if [ ! -f "$PASS_FILE" ] && [ -f "$OLD_PASS" ] && [ -z "${DSH_INSTALL_PASS_FILE:-}" ] && [ -z "${DSH_AUTH_PASS_FILE:-}" ]; then
   mv -f "$OLD_PASS" "$PASS_FILE" 2>/dev/null && chmod 600 "$PASS_FILE" 2>/dev/null
 fi
@@ -33,11 +33,11 @@ case "$cmd" in
       mode=$(stat -c '%a' "$PASS_FILE" 2>/dev/null || echo '?')
       when=$(stat -c '%y' "$PASS_FILE" 2>/dev/null | cut -d. -f1)
       len=$(tr -d '\n\r \t' < "$PASS_FILE" | wc -c | tr -d ' ')
-      printf '已授权：%s（权限 %s，写入 %s，长度 %s 位）\n' "$PASS_FILE" "$mode" "$when" "$len"
-      [ "$mode" = "600" ] || printf '⚠ 权限不是 600（当前 %s）——建议立刻 chmod 600 %s\n' "$mode" "$PASS_FILE"
-      [ "$len" = "6" ] || printf '⚠ 长度不是 6 位，装包自动化可能读不出来\n'
+      printf 'Authorized: %s (mode %s, written %s, length %s digits)\n' "$PASS_FILE" "$mode" "$when" "$len"
+      [ "$mode" = "600" ] || printf '⚠ mode is not 600 (currently %s) — chmod 600 %s now\n' "$mode" "$PASS_FILE"
+      [ "$len" = "6" ] || printf '⚠ length is not 6 digits; install automation may not be able to read it\n'
     else
-      printf '未授权：%s 不存在 → AI 不能用你的锁屏密码过任何身份验证（装包也一样），需要你本人操作\n' "$PASS_FILE"
+      printf 'Not authorized: %s does not exist → the AI cannot pass any authentication with your lockscreen password (installs included); you must do it yourself\n' "$PASS_FILE"
       exit 1
     fi ;;
 
@@ -45,37 +45,37 @@ case "$cmd" in
     d=$(cat | tr -d '\n\r \t')
     case "$d" in
       [0-9][0-9][0-9][0-9][0-9][0-9]) ;;
-      *) printf '拒绝写入：只接受 6 位数字（收到 %s 个字符）\n' "${#d}" >&2; exit 2 ;;
+      *) printf 'refused: only 6 digits are accepted (got %s characters)\n' "${#d}" >&2; exit 2 ;;
     esac
     umask 077
-    printf '%s' "$d" > "$PASS_FILE" || { printf '写入失败：%s\n' "$PASS_FILE" >&2; exit 1; }
+    printf '%s' "$d" > "$PASS_FILE" || { printf 'write failed: %s\n' "$PASS_FILE" >&2; exit 1; }
     chmod 600 "$PASS_FILE"
-    printf '✔ 已授权：写入 %s（权限 %s，%s 位）\n' "$PASS_FILE" "$(stat -c '%a' "$PASS_FILE")" "${#d}"
-    printf '  撤销入口：控制台 App「维护」里的『密码使用权』开关／小组件 9／或直接 rm %s\n' "$PASS_FILE" ;;
+    printf '✔ Authorized: wrote %s (mode %s, %s digits)\n' "$PASS_FILE" "$(stat -c '%a' "$PASS_FILE")" "${#d}"
+    printf '  To revoke: the 『密码使用权』 switch under 「维护」 in the Console App / widget 9 / or just rm %s\n' "$PASS_FILE" ;;
 
   revoke|off)
-    if [ ! -f "$PASS_FILE" ]; then printf '本来就没有授权（%s 不存在）\n' "$PASS_FILE"; exit 0; fi
+    if [ ! -f "$PASS_FILE" ]; then printf 'there was no authorization to begin with (%s does not exist)\n' "$PASS_FILE"; exit 0; fi
     n=$(tr -d '\n\r \t' < "$PASS_FILE" | wc -c | tr -d ' ')
-    # 先覆写再删：不是安全擦除，但比直接 rm 少留一点残迹
+    # Overwrite first, then delete: not a secure erase, but it leaves less behind than a plain rm
     if [ "$n" -gt 0 ] 2>/dev/null; then
       printf '0%.0s' $(seq 1 "$n") > "$PASS_FILE" 2>/dev/null || true
       sync 2>/dev/null || true
     fi
     rm -f "$PASS_FILE"
-    if [ -e "$PASS_FILE" ]; then printf '✘ 撤销失败：%s 还在\n' "$PASS_FILE" >&2; exit 1; fi
-    printf '✔ 已撤销：%s 已删除\n' "$PASS_FILE"
-    printf '  含义：AI 失去使用这个密码的资格 —— 装包、解除设置限制等任何需要它的验证都会停住，\n'
-    printf '        必须你本人按指纹/输密码，或重新授权（dsh-auth-pass set）。\n'
-    printf '  恢复：把 6 位密码再给一次（printf 密码 | dsh-auth-pass set）。\n' ;;
+    if [ -e "$PASS_FILE" ]; then printf '✘ revoke failed: %s is still there\n' "$PASS_FILE" >&2; exit 1; fi
+    printf '✔ Revoked: %s deleted\n' "$PASS_FILE"
+    printf '  Meaning: the AI no longer has the right to use this password — installs, lifting restrictions and anything else that needs it will stop,\n'
+    printf '        and you must use your fingerprint or password yourself, or re-authorize (dsh-auth-pass set).\n'
+    printf '  Restore: give the 6 digits again (printf password | dsh-auth-pass set).\n' ;;
 
   digits)
-    [ -f "$PASS_FILE" ] || { printf '未授权（%s 不存在）\n' "$PASS_FILE" >&2; exit 1; }
+    [ -f "$PASS_FILE" ] || { printf 'not authorized (%s does not exist)\n' "$PASS_FILE" >&2; exit 1; }
     d=$(tr -d '\n\r \t' < "$PASS_FILE")
     case "$d" in
       [0-9][0-9][0-9][0-9][0-9][0-9]) printf '%s' "$d" ;;
-      *) printf '文件内容不是 6 位数字，拒绝输出\n' >&2; exit 2 ;;
+      *) printf 'file contents are not 6 digits; refusing to print\n' >&2; exit 2 ;;
     esac ;;
 
   *)
-    printf '用法: dsh-auth-pass status|set|revoke|digits|path\n' >&2; exit 2 ;;
+    printf 'Usage: dsh-auth-pass status|set|revoke|digits|path\n' >&2; exit 2 ;;
 esac

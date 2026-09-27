@@ -1,4 +1,4 @@
-# 本地文件面板 bundle：插入指向本包的组合行
+# Local file panel bundle: insert the composition row pointing at this package
 - insert:
     - id: filepanel
       name: dsh-filepanel-local

@@ -1,25 +1,25 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# droid —— 通过 ADB（无线调试）操作整台安卓手机：看屏、点击、滑动、输入、装包、读 UI 树
-# 前提：无线调试已配对并连上（droid conn）。无 root 也可用，因为走的是 adb shell（shell 用户权限）。
+# droid —— drive the whole Android phone over ADB (wireless debugging): screen, tap, swipe, type, install, read the UI tree
+# Needs wireless debugging paired and connected (droid conn). Works without root, since it goes through adb shell (shell user rights).
 #
-# 用法：
-#   droid conn [pair PORT CODE | PORT]   连接/重新连接（无参用 ~/.droid.conf 里记的端口）
-#   droid devices                        当前连接的设备
-#   droid shot [输出路径]                截整屏 → 默认 Download/dsh/图片/droid-<时间戳>.png
-#   droid tap X Y                        点击
-#   droid swipe X1 Y1 X2 Y2 [毫秒]       滑动（默认 300ms）
-#   droid text '要输入的文字'            输入文本（自动转义）
-#   droid key KEYCODE_BACK|HOME|ENTER|...发送按键
-#   droid ui [关键词]                    导出 UI 树（xml），可按关键词过滤出元素与坐标
-#   droid find '文字' [--tap]            在 UI 树里找含该文字的元素（可选直接点它）
-#   droid apps [关键词]                  列出第三方应用包名
-#   droid install <apk路径>              安装/覆盖安装 APK（无需点安装对话框）
-#   droid start <包名|包名/Activity>     启动应用
-#   droid cur                            当前前台应用
-#   droid shell '<命令>'                 直接跑 adb shell
+# Usage: 
+#   droid conn [pair PORT CODE | PORT]   connect/reconnect (with no args, uses the port recorded in ~/.droid.conf)
+#   droid devices                        currently connected devices
+#   droid shot [output path]                full screen → default Download/dsh/图片/droid-<timestamp>.png
+#   droid tap X Y                        tap
+#   droid swipe X1 Y1 X2 Y2 [ms]       swipe (default 300ms)
+#   droid text 'text to type'            type text (auto-escaped)
+#   droid key KEYCODE_BACK|HOME|ENTER|...send a keyevent
+#   droid ui [keyword]                    export the UI tree (xml), optionally filtering elements and coordinates by keyword
+#   droid find 'text' [--tap]            find elements containing that text in the UI tree (optionally tap it)
+#   droid apps [keyword]                  list third-party app package names
+#   droid install <apk path>              install/reinstall an APK (no need to tap the install dialog)
+#   droid start <package|package/Activity>     launch an app
+#   droid cur                            current foreground app
+#   droid shell '<command>'                 run adb shell directly
 set -u
 CONF="$HOME/.droid.conf"
-# 多设备/残留 offline 记录时，自动锁定唯一处于 device 状态的设备
+# With several devices or stale offline entries, it locks onto the only device in state device
 pick_serial() {
   local s
   s=$(adb devices 2>/dev/null | awk 'NR>1 && $2=="device" {print $1; exit}')
@@ -28,7 +28,7 @@ pick_serial() {
 pick_serial
 IMG_DIR="$HOME/storage/downloads/dsh/图片"
 mkdir -p "$IMG_DIR" 2>/dev/null
-[ -f "$CONF" ] && . "$CONF"          # 提供 DROID_PORT / DROID_PAIR_PORT / DROID_PAIR_CODE
+[ -f "$CONF" ] && . "$CONF"          # provides DROID_PORT / DROID_PAIR_PORT / DROID_PAIR_CODE
 
 save_conf() {
   { echo "DROID_PORT=${DROID_PORT:-}"
@@ -41,7 +41,7 @@ need_device() {
   local n
   n=$(adb devices | awk 'NR>1 && $2=="device"' | wc -l)
   if [ "$n" -eq 0 ]; then
-    echo "❌ 没有已连接的设备。先跑：droid conn <端口>（或用 droid conn pair <端口> <配对码>）" >&2
+    echo "❌ no connected device. Run first: droid conn <port> (or droid conn pair <port> <code>)" >&2
     return 1
   fi
   return 0
@@ -50,22 +50,22 @@ need_device() {
 cmd_conn() {
   local mode="${1:-auto}"
   if [ "$mode" = "pair" ]; then
-    DROID_PAIR_PORT="${2:?配对端口}"; DROID_PAIR_CODE="${3:?配对码}"
+    DROID_PAIR_PORT="${2:?pairing port}"; DROID_PAIR_CODE="${3:?pairing code}"
     echo "→ adb pair 127.0.0.1:$DROID_PAIR_PORT (code $DROID_PAIR_CODE)"
     adb pair "127.0.0.1:$DROID_PAIR_PORT" "$DROID_PAIR_CODE" 2>&1 | tail -3
     save_conf
-    echo "提示：配对成功后还需要 connect 端口（无线调试主界面上的『IP 地址和端口』）→ droid conn <端口>"
+    echo "Note: after pairing you still need to connect the port (the 『IP 地址和端口』 entry on the wireless debugging screen) → droid conn <port>"
     return 0
   fi
   [ -n "${1:-}" ] && { DROID_PORT="$1"; save_conf; }
-  [ -z "${DROID_PORT:-}" ] && { echo "❌ 没记过连接端口。用法：droid conn <端口>" >&2; return 2; }
+  [ -z "${DROID_PORT:-}" ] && { echo "❌ no connect port on record. Usage: droid conn <port>" >&2; return 2; }
   adb connect "127.0.0.1:$DROID_PORT" 2>&1 | tail -2
   sleep 1
   adb devices | tail -n +2
   need_device
 }
 
-# 没有 adb 设备时按顺序降级：① 自建「DSH 桥」App（回环 socket，推荐）② AutoX.js 桥接（共享目录）
+# With no adb device it degrades in order: ① the self-built 「DSH 桥」 App (loopback socket, preferred) ② the AutoX.js bridge (shared directory)
 if [ $# -gt 0 ]; then
   case "$1" in
     conn|devices|discover|scan|help) ;;
@@ -89,26 +89,26 @@ case "${1:-help}" in
     OUT="${2:-$IMG_DIR/droid-$(date +%Y%m%d-%H%M%S).png}"
     need_device || exit 1
     adb ${DROID_SERIAL:+-s $DROID_SERIAL} exec-out screencap -p > "$OUT" 2>/dev/null
-    if [ -s "$OUT" ]; then echo "已截图: $OUT ($(wc -c < "$OUT") 字节)"; else echo "❌ 截图失败" >&2; exit 1; fi ;;
+    if [ -s "$OUT" ]; then echo "screenshot saved: $OUT ($(wc -c < "$OUT") bytes)"; else echo "❌ screenshot failed" >&2; exit 1; fi ;;
   tap)
     need_device || exit 1
-    adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input tap "${2:?X}" "${3:?Y}" && echo "已点击 (${2},${3})" ;;
+    adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input tap "${2:?X}" "${3:?Y}" && echo "tapped (${2},${3})" ;;
   swipe)
     need_device || exit 1
-    adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input swipe "${2:?x1}" "${3:?y1}" "${4:?x2}" "${5:?y2}" "${6:-300}" && echo "已滑动" ;;
+    adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input swipe "${2:?x1}" "${3:?y1}" "${4:?x2}" "${5:?y2}" "${6:-300}" && echo "swiped" ;;
   text)
     need_device || exit 1
     S="${2:-}"
     E=$(printf '%s' "$S" | sed "s/ /%s/g; s/'/\\\\'/g")
-    adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input text "$E" && echo "已输入: $S" ;;
+    adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input text "$E" && echo "typed: $S" ;;
   key)
     need_device || exit 1
-    adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input keyevent "${2:?KEYCODE}" && echo "已发送 ${2}" ;;
+    adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input keyevent "${2:?KEYCODE}" && echo "sent ${2}" ;;
   ui)
     need_device || exit 1
     adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell uiautomator dump /sdcard/droid-ui.xml >/dev/null 2>&1
     adb ${DROID_SERIAL:+-s $DROID_SERIAL} exec-out cat /sdcard/droid-ui.xml > "$HOME/.droid-ui.xml" 2>/dev/null
-    [ -s "$HOME/.droid-ui.xml" ] || { echo "❌ UI 树导出失败" >&2; exit 1; }
+    [ -s "$HOME/.droid-ui.xml" ] || { echo "❌ UI tree export failed" >&2; exit 1; }
     if [ -n "${2:-}" ]; then
       python3 - "$HOME/.droid-ui.xml" "$2" <<'PY'
 import re, sys, xml.etree.ElementTree as ET
@@ -126,13 +126,13 @@ for n in root.iter('node'):
         print(f"  [{cx},{cy}] {n.get('class','').split('.')[-1]:<14} text={n.get('text','')[:40]!r} desc={n.get('content-desc','')[:30]!r} id={n.get('resource-id','')[-28:]}")
         hits += 1
         if hits >= 25: break
-print(f'共 {hits} 个匹配（坐标即点击中心）')
+print(f'{hits} matches (the coordinates are the tap center)')
 PY
     else
-      echo "UI 树已存: $HOME/.droid-ui.xml ($(wc -c < "$HOME/.droid-ui.xml") 字节)"; fi ;;
+      echo "UI tree saved: $HOME/.droid-ui.xml ($(wc -c < "$HOME/.droid-ui.xml") bytes)"; fi ;;
   find)
     need_device || exit 1
-    KW="${2:?关键词}"; shift 2 || true
+    KW="${2:?keyword}"; shift 2 || true
     TAP=""
     for a in "$@"; do [ "$a" = "--tap" ] && TAP=1; done
     adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell uiautomator dump /sdcard/droid-ui.xml >/dev/null 2>&1
@@ -151,19 +151,19 @@ for n in root.iter('node'):
             print(f"{(x1+x2)//2} {(y1+y2)//2} {n.get('text','')[:30]}"); break
 PY
 )
-    if [ -z "$COORD" ]; then echo "没找到含「$KW」的元素"; exit 1; fi
-    echo "找到: $COORD"
-    if [ -n "$TAP" ]; then set -- $COORD; adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input tap "$1" "$2" && echo "已点击 ($1,$2)"; fi ;;
+    if [ -z "$COORD" ]; then echo "no element containing $KW"; exit 1; fi
+    echo "found: $COORD"
+    if [ -n "$TAP" ]; then set -- $COORD; adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input tap "$1" "$2" && echo "tapped ($1,$2)"; fi ;;
   apps)
     need_device || exit 1
     adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell pm list packages -3 | sed 's/package://' | { [ -n "${2:-}" ] && grep -i "$2" || cat; } ;;
   install)
     need_device || exit 1
-    APK="${2:?apk 路径}"
+    APK="${2:?apk path}"
     adb ${DROID_SERIAL:+-s $DROID_SERIAL} install -r -d "$APK" 2>&1 | tail -4 ;;
   start)
     need_device || exit 1
-    T="${2:?包名}"
+    T="${2:?package}"
     case "$T" in
       */*) adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell am start -n "$T" 2>&1 | tail -3 ;;
       *)   adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell monkey -p "$T" -c android.intent.category.LAUNCHER 1 2>&1 | tail -3 ;;
@@ -175,13 +175,13 @@ PY
     need_device || exit 1
     shift; adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell "$@" ;;
   discover)
-    # mDNS 自动发现无线调试端口（需无线调试已打开）
+    # mDNS auto-discovery of the wireless debugging port (wireless debugging must be on)
     python3 - <<'PY'
 import socket, time
 try:
     from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
 except Exception:
-    print('zeroconf 不可用：pip install zeroconf'); raise SystemExit(1)
+    print('zeroconf unavailable: pip install zeroconf'); raise SystemExit(1)
 found = {}
 class L(ServiceListener):
     def add_service(self, zc, type_, name):
@@ -194,11 +194,11 @@ zc = Zeroconf(); ServiceBrowser(zc, ['_adb-tls-pairing._tcp.local.', '_adb-tls-c
 time.sleep(7); zc.close()
 for n, (t, port, addrs) in found.items():
     print(f'  {t:<21} port={port} addr={addrs}')
-print(f'共发现 {len(found)} 个（pairing=配对端口，connect=连接端口）')
+print(f'found {len(found)} (pairing=pairing port, connect=connect port)')
 PY
     ;;
   scan)
-    # 兜底：扫本机 30000-50000 监听端口，并指纹识别哪个是 adb
+    # fallback: scan local listening ports 30000-50000 and fingerprint which one is adb
     python3 - <<'PY'
 import socket, concurrent.futures
 open_ports = []
@@ -211,17 +211,17 @@ def probe(p):
 with concurrent.futures.ThreadPoolExecutor(max_workers=400) as ex:
     for r in ex.map(probe, range(30000, 50001)):
         if r: open_ports.append(r)
-print('监听端口:', open_ports or '（无）')
+print('listening ports:', open_ports or '(none)')
 hello = b'CNXN\x00\x00\x00\x01\x00\x10\x00\x00\x07\x00\x00\x00\x32\x02\x00\x00\xbc\xb1\xa7\xb1host::\x00'
 for p in open_ports:
     s = socket.socket(); s.settimeout(1.2)
     try:
         s.connect(('127.0.0.1', p)); s.sendall(hello); data = s.recv(24)
         kind = data[:4].decode('latin1', 'replace')
-        tag = 'ADB（连接端口）' if kind in ('CNXN', 'AUTH', 'STLS') else ('TLS（配对端口）' if data[:1] == b'\x16' else '其他')
+        tag = 'ADB (connect port)' if kind in ('CNXN', 'AUTH', 'STLS') else ('TLS (pairing port)' if data[:1] == b'\x16' else 'other')
         print(f'  {p}: {tag} {data[:8]!r}')
     except Exception as e:
-        print(f'  {p}: 无响应 ({e.__class__.__name__})')
+        print(f'  {p}: no response ({e.__class__.__name__})')
     finally:
         s.close()
 PY

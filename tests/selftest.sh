@@ -1,35 +1,42 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# selftest.sh —— 9 个小组件的自检套件（改完必须跑这个）
+# selftest.sh — self-test suite for the 9 widgets (run this after every change)
 #
-# 分级测试：
-#   L0 前置   环境自己会坏（桥/adb/8080），先判定，别把环境问题算成组件失败
-#   L1 语法   bash -n + python 编译
-#   L2 预演   脚本自身的 --dry-run（必须退出 0 且走完全流程）
-#   L3 判定   就绪判定/lock 的**回归测试**（这一层是本次修 404 的核心，全部可离线跑）
-#   L4 真跑   安全可逆的组件真实执行并校验结果
-#   L5 沙箱   组件 1 冷启动：8099 起临时实例，采样 HTTP 码取证「端口先开、路由后挂」
-#   SKIP      真跑会杀掉当前会话（2/4/6）或需人工恢复（0）→ 只能预演 + 由用户择机真跑
+# Tiered tests:
+#   L0 precheck   the environment itself breaks (bridge/adb/8080): judge it first, never score an env problem as a widget failure
+#   L1 syntax     bash -n + python compile
+#   L2 rehearsal  the scripts' own --dry-run (must exit 0 and walk the whole flow)
+#   L3 verdicts   **regression tests** for the readiness check / boot lock (the core of the 404 fix, fully offline)
+#   L4 real run   real, safe-and-reversible widget execution with result verification
+#   L5 sandbox    cold start of widget 1: a throwaway instance on 8099, sampling HTTP codes to prove 'port opens first, routes mount later'
+#   SKIP          a real run would kill this session (2/4/6) or needs manual recovery (0) → dry-run only, user picks the moment
 HOME_DIR="/data/data/com.termux/files/home"
 T="$HOME_DIR/.shortcuts/tasks"
 L="$HOME_DIR/.local/share/dsh-widgets/common.sh"
 PASS=0; FAIL=0; SKIP=0; REPORT=""
 TMPLOG="$HOME_DIR/.smoke/selftest.log"
 TMPD="$HOME_DIR/.smoke/selftest-tmp"; rm -rf "$TMPD"; mkdir -p "$TMPD"
-SAVED=0   # 只有在本次真的备份过日志/URL 之后，才允许收尾还原
+SAVED=0   # cleanup may restore only after this run really saved the log/URL
 
-# ── 沙箱只准碰 8099，绝不准碰你正在用的 8080 ──
-# 为什么写这么细：以前这里是"凡是不在启动前快照里的 dsh 进程就 kill"，
-# 万一你在我测试期间重启了 DSH，新实例就会被当成沙箱误杀。
+# ── Force a deterministic language for this run ──
+# The widgets now speak whatever ~/.dsh-lang says (via widgets/i18n.sh). Assertions below match on
+# text, so the suite pins the language to English for its own runs instead of depending on the
+# user's setting: DSH_LANG_FILE is honoured by i18n.sh, so nothing global is touched.
+export DSH_LANG_FILE="$TMPD/dsh-lang-selftest"
+printf 'en\n' > "$DSH_LANG_FILE"
+
+# ── the sandbox may only touch 8099, never the 8080 you are using ──
+# Why so precise: this used to be "kill any dsh process that was not in the pre-boot snapshot",
+# so if you restarted DSH while I was testing, the new instance was mistaken for the sandbox and killed.
 kill_sandbox() {
   local p
   for p in $(pgrep -f 'bin[.]js web' 2>/dev/null); do
     [ "$p" = "$$" ] && continue
     if tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q -- '--port 8099'; then
-      kill -9 "$p" 2>/dev/null && line "     （已清理沙箱进程 pid $p）"
+      kill -9 "$p" 2>/dev/null && line "     (cleaned up sandbox process pid $p)"
     fi
   done
 }
-# 被 pkill / 重启打断时也要收拾干净：沙箱进程、沙箱启动锁、被改动的日志与 .dsh-url
+# Clean up even when interrupted by pkill / restart: sandbox processes, the sandbox boot lock, the touched log and .dsh-url
 cleanup_all() {
   kill_sandbox
   [ -d "$HOME_DIR/.dsh-boot-8099.lock" ] && rm -rf "$HOME_DIR/.dsh-boot-8099.lock" 2>/dev/null
@@ -41,13 +48,13 @@ cleanup_all() {
   return 0
 }
 trap 'cleanup_all' EXIT INT TERM
-kill_sandbox   # 上一轮被打断留下的沙箱，先清掉
+kill_sandbox   # clear a sandbox left behind by an interrupted previous round
 
-# 公共库要**在 L0 之前**载入：L0 的桥唤醒需要 bridge_wake（带 token）
+# The common library must load **before L0**: L0's bridge wake needs bridge_wake (with token)
 . "$L"
 
 line() { printf '%s\n' "$1"; }
-rec()  { # $1=状态 $2=组件 $3=说明
+rec()  { # $1=status $2=widget $3=description
   case "$1" in
     PASS) PASS=$((PASS+1)); printf '  ✔ %-24s %s\n' "$2" "$3" ;;
     FAIL) FAIL=$((FAIL+1)); printf '  ✘ %-24s %s\n' "$2" "$3" ;;
@@ -56,22 +63,24 @@ rec()  { # $1=状态 $2=组件 $3=说明
   REPORT="${REPORT}${1}|${2}|${3}\n"
 }
 
-dryrun_ok() { # $1=脚本
+dryrun_ok() { # $1=script
   local out rc
   out=$(timeout 120 bash "$1" --dry-run 2>&1); rc=$?
   printf '%s' "$out" > "$TMPLOG"
-  [ "$rc" = 0 ] && grep -q '】完成' "$TMPLOG"
+  # The completion banner is a data marker: it is now '[name] done, took Ns' (widgets/common.sh).
+  # Accept the legacy Chinese spelling too, so logs written before the switch still parse.
+  [ "$rc" = 0 ] && grep -qE '\][[:space:]]+done, took|】完成' "$TMPLOG"
 }
 
-line "════ 小组件自检 $(date '+%F %T') ════"
+line "════ Widget selftest $(date '+%F %T') ════"
 
-# ── L0：前置条件 ──
-line "【L0】前置条件"
+# ── L0: preconditions ──
+line "[L0] Preconditions"
 BRIDGE_OK=0; ADB_OK=0; WEB_OK=0
 (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null && BRIDGE_OK=1
 if [ "$BRIDGE_OK" = 0 ]; then
-  # 必须用**带 token** 的广播：v1.7 起不带 token 的唤醒在服务已关时会被忽略，
-  # 以前这里用裸广播 → 桥明明能唤醒却被判成"不可用"，整段桥测试被跳过（实测踩到）。
+  # A **token-bearing** broadcast is required: since v1.7 a tokenless wake is ignored once the service is off,
+  # so the bare broadcast used here called a wakeable bridge "unavailable" and skipped every bridge test (hit for real).
   bridge_wake 2>/dev/null || { am broadcast -a io.dsh.bridge.WAKE -n io.dsh.bridge/.WakeReceiver >/dev/null 2>&1; sleep 2; }
   (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null && BRIDGE_OK=1
 fi
@@ -79,58 +88,58 @@ if [ "$BRIDGE_OK" = 0 ]; then
   am start -n io.dsh.bridge/.MainActivity >/dev/null 2>&1; sleep 3
   (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null && BRIDGE_OK=1
 fi
-[ "$BRIDGE_OK" = 1 ] && rec PASS "前置：桥通道" "8788 可用（$(timeout 12 "$HOME_DIR/.local/bin/droid-sock" ping 2>/dev/null | grep -oE '"ver": *"[^"]*"')）" \
-  || rec SKIP "前置：桥通道" "带 token 唤醒也起不来 —— 需你打开一次「DSH 桥」App（非组件问题）"
+[ "$BRIDGE_OK" = 1 ] && rec PASS "precheck: bridge channel" "8788 reachable ($(timeout 12 "$HOME_DIR/.local/bin/droid-sock" ping 2>/dev/null | grep -oE '"ver": *"[^"]*"'))" \
+  || rec SKIP "precheck: bridge channel" "a token-bearing wake cannot start it either — open the DSH Bridge app once (not a widget problem)"
 adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q . && ADB_OK=1
 if [ "$ADB_OK" = 0 ] && [ "$BRIDGE_OK" = 1 ]; then
-  timeout 150 bash "$T/8_自动开无线调试.sh" >/dev/null 2>&1
+  timeout 150 bash "$T/8_enable-wireless-adb.sh" >/dev/null 2>&1
   adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q . && ADB_OK=1
 fi
-[ "$ADB_OK" = 1 ] && rec PASS "前置：adb 通道" "$(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')" \
-  || rec SKIP "前置：adb 通道" "未连接（Wi-Fi 关过/重启过；需先开一次「无线调试」）"
+[ "$ADB_OK" = 1 ] && rec PASS "precheck: adb channel" "$(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')" \
+  || rec SKIP "precheck: adb channel" "not connected (Wi-Fi was off or restarted; enable Wireless debugging once first)"
 (exec 3<>/dev/tcp/127.0.0.1/8080) 2>/dev/null && WEB_OK=1
-[ "$WEB_OK" = 1 ] && rec PASS "前置：8080" "当前会话在跑" || rec SKIP "前置：8080" "当前没有会话在跑"
+[ "$WEB_OK" = 1 ] && rec PASS "precheck: 8080" "this session is running" || rec SKIP "precheck: 8080" "no session is running right now"
 
-# ── L1：语法 ──
-line "【L1】语法检查"
+# ── L1: syntax ──
+line "[L1] Syntax check"
 for f in "$T"/*.sh "$L" "$HOME_DIR/.local/share/dsh-widgets/selftest.sh"; do
   n=$(basename "$f")
-  if bash -n "$f" 2>/dev/null; then rec PASS "$n" "语法 OK"; else rec FAIL "$n" "语法错误"; fi
+  if bash -n "$f" 2>/dev/null; then rec PASS "$n" "syntax OK"; else rec FAIL "$n" "syntax error"; fi
 done
 PYC=$(python3 -m py_compile "$HOME_DIR/.local/bin/droid-sock" 2>&1)
-[ -z "$PYC" ] && rec PASS "droid-sock" "python 编译 OK" || rec FAIL "droid-sock" "python 编译失败：$(printf '%s' "$PYC" | tail -1)"
+[ -z "$PYC" ] && rec PASS "droid-sock" "python compile OK" || rec FAIL "droid-sock" "python compile failed: $(printf '%s' "$PYC" | tail -1)"
 
-# ── L2：--dry-run ──
-line "【L2】--dry-run 全流程预演"
+# ── L2: --dry-run ──
+line "[L2] --dry-run full-flow rehearsal"
 for f in "$T"/*.sh; do
   n=$(basename "$f")
-  if dryrun_ok "$f"; then rec PASS "$n" "dry-run 走完且退出 0"; else rec FAIL "$n" "dry-run 异常（见 $TMPLOG）"; fi
+  if dryrun_ok "$f"; then rec PASS "$n" "dry-run completed and exited 0"; else rec FAIL "$n" "dry-run failed (see $TMPLOG)"; fi
 done
-# 组件 2 的 --keep-bridge 曾经只在文档里、没进 case（写了也被无视）→ 用真行为回验
-if timeout 60 bash "$T/2_关闭DSH.sh" --dry-run --keep-bridge > "$TMPLOG" 2>&1 && grep -q '按要求保留桥通道' "$TMPLOG"; then
-  rec PASS "2_关闭DSH --keep-bridge" "参数真的生效（保留桥通道）"
-else rec FAIL "2_关闭DSH --keep-bridge" "写了 --keep-bridge 但仍去关桥（参数没进 case）"; fi
-if timeout 60 bash "$T/2_关闭DSH.sh" --dry-run > "$TMPLOG" 2>&1 && grep -qE 'droid-sock (sleep|stop)' "$TMPLOG"; then
-  rec PASS "2_关闭DSH 默认" "默认会关桥（sleep 优先，旧版退 stop）"
-else rec FAIL "2_关闭DSH 默认" "默认没走到关桥分支"; fi
+# Widget 2's --keep-bridge once lived only in docs and never reached the case block (accepted, then ignored) → re-verify by real behaviour
+if timeout 60 bash "$T/2_shutdown-dsh.sh" --dry-run --keep-bridge > "$TMPLOG" 2>&1 && grep -q 'Keeping the bridge channel' "$TMPLOG"; then
+  rec PASS "2_shutdown-dsh --keep-bridge" "the flag really takes effect (bridge channel kept)"
+else rec FAIL "2_shutdown-dsh --keep-bridge" "--keep-bridge was passed but it stops the bridge anyway (the flag never reached the case block)"; fi
+if timeout 60 bash "$T/2_shutdown-dsh.sh" --dry-run > "$TMPLOG" 2>&1 && grep -qE 'droid-sock (sleep|stop)' "$TMPLOG"; then
+  rec PASS "2_shutdown-dsh default" "the default stops the bridge (prefers sleep, falls back to stop on old versions)"
+else rec FAIL "2_shutdown-dsh default" "the default never reached the bridge-stopping branch"; fi
 
-# ── L3：就绪判定 / 锁 的回归测试（本次修 404 的核心）──
-line "【L3】就绪判定与启动锁（回归测试）"
-# 载入公共库（DRY=0），单独在子 shell 里做断言
+# ── L3: regression tests for the readiness check / boot lock (the core of the 404 fix) ──
+line "[L3] Readiness check and boot lock (regression tests)"
+# The common library is already loaded (DRY=0); assertions run in a separate subshell
 
-# ① 旧 token 必须被拒：这正是截图里「打开就是报错页」的成因
+# (1) A stale token must be rejected: exactly what caused the 'error page on open' in the screenshot
 CACHED=$(grep -oE "$TOKEN_RE" "$HOME_DIR/.dsh-url" 2>/dev/null | tail -1)
 if [ "$WEB_OK" = 0 ]; then
-  rec SKIP "旧 token 被拒" "8080 没在跑，无法验证"
+  rec SKIP "stale token rejected" "8080 is not running, cannot verify"
 elif [ -z "$CACHED" ]; then
-  rec SKIP "旧 token 被拒" ".dsh-url 里没有 URL"
+  rec SKIP "stale token rejected" "no URL in .dsh-url"
 elif url_ready "$CACHED"; then
-  rec PASS "旧 token 被拒" "缓存 URL 恰好仍有效（200）"
+  rec PASS "stale token rejected" "the cached URL happens to still be valid (200)"
 else
-  rec PASS "旧 token 被拒" "缓存 URL 已失效（HTTP $(url_code "$CACHED")），url_ready 正确判为不可用"
+  rec PASS "stale token rejected" "the cached URL is dead (HTTP $(url_code "$CACHED")); url_ready correctly calls it unusable"
 fi
 
-# ② 半启动的 404 必须被拒（并证明旧判定的确会放行）
+# (2) A half-started 404 must be rejected (and proof that the old check really let it through)
 python3 - <<'PY' >/dev/null 2>&1 &
 import http.server, socketserver
 class H(http.server.BaseHTTPRequestHandler):
@@ -142,33 +151,33 @@ socketserver.TCPServer(('127.0.0.1', 8097), H).serve_forever()
 PY
 FAKE404=$!
 sleep 1.2
-OLD=$(http_code 8097)                       # 旧判定用的就是这个：非 000 就算「就绪」
+OLD=$(http_code 8097)                       # the old check used exactly this: anything but 000 counted as 'ready'
 if url_ready "http://127.0.0.1:8097/"; then
-  rec FAIL "半启动 404 被拒" "url_ready 竟然把 404 当成就绪"
+  rec FAIL "half-started 404 rejected" "url_ready actually treated 404 as ready"
 elif [ "$OLD" = "404" ]; then
-  rec PASS "半启动 404 被拒" "旧判定看到 HTTP $OLD 会放行 → 新判定正确拦住（这就是截图那个 404）"
+  rec PASS "half-started 404 rejected" "the old check would let HTTP $OLD through → the new one blocks it (this is the 404 from the screenshot)"
 else
-  rec PASS "半启动 404 被拒" "404 服务被正确拒绝（旧判定 http_code=$OLD）"
+  rec PASS "half-started 404 rejected" "the 404 server is correctly rejected (old check: http_code=$OLD)"
 fi
 kill "$FAKE404" 2>/dev/null
 
-# ③ token 行提取
+# (3) token line extraction
 cat > "$TMPD/fake.log" <<'EOF'
 [dsh-cost-meter] 已加载
 dsh web: http://127.0.0.1:8099/?token=AAA-bbb_CCC123 (LAN: http://192.168.1.5:8099/?token=AAA-bbb_CCC123)
 EOF
 GOT=$(token_from_log "$TMPD/fake.log")
-[ "$GOT" = "http://127.0.0.1:8099/?token=AAA-bbb_CCC123" ] && rec PASS "token 行提取" "取到本机 URL：$GOT" \
-  || rec FAIL "token 行提取" "取到的是「$GOT」"
+[ "$GOT" = "http://127.0.0.1:8099/?token=AAA-bbb_CCC123" ] && rec PASS "token line extraction" "got the local URL: $GOT" \
+  || rec FAIL "token line extraction" "got '$GOT' instead"
 
-# ④ 启动互斥：连点两次不能同时启动两个实例（两个实例抢 credentials 写锁必崩一个）
-# 注意：必须用**真正的另一个进程**来当持锁者 —— subshell 里 $$ 仍是父进程 pid，
-# 会被「同进程幂等」判定当成自己人，测不出互斥。真实的连点就是两个 bash 进程。
+# (4) Boot mutual exclusion: two rapid taps must not start two instances (they fight over the credentials write lock and one crashes)
+# Note: the lock holder must be a **truly separate process** — inside a subshell $$ is still the parent pid,
+# so the same-process idempotence rule counts it as self and exclusion cannot be tested. Real double taps are two bash processes.
 LOCK_BLOCKED=0; LOCK_OK=0
-# 2026-09-27 改成**握手**而不是固定 sleep 3：
-#   原来 holder 只持锁 3 秒，而这台机器在跑重活时（备份/沙箱）sleep 1 会被拉长到 3 秒以上 →
-#   等测试者去抢时 holder 已经释放 → 报"没挡住"的**假失败**（实测遇到过一次）。
-#   现在：holder 拿到锁后写 ready 文件，一直等到测试者写 go 文件才释放。
+# 2026-09-27 changed to a **handshake** instead of a fixed sleep 3:
+#   the holder used to hold the lock only 3s, but on this machine under heavy work (backup/sandbox) a sleep 1 stretches past 3s →
+#   by the time the tester grabbed it the holder had already released → a **false failure** saying "not blocked" (hit once for real).
+#   Now: the holder writes a ready file once it holds the lock and releases it only after the tester writes the go file.
 LOCK_READY="$TMPDIR/lock-ready.$$"; LOCK_GO="$TMPDIR/lock-go.$$"; rm -f "$LOCK_READY" "$LOCK_GO"
 bash -c '. "$HOME/.local/share/dsh-widgets/common.sh"; boot_lock_acquire && : > "'"$LOCK_READY"'"; for _ in $(seq 1 100); do [ -f "'"$LOCK_GO"'" ] && break; sleep 0.2; done; boot_lock_release' &
 HOLDER=$!
@@ -179,132 +188,132 @@ if [ "$LOCK_BLOCKED" = 1 ]; then
   wait $HOLDER 2>/dev/null
   boot_lock_acquire && LOCK_OK=1
   boot_lock_release
-  [ "$LOCK_OK" = 1 ] && rec PASS "启动互斥锁" "第二个启动被挡住；持锁者退出后可再取" \
-    || rec FAIL "启动互斥锁" "持锁者退出后仍取不到锁（陈旧锁没被清）"
+  [ "$LOCK_OK" = 1 ] && rec PASS "boot exclusion lock" "the second boot was blocked; the lock is free again once the holder exits" \
+    || rec FAIL "boot exclusion lock" "cannot take the lock after the holder exits (the stale lock was not cleared)"
 else
-  rec FAIL "启动互斥锁" "第二个启动没被挡住 → 连点两次会拉起两个实例"
+  rec FAIL "boot exclusion lock" "the second boot was not blocked → two rapid taps pull up two instances"
 fi
-# 幂等：同一进程（组件先取锁 + 公共启动函数再取锁）不能自己挡自己
+# Idempotence: one process (widget takes the lock, then the shared boot function takes it) must not block itself
 A=$( boot_lock_acquire; echo $? ); B=$( boot_lock_acquire; echo $? )
 boot_lock_release
-[ "$A" = "0" ] && [ "$B" = "0" ] && rec PASS "启动锁幂等" "同进程重复取锁都成功（不会自己挡自己）" \
-  || rec FAIL "启动锁幂等" "同进程第二次取锁失败（$A/$B）→ 组件会在自己内部死锁"
-rm -rf "$BOOT_LOCK_DIR" 2>/dev/null   # 兜底：测试不留锁，否则后面 L5 会起不来
+[ "$A" = "0" ] && [ "$B" = "0" ] && rec PASS "boot lock idempotence" "repeated takes in the same process all succeed (it never blocks itself)" \
+  || rec FAIL "boot lock idempotence" "the second take in the same process failed ($A/$B) → a widget would deadlock against itself"
+rm -rf "$BOOT_LOCK_DIR" 2>/dev/null   # safety net: the test leaves no lock behind, or L5 cannot start later
 
-# ⑤ 孤儿 credentials 锁：没有实例在跑时必须清掉（-9 之后不清就永远启动不了）
+# (5) Orphan credentials lock: it must be cleared when no instance runs (uncleared after -9, booting is broken forever)
 printf '999999\n' > "$TMPD/cred.lock"
 R1=$( ( dsh_alive() { return 1; }; clear_orphan_cred_lock "$TMPD/cred.lock"; echo $? ) )
 GONE=0; [ -f "$TMPD/cred.lock" ] || GONE=1
 printf '999999\n' > "$TMPD/cred.lock"
 R2=$( ( dsh_alive() { return 0; }; clear_orphan_cred_lock "$TMPD/cred.lock"; echo $? ) )
 if [ "$R1" = "0" ] && [ "$GONE" = "1" ] && [ "$R2" = "1" ]; then
-  rec PASS "孤儿 credentials 锁" "无实例时删除；有实例时不动（-9 之后不再永久卡启动）"
+  rec PASS "orphan credentials lock" "removed with no instance, left alone with one (no permanent boot hang after -9)"
 else
-  rec FAIL "孤儿 credentials 锁" "行为不对（无实例=$R1 删掉了=$GONE 有实例=$R2）"
+  rec FAIL "orphan credentials lock" "wrong behaviour (no instance=$R1 removed=$GONE with instance=$R2)"
 fi
 
-# ⑥ 进程已经死了要立刻报错，不要傻等
+# (6) A dead process must fail at once instead of waiting pointlessly
 S=$(date +%s)
 wait_dsh_ready 20 "$TMPD/fake.log" 999999 >/dev/null 2>&1; RC=$?
 D=$(( $(date +%s) - S ))
-if [ "$RC" = "2" ] && [ "$D" -lt 5 ]; then rec PASS "进程中途退出即报错" "pid 不存在时 ${D}s 内返回「已退出」"
-else rec FAIL "进程中途退出即报错" "返回 $RC，耗时 ${D}s（应为 2 且很快）"; fi
+if [ "$RC" = "2" ] && [ "$D" -lt 5 ]; then rec PASS "exited process fails fast" "returns 'already exited' within ${D}s when the pid is gone"
+else rec FAIL "exited process fails fast" "returned $RC after ${D}s (expected 2, and quickly)"; fi
 
-# ⑦ dsh_pids 不能匹配到自己这条命令行（以前踩过：pgrep 自杀）
+# (7) dsh_pids must not match its own command line (hit before: pgrep killing itself)
 SELFHIT=$(dsh_pids | grep -c "^$$\$" || true)
-[ "$SELFHIT" = "0" ] && rec PASS "dsh_pids 不自匹配" "不会把调用者自己算成 dsh 进程" || rec FAIL "dsh_pids 不自匹配" "匹配到了自己"
+[ "$SELFHIT" = "0" ] && rec PASS "dsh_pids does not self-match" "never counts the caller itself as a dsh process" || rec FAIL "dsh_pids does not self-match" "it matched itself"
 
-# ⑧ 重启类组件必须**先取锁、后动手**：否则连点两次时，第二次的第①步会把第一次
-#    刚拉起的新实例 -9 掉，第一次就报"进程在启动过程中退出了"（组件 4 实测就是这么坏的）
+# (8) Restart-style widgets must **take the lock first, act second**: on a double tap the second run's step 1 otherwise -9s
+#    the fresh instance the first run just started, and the first run reports "process exited during startup" (exactly how widget 4 broke)
 ORDER_OK=1
-for w in 2_关闭DSH 4_软重启DSH 6_硬重启DSH; do
+for w in 2_shutdown-dsh 4_soft-restart-dsh 6_hard-restart-dsh; do
   LK=$(grep -n 'boot_lock_acquire' "$T/$w.sh" | head -1 | cut -d: -f1)
   KW=$(grep -n 'kill_wait' "$T/$w.sh" | head -1 | cut -d: -f1)
   if [ -z "$LK" ] || [ -z "$KW" ] || [ "$LK" -gt "$KW" ]; then
-    ORDER_OK=0; line "     ⚠ $w：取锁在第 ${LK:-无} 行、动手在第 ${KW:-无} 行"
+    ORDER_OK=0; line "     ⚠ $w: lock at line ${LK:-none}, action at line ${KW:-none}"
   fi
 done
-[ "$ORDER_OK" = 1 ] && rec PASS "取锁早于动手" "组件 2/4/6 都是先取锁再杀进程（连点不会再自杀）" \
-  || rec FAIL "取锁早于动手" "有组件先动手后取锁 → 连点会杀掉自己刚起的实例"
+[ "$ORDER_OK" = 1 ] && rec PASS "lock before action" "widgets 2/4/6 all take the lock before killing (a double tap no longer kills itself)" \
+  || rec FAIL "lock before action" "some widget acts before locking → a double tap kills the instance it just started"
 
-# ⑨ 关浏览器/关 Termux 必须说真话：termux-am 不支持 force-stop，没 adb 就该说做不到
-# 忽略注释行（grep -n 输出是 "行号:内容"，注释行长这样 → 108:# …）
-BADFS=$(grep -n 'am force-stop' "$T/2_关闭DSH.sh" 2>/dev/null | grep -v ':[[:space:]]*#' | grep -v 'adb shell am force-stop' | wc -l)
+# (9) Closing the browser/Termux must tell the truth: termux-am has no force-stop, so without adb it must admit it cannot
+# Skip comment lines (grep -n prints "lineno:content", and a comment line looks like → 108:# …)
+BADFS=$(grep -n 'am force-stop' "$T/2_shutdown-dsh.sh" 2>/dev/null | grep -v ':[[:space:]]*#' | grep -v 'adb shell am force-stop' | wc -l)
 if [ "$BADFS" -gt 0 ]; then
-  rec FAIL "关闭动作不撒谎" "组件 2 里还有 $BADFS 处裸 am force-stop（termux-am 不支持 → 没关却报成功）"
+  rec FAIL "close action tells the truth" "widget 2 still has $BADFS bare am force-stop calls (termux-am lacks it → reports success without closing)"
 else
-  rec PASS "关闭动作不撒谎" "组件 2 不裸用 am force-stop；没 adb 时交给 dsh-close-window 借桥按键（2026-09-27 实机验证：1 次返回键即关闭）"
+  rec PASS "close action tells the truth" "widget 2 never calls bare am force-stop; without adb dsh-close-window borrows the bridge to send keys (device-verified 2026-09-27: one Back key closes it)"
 fi
 
-# ⑨·补 关窗口工具必须存在、可自测，且**排在停桥之前**（2026-09-27 用户实测的两个坑）
+# (9b) The window-closing tool must exist, self-test, and come **before stopping the bridge** (two traps the user hit on 2026-09-27)
 if [ -x "$HOME/.local/bin/dsh-close-window" ] && timeout 20 "$HOME/.local/bin/dsh-close-window" --probe >/dev/null 2>&1; then
-  rec PASS "dsh-close-window" "存在且 --probe 可用（不动手就能看清窗口在不在前台）"
-else rec FAIL "dsh-close-window" "缺失或 --probe 不可用 → 没 adb 时关窗口又是假的"; fi
-CW=$(grep -n 'bin/dsh-close-window' "$T/2_关闭DSH.sh" 2>/dev/null | grep -v ':[[:space:]]*#' | head -1 | cut -d: -f1)
-BSTOP=$(grep -n 'droid-sock" stop' "$T/2_关闭DSH.sh" 2>/dev/null | grep -v ':[[:space:]]*#' | head -1 | cut -d: -f1)
+  rec PASS "dsh-close-window" "present and --probe works (shows whether the window is foreground without acting)"
+else rec FAIL "dsh-close-window" "missing or --probe broken → without adb, closing the window is a lie again"; fi
+CW=$(grep -n 'bin/dsh-close-window' "$T/2_shutdown-dsh.sh" 2>/dev/null | grep -v ':[[:space:]]*#' | head -1 | cut -d: -f1)
+BSTOP=$(grep -n 'droid-sock" stop' "$T/2_shutdown-dsh.sh" 2>/dev/null | grep -v ':[[:space:]]*#' | head -1 | cut -d: -f1)
 if [ -n "$CW" ] && [ -n "$BSTOP" ] && [ "$CW" -lt "$BSTOP" ]; then
-  rec PASS "关窗口早于停桥" "第 $CW 行关窗口、第 $BSTOP 行才停桥（顺序反了就没 adb 一定关不掉）"
-else rec FAIL "关窗口早于停桥" "关窗口($CW) 没有排在停桥($BSTOP) 之前 → 桥已停，按键无人可借"; fi
+  rec PASS "window close before bridge stop" "the window closes at line $CW, the bridge stops only at line $BSTOP (reversed, it can never close without adb)"
+else rec FAIL "window close before bridge stop" "window close ($CW) does not come before bridge stop ($BSTOP) → the bridge is down and nobody can send keys"; fi
 
-# ⑩ 组件 8：Wi-Fi 关着时不能只是"停下来抱怨"，必须把 Wi-Fi 页打开并自动接续
-#    （Android 10+ 不允许 App 开 Wi-Fi → 只能这样半自动；--no-ui 可退回纯提示）
-if grep -q 'android.settings.WIFI_SETTINGS' "$T/8_自动开无线调试.sh" && grep -q -- '--no-ui' "$T/8_自动开无线调试.sh"; then
-  rec PASS "组件8 Wi-Fi 半自动" "Wi-Fi 关着时打开设置页并轮询等你打开，之后自动跑完"
+# (10) Widget 8: with Wi-Fi off it must not just "stop and complain" — it must open the Wi-Fi page and carry on automatically
+#    (Android 10+ forbids apps from enabling Wi-Fi → this semi-automatic handoff is the only way; --no-ui falls back to a plain hint)
+if grep -q 'android.settings.WIFI_SETTINGS' "$T/8_enable-wireless-adb.sh" && grep -q -- '--no-ui' "$T/8_enable-wireless-adb.sh"; then
+  rec PASS "widget8 Wi-Fi handoff" "with Wi-Fi off it opens the settings page, polls until you enable it, then finishes on its own"
 else
-  rec FAIL "组件8 Wi-Fi 半自动" "缺 Wi-Fi 交接流程（会像以前那样只报"前置不满足"就退出）"
+  rec FAIL "widget8 Wi-Fi handoff" "missing the Wi-Fi handoff flow (would exit after only reporting "preconditions unmet", as before)"
 fi
 
-# ⑪ 组件 8：**写设置 ≠ adbd 真的起来** —— 置 1 之后必须先回读，没保住就立刻停下并给对原因。
-#    2026-09-26 实跑抓到：旧版会白扫 30000-60999 等 40 秒，最后还把"网络不通"当原因（而当时 online=true）。
-if grep -q '③·校验' "$T/8_自动开无线调试.sh" && grep -q '开关没保住' "$T/8_自动开无线调试.sh"; then
-  rec PASS "组件8 置1后先回读" "没保住就 4s 停下并说明真实原因，不再白扫端口、不再报反的结论"
+# (11) Widget 8: **writing the setting ≠ adbd really starting** — after setting 1 it must read back first, and stop at once with the right cause if it did not stick.
+#    Caught by a 2026-09-26 real run: the old version scanned 30000-60999 for 40 seconds and then blamed "no network" (while online=true).
+if grep -q '③·check:' "$T/8_enable-wireless-adb.sh" && grep -q 'the switch did not stick' "$T/8_enable-wireless-adb.sh"; then
+  rec PASS "widget8 read-back after set" "stops within 4s with the real cause when it does not stick — no more futile port scan, no more inverted conclusion"
 else
-  rec FAIL "组件8 置1后先回读" "缺回读校验（会白扫 3 万端口并给出与事实相反的原因）"
+  rec FAIL "widget8 read-back after set" "missing the read-back check (would scan 30k ports and give a cause opposite to the facts)"
 fi
 
-# ⑫ 撤销安装密码授权：这条是"AI 拿你的锁屏密码装包"的**唯一撤销口**，
-#    必须两头都有入口（小组件 + 控制台 App），而且小组件要真的调 helper 的 revoke。
+# (12) Revoking install-password authorisation: the **only revocation point** for "the AI uses your lock-screen password to install packages",
+#    so both ends need an entry point (widget + console app), and the widget must really call the helper's revoke.
 if [ -x "$HOME_DIR/.local/bin/dsh-auth-pass" ] \
-   && grep -q 'dsh-auth-pass' "$T/9_撤销密码授权.sh" \
-   && grep -q 'revoke' "$T/9_撤销密码授权.sh"; then
-  rec PASS "收回密码使用权(小组件)" "组件 9 走 dsh-auth-pass revoke，并复核文件确实消失"
+   && grep -q 'dsh-auth-pass' "$T/9_revoke-pin.sh" \
+   && grep -q 'revoke' "$T/9_revoke-pin.sh"; then
+  rec PASS "revoke password rights (widget)" "widget 9 goes through dsh-auth-pass revoke and re-checks that the file really disappears"
 else
-  rec FAIL "收回密码使用权(小组件)" "缺 helper 或组件 9 没接上 revoke"
+  rec FAIL "revoke password rights (widget)" "helper missing, or widget 9 is not wired to revoke"
 fi
-#    用户 2026-09-26 要求：授权要是**开关**而不是按钮 → 检查点改到 MainActivity 里那一行
+#    User request 2026-09-26: authorisation must be a **switch**, not a button → the check point moved to that line in MainActivity
 if grep -q 'dsh-auth-pass revoke' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" 2>/dev/null \
    && grep -q 'dsh-auth-pass status' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" 2>/dev/null \
    && grep -q 'authSwitch' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" 2>/dev/null \
-   && grep -q '密码使用权' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" 2>/dev/null; then
-  rec PASS "密码使用权开关(控制台)" "维护类里是 Switch：开=AI 可动用你的密码过验证，关=立刻收回（语义不只装包）"
+   && grep -qE '密码使用权|Password access' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" "$HOME_DIR/dsh-console/src/io/dsh/console/L.java" 2>/dev/null; then
+  rec PASS "password-rights switch (console)" "a Switch in the maintenance class: on = the AI may use your password to pass verification, off = revoked at once (not just for installs)"
 else
-  rec FAIL "密码使用权开关(控制台)" "控制台里没有把"密码使用权"做成开关（或没接上 helper）"
+  rec FAIL "password-rights switch (console)" "the console does not make "password rights" a switch (or is not wired to the helper)"
 fi
 
-# ⑬ DSH 页面里那个 task 插件（dsh-mobile-local）也要跟上：
-#    分类、桥/adb 分开、密码使用权开关、以及 tasksd 的 /auth 三件套
+# (13) The task plugin in the DSH page (dsh-mobile-local) must keep up too:
+#    categories, bridge/adb split apart, the password-rights switch, and tasksd's three /auth pieces
 PLUG="$HOME_DIR/.dsh/profiles/web/local/dsh-mobile-local/client.js"
 if grep -q 'CATS' "$PLUG" 2>/dev/null && grep -q 'mb-auth' "$PLUG" 2>/dev/null \
    && grep -q 'bridge_wake' "$PLUG" 2>/dev/null && grep -q 'dsh-auth-pass' "$HOME_DIR/.local/bin/dsh-tasksd" 2>/dev/null; then
-  rec PASS "task 插件(页面)更新" "分类 + 桥/adb 分开 + 密码使用权开关；tasksd 也接了 /auth"
+  rec PASS "task plugin (page) updated" "categories + bridge/adb split + password-rights switch; tasksd serves /auth too"
 else
-  rec FAIL "task 插件(页面)更新" "插件或 tasksd 没跟上（分类/开关/授权端点缺一）"
+  rec FAIL "task plugin (page) updated" "the plugin or tasksd lags behind (one of categories/switch/auth endpoint is missing)"
 fi
-if grep -q "'9_撤销密码授权'" "$HOME_DIR/.local/bin/dsh-tasksd" 2>/dev/null \
+if grep -q "'9_revoke-pin'" "$HOME_DIR/.local/bin/dsh-tasksd" 2>/dev/null \
    && grep -q 'VIRTUAL' "$HOME_DIR/.local/bin/dsh-tasksd" 2>/dev/null; then
-  rec PASS "tasksd 白名单+虚拟任务" "9_撤销密码授权 与 bridge_wake/bridge_status 都在白名单里"
+  rec PASS "tasksd whitelist+virtual tasks" "9_revoke-pin alongside bridge_wake/bridge_status are both whitelisted"
 else
-  rec FAIL "tasksd 白名单+虚拟任务" "白名单没跟上（缺 9_ 或桥的虚拟任务）"
+  rec FAIL "tasksd whitelist+virtual tasks" "the whitelist lags behind (missing 9_ or the bridge's virtual tasks)"
 fi
 
-# ⑭ 客户端 bundle 必须拼得出来（2026-09-26 真踩：在 profile 里跑 pnpm install 会剪掉
-#    运行时软链的 @deepseek-ai/dsh-base / dsh-web-app → 页面报 "Failed to load plugins"）
+# (14) The client bundle must resolve (hit for real 2026-09-26: running pnpm install inside the profile prunes
+#    the runtime symlinks @deepseek-ai/dsh-base / dsh-web-app → the page reports "Failed to load plugins")
 if "$HOME_DIR/.local/bin/dsh-relink-bundles" --check >/dev/null 2>&1; then
-  rec PASS "运行时 bundle 软链" "@deepseek-ai/dsh-base / dsh-web-app 都在（pnpm install 后要 dsh-relink-bundles 补链）"
+  rec PASS "runtime bundle symlinks" "@deepseek-ai/dsh-base / dsh-web-app are both present (after pnpm install, dsh-relink-bundles restores the links)"
 else
-  rec FAIL "运行时 bundle 软链" "缺链 → 页面会报 Failed to load plugins（跑 dsh-relink-bundles）"
+  rec FAIL "runtime bundle symlinks" "links missing → the page reports Failed to load plugins (run dsh-relink-bundles)"
 fi
-# 只在本机 DSH 活着时验一次"真的能取到 bundle"（取不到就说明路由/包有问题）
+# Verify "the bundle really fetches" once, only while the local DSH is alive (a failure means the routes/package are broken)
 if timeout 6 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' 2>/dev/null; then
   TOK=$(grep -ao 'token=[A-Za-z0-9_-]*' "$HOME_DIR/.dsh-restart.log" 2>/dev/null | tail -1 | cut -d= -f2)
   if [ -n "$TOK" ]; then
@@ -313,114 +322,114 @@ if timeout 6 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' 2>/dev/null; then
     U1=$(grep -oE '/plugins/\?\?[^"'"'"'\\]+' "$TMPLOG.page" 2>/dev/null | sed 's/&amp;/\&/g' | sort -u | head -1)
     if [ -n "$U1" ]; then
       C=$(curl -s -b "$CJ" -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080$U1" 2>/dev/null)
-      [ "$C" = "200" ] && rec PASS "客户端 bundle 真能取" "本机 DSH 的 /plugins/??… 返回 200" \
-                       || rec FAIL "客户端 bundle 真能取" "返回 $C（页面会显示 Failed to load plugins）"
+      [ "$C" = "200" ] && rec PASS "client bundle really fetches" "the local DSH's /plugins/??… returns 200" \
+                       || rec FAIL "client bundle really fetches" "returned $C (the page will show Failed to load plugins)"
     else
-      rec SKIP "客户端 bundle 真能取" "页面里没解析出 /plugins/ URL（DSH 可能刚起）"
+      rec SKIP "client bundle really fetches" "no /plugins/ URL parsed from the page (DSH may have just started)"
     fi
     rm -f "$CJ" "$TMPLOG.page"
   else
-    rec SKIP "客户端 bundle 真能取" "读不到本机 token"
+    rec SKIP "client bundle really fetches" "cannot read the local token"
   fi
 else
-  rec SKIP "客户端 bundle 真能取" "本机 8080 没在跑"
+  rec SKIP "client bundle really fetches" "the local 8080 is not running"
 fi
 
-# ⑮ 状态回传不能被"从头切"：App 侧只截任务输出（看尾部），状态 JSON 必须整包（看头部）。
-#    实测踩到：状态包 6463 字节 > 旧的 4000 上限 → 头被切掉 → App 显示「状态解析失败」。
+# (15) Status pushback must not be "cut from the head": the app truncates only task output (tail); status JSON must stay whole (head).
+#    Hit for real: a 6463-byte status payload > the old 4000 cap → the head was cut → the app showed 'status parse failed'.
 if grep -q 'dsh-status-pub --json --brief' "$HOME_DIR/dsh-console/src/io/dsh/console/TermuxRunner.java" 2>/dev/null \
    && grep -q 'isStatus ? 200000 : 4000' "$HOME_DIR/dsh-console/src/io/dsh/console/TaskResultReceiver.java" 2>/dev/null; then
   BRIEF=$(~/.local/bin/dsh-status-pub --json --brief 2>/dev/null | wc -c | tr -d ' ')
   FULL=$(~/.local/bin/dsh-status-pub --json 2>/dev/null | wc -c | tr -d ' ')
   if [ "${BRIEF:-99999}" -lt 4000 ]; then
-    rec PASS "状态回传不截断" "--brief ${BRIEF}B（完整 ${FULL}B）：状态整包不切头，任务输出才从尾部截"
+    rec PASS "status pushback not truncated" "--brief ${BRIEF}B (full ${FULL}B): status stays whole, only task output is tail-truncated"
   else
-    rec FAIL "状态回传不截断" "--brief ${BRIEF}B 已超 4000，会被截断（要给它瘦身）"
+    rec FAIL "status pushback not truncated" "--brief ${BRIEF}B already exceeds 4000 and will be truncated (needs slimming)"
   fi
 else
-  rec FAIL "状态回传不截断" "App 侧没有区分 status/任务的截断规则（状态 JSON 会被切头）"
+  rec FAIL "status pushback not truncated" "the app side does not distinguish status/task truncation rules (status JSON gets its head cut)"
 fi
 
-# ── L4：真实执行 ──
-line "【L4】真实执行（安全可逆的）"
+# ── L4: real runs ──
+line "[L4] Real runs (safe and reversible)"
 
-# 撤销安装密码授权：**只动沙箱路径**，真授权文件全程不碰（跑完还要复核它没被动过）
+# Revoke install-password authorisation: **sandbox paths only**; the real authorisation file is never touched (and is re-checked afterwards)
 if [ -f "$HOME_DIR/.dsh-auth-pass" ]; then HAD_REAL_PASS=1; else HAD_REAL_PASS=0; fi
 TMPPASS="${TMPDIR:-$PREFIX/tmp}/dsh-pass-selftest.$$"
 if printf '123456' > "$TMPPASS" && chmod 600 "$TMPPASS"; then
   OUTR=$(DSH_AUTH_PASS_FILE="$TMPPASS" "$HOME_DIR/.local/bin/dsh-auth-pass" revoke 2>&1); RCR=$?
   if [ "$RCR" = 0 ] && [ ! -e "$TMPPASS" ]; then
-    rec PASS "收回密码使用权(真跑)" "沙箱文件先覆写后删除，退出 0；$OUTR" 
+    rec PASS "revoke password rights (real run)" "the sandbox file is overwritten then removed, exit 0; $OUTR" 
   else
-    rec FAIL "收回密码使用权(真跑)" "退出 $RCR / 文件仍在：$OUTR"
+    rec FAIL "revoke password rights (real run)" "exit $RCR / the file is still there: $OUTR"
   fi
 else
-  rec FAIL "收回密码使用权(真跑)" "造不出沙箱文件 $TMPPASS"
+  rec FAIL "revoke password rights (real run)" "cannot create the sandbox file $TMPPASS"
 fi
 if [ "$HAD_REAL_PASS" = 1 ] && [ ! -f "$HOME_DIR/.dsh-auth-pass" ]; then
-  rec FAIL "真授权未被误删" "自检把真授权文件删了（这正是最不能出的事）"
+  rec FAIL "real authorisation untouched" "the selftest deleted the real authorisation file (the one thing that must never happen)"
 elif [ "$HAD_REAL_PASS" = 1 ]; then
-  rec PASS "真授权未被误删" "沙箱测试只动临时路径，真授权仍在且权限 $(stat -c '%a' "$HOME_DIR/.dsh-auth-pass" 2>/dev/null)"
+  rec PASS "real authorisation untouched" "the sandbox test used temp paths only; the real authorisation is intact with mode $(stat -c '%a' "$HOME_DIR/.dsh-auth-pass" 2>/dev/null)"
 else
-  rec SKIP "真授权未被误删" "当前没有授权文件（未授权状态）"
+  rec SKIP "real authorisation untouched" "there is no authorisation file right now (not authorised)"
 fi
-if timeout 180 bash "$T/3_备份DSH.sh" > "$TMPLOG" 2>&1 && grep -q '归档可读' "$TMPLOG"; then
-  rec PASS "3_备份DSH.sh" "真跑通过：$(grep -oE '共 [0-9]+ 份[^，]*' "$TMPLOG" | head -1)"
-else rec FAIL "3_备份DSH.sh" "真跑失败（见 $TMPLOG）"; fi
-if timeout 180 bash "$T/5_清理DSH.sh" > "$TMPLOG" 2>&1; then
-  rec PASS "5_清理DSH.sh" "真跑通过：$(grep -oE 'Download/dsh：[0-9]+MB → [0-9]+MB' "$TMPLOG" | head -1)"
-else rec FAIL "5_清理DSH.sh" "真跑失败"; fi
-if timeout 120 bash "$T/7_重连AI通道.sh" > "$TMPLOG" 2>&1 && grep -q 'DSH Web : 在跑' "$TMPLOG"; then
-  rec PASS "7_重连AI通道.sh" "真跑通过：$(grep -oE 'adb     : .*' "$TMPLOG" | head -1 | cut -c1-40)"
-else rec FAIL "7_重连AI通道.sh" "真跑失败"; fi
+if timeout 180 bash "$T/3_backup-dsh.sh" > "$TMPLOG" 2>&1 && grep -q 'Archive readable' "$TMPLOG"; then
+  rec PASS "3_backup-dsh.sh" "real run passed: $(grep -oE '[0-9]+ archives? kept[^,]*' "$TMPLOG" | head -1)"
+else rec FAIL "3_backup-dsh.sh" "real run failed (see $TMPLOG)"; fi
+if timeout 180 bash "$T/5_cleanup-dsh.sh" > "$TMPLOG" 2>&1; then
+  rec PASS "5_cleanup-dsh.sh" "real run passed: $(grep -oE 'Download/dsh: [0-9]+MB → [0-9]+MB' "$TMPLOG" | head -1)"
+else rec FAIL "5_cleanup-dsh.sh" "real run failed"; fi
+if timeout 120 bash "$T/7_reconnect-ai.sh" > "$TMPLOG" 2>&1 && grep -q 'DSH Web : running' "$TMPLOG"; then
+  rec PASS "7_reconnect-ai.sh" "real run passed: $(grep -oE 'adb     : .*' "$TMPLOG" | head -1 | cut -c1-40)"
+else rec FAIL "7_reconnect-ai.sh" "real run failed"; fi
 if [ "$BRIDGE_OK" = 0 ]; then
-  rec SKIP "8_自动开无线调试.sh" "依赖桥通道，前置未满足（非组件问题）"
+  rec SKIP "8_enable-wireless-adb.sh" "depends on the bridge channel; preconditions unmet (not a widget problem)"
 else
-  timeout 150 bash "$T/8_自动开无线调试.sh" > "$TMPLOG" 2>&1; RC8=$?
+  timeout 150 bash "$T/8_enable-wireless-adb.sh" > "$TMPLOG" 2>&1; RC8=$?
   case "$RC8" in
-    0) if grep -qE '开关已置 1|已是开启|已连上' "$TMPLOG"; then rec PASS "8_自动开无线调试.sh" "真跑通过（幂等）"
-       else rec FAIL "8_自动开无线调试.sh" "退出 0 但没看到开关生效（见 $TMPLOG）"; fi ;;
-    3) # 退出 3 = "未执行：前置不满足"。**按脚本自己的措辞区分是哪一种前置**，
-       # 别一概说成"Wi-Fi 关着"——2026-09-26 实测过：网络是通的，只是 adb_wifi 被系统清回 0。
-       if grep -q '开关没保住' "$TMPLOG"; then
-         if grep -q '不是网络问题' "$TMPLOG"; then
-           rec SKIP "8_自动开无线调试.sh" "环境：网络通但开关被系统清回 0 → 需在开发者选项手动开一次（已正确诊断，未白扫端口）"
+    0) if grep -qE 'adb connected|Connected to' "$TMPLOG"; then rec PASS "8_enable-wireless-adb.sh" "real run passed (idempotent)"
+       else rec FAIL "8_enable-wireless-adb.sh" "exit 0 but the switch never took effect (see $TMPLOG)"; fi ;;
+    3) # exit 3 = "not executed: preconditions unmet". **Use the script's own wording to tell which precondition**,
+       # not always "Wi-Fi is off" — verified on 2026-09-26: the network was fine, the system had just reset adb_wifi to 0.
+       if grep -q 'the switch did not stick' "$TMPLOG"; then
+         if grep -q 'not a network problem' "$TMPLOG"; then
+           rec SKIP "8_enable-wireless-adb.sh" "env: the network is fine but the system reset the switch to 0 → enable it manually once in Developer options (correctly diagnosed, no futile scan)"
          else
-           rec SKIP "8_自动开无线调试.sh" "环境：Wi-Fi 没连上网络 → 无线调试清回 0（已正确诊断，未白扫端口）"
+           rec SKIP "8_enable-wireless-adb.sh" "env: Wi-Fi is not on a network → wireless debugging reset to 0 (correctly diagnosed, no futile scan)"
          fi
        else
-         rec SKIP "8_自动开无线调试.sh" "Wi-Fi 关着 → 脚本正确提前停下（前置不满足，非组件问题）"
+         rec SKIP "8_enable-wireless-adb.sh" "Wi-Fi is off → the script correctly stops early (preconditions unmet, not a widget problem)"
        fi ;;
-    1) # 退出 1 时先看它自己的**诊断**：环境不满足算 SKIP，只有诊断不出来才算组件失败
-       if grep -q '没有真正连上网络' "$TMPLOG"; then
-         rec SKIP "8_自动开无线调试.sh" "环境：Wi-Fi 开着但没连上网络 → 系统把无线调试清回 0（已正确诊断）"
-       elif grep -q '框架没被真正启动' "$TMPLOG"; then
-         rec SKIP "8_自动开无线调试.sh" "环境：开关=1 但框架未启动，需在开发者选项手动开一次（已正确诊断）"
-       else rec FAIL "8_自动开无线调试.sh" "退出 1 且没能给出诊断（见 $TMPLOG）"; fi ;;
-    *) rec FAIL "8_自动开无线调试.sh" "退出 $RC8（见 $TMPLOG）" ;;
+    1) # on exit 1 read its own **diagnosis** first: an unmet environment counts as SKIP; only a missing diagnosis is a widget failure
+       if grep -q 'no real network connection' "$TMPLOG"; then
+         rec SKIP "8_enable-wireless-adb.sh" "env: Wi-Fi is on but not on a network → the system reset wireless debugging to 0 (correctly diagnosed)"
+       elif grep -q 'framework was not really started' "$TMPLOG"; then
+         rec SKIP "8_enable-wireless-adb.sh" "env: switch=1 but the framework never started; enable it manually once in Developer options (correctly diagnosed)"
+       else rec FAIL "8_enable-wireless-adb.sh" "exit 1 with no diagnosis given (see $TMPLOG)"; fi ;;
+    *) rec FAIL "8_enable-wireless-adb.sh" "exit $RC8 (see $TMPLOG)" ;;
   esac
 fi
 
-# 桥：能力探测 → 软停 → 广播唤醒 往返，并实测「软停会不会自己回来」
+# Bridge: capability probe → soft stop → broadcast wake round trip, plus a live check of 'does a soft stop come back by itself'
 if [ "$BRIDGE_OK" = 0 ]; then
-  rec SKIP "桥软停/唤醒" "依赖桥通道，前置未满足"
+  rec SKIP "bridge soft stop/wake" "depends on the bridge channel; preconditions unmet"
 else
   CAPS=$(timeout 12 "$HOME_DIR/.local/bin/droid-sock" caps 2>/dev/null || true)
   if printf '%s' "$CAPS" | grep -q '"stop_is_durable"'; then
-    # ── v1.8 起的**默认路径**（组件 2 默认走这条）：软停必须不自恢复，且唤醒能立刻回来 ──
-    rec PASS "桥能力探测" "v1.8：$(printf '%s' "$CAPS" | grep -oE '"ver": *"[^"]*"') 软停即持久（不再自恢复）+ sleep 仍可用"
+    # ── **default path** since v1.8 (widget 2 takes it by default): a soft stop must not self-recover and a wake must return at once ──
+    rec PASS "bridge capability probe" "v1.8: $(printf '%s' "$CAPS" | grep -oE '"ver": *"[^"]*"') soft stop is durable (no self-recovery) + sleep is still available"
     if timeout 15 "$HOME_DIR/.local/bin/droid-sock" stop >/dev/null 2>&1; then
       sleep 2
       if (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null; then
-        rec FAIL "v1.8 软停持久" "stop 后端口仍开"
+        rec FAIL "v1.8 soft stop durable" "the port is still open after stop"
       else
         CAME=0
         for i in $(seq 1 16); do sleep 1; (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null && { CAME=1; break; }; done
-        [ "$CAME" = 0 ] && rec PASS "v1.8 软停持久" "stop 后 8788 关闭，18 秒内不自恢复（旧版 14 秒就自己回来）" \
-                        || rec FAIL "v1.8 软停持久" "stop 后 ${i}s 又自己开了"
-        # 窗口给到 45 秒：App 进程若被系统回收，广播要把它冷启动起来，实测能到 20~40 秒。
-        # 2026-09-26 晚碰到过一次 45 秒没回来（同一版本上一轮是通过的）→ 补一发广播再等 45 秒，
-        # 并把"补发后才回来"如实写进结论，而不是直接判失败、也不是假装一次就成功。
+        [ "$CAME" = 0 ] && rec PASS "v1.8 soft stop durable" "8788 is closed after stop and does not self-recover within 18s (old versions came back in 14s)" \
+                        || rec FAIL "v1.8 soft stop durable" "it opened itself again ${i}s after stop"
+        # The window is 45s: if the system reclaimed the app process, the broadcast must cold-start it, measured at 20-40s.
+        # Late on 2026-09-26 it once did not return within 45s (the same version had passed the round before) → send one more broadcast and wait another 45s,
+        # and state "came back only after the extra broadcast" honestly, instead of failing it or pretending one try was enough.
         T0W=$(date +%s)
         timeout 20 "$HOME_DIR/.local/bin/droid-sock" wake >/dev/null 2>&1
         BACK=0
@@ -438,11 +447,11 @@ else
           done
         fi
         if [ "$BACK" != 0 ] && [ "$RETRY" = 0 ]; then
-          rec PASS "v1.8 唤醒恢复" "广播唤醒后 ${BACK}s 端口恢复（进程还活着，不用重新授权）"
+          rec PASS "v1.8 wake recovery" "the port is back ${BACK}s after the broadcast wake (the process is alive, no re-authorisation needed)"
         elif [ "$BACK" != 0 ]; then
-          rec PASS "v1.8 唤醒恢复" "首发 45s 没回，补一发后 ${BACK}s 恢复（vivo 冷启动慢，属已知抖动）"
+          rec PASS "v1.8 wake recovery" "the first broadcast did not bring it back within 45s; the extra one recovered it at ${BACK}s (slow vivo cold start, a known jitter)"
         else
-          rec FAIL "v1.8 唤醒恢复" "两发广播共 90 秒没唤回来"
+          rec FAIL "v1.8 wake recovery" "two broadcasts and 90 seconds still did not wake it"
         fi
         PS=""
         for i in $(seq 1 10); do
@@ -451,75 +460,75 @@ else
           sleep 1
         done
         case "$PS" in
-          *false*) rec PASS "paused 标记正确" "唤醒后 paused 已清回 false（下次重绑不会被静默）" ;;
-          *) rec FAIL "paused 标记正确" "唤醒后 paused 仍是 true（$PS）" ;;
+          *false*) rec PASS "paused flag correct" "paused is back to false after the wake (the next rebind will not be silenced)" ;;
+          *) rec FAIL "paused flag correct" "paused is still true after the wake ($PS)" ;;
         esac
       fi
     else
-      rec FAIL "v1.8 软停持久" "droid-sock stop 无响应"
+      rec FAIL "v1.8 soft stop durable" "droid-sock stop does not respond"
     fi
   elif printf '%s' "$CAPS" | grep -q '"sleep"'; then
-    rec PASS "桥能力探测" "v1.7+ 支持 sleep 真停 + 带 token 唤醒可重新授权"
-    # v1.7 路径：真停必须**不自恢复**（旧版软停实测 14s 就自己回来了）
+    rec PASS "bridge capability probe" "v1.7+ supports a real sleep stop + a token-bearing wake can re-authorise"
+    # v1.7 path: a real stop must **not** self-recover (the old soft stop came back in 14s in testing)
     if timeout 20 "$HOME_DIR/.local/bin/droid-sock" sleep >/dev/null 2>&1; then
       sleep 2
       if (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null; then
-        rec FAIL "v1.7 真停" "sleep 后端口仍开"
+        rec FAIL "v1.7 real stop" "the port is still open after sleep"
       else
         CAME=0
         for i in $(seq 1 8); do sleep 1; (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null && { CAME=1; break; }; done
-        [ "$CAME" = 0 ] && rec PASS "v1.7 真停" "sleep 后 8788 关闭，16 秒内不自恢复（旧版软停会自己回来）" \
-                        || rec FAIL "v1.7 真停" "sleep 后不久就自己回来了"
-        # 安全边界：错误 token 的广播不许把它拉起来
+        [ "$CAME" = 0 ] && rec PASS "v1.7 real stop" "8788 is closed after sleep and does not self-recover within 16s (the old soft stop came back)" \
+                        || rec FAIL "v1.7 real stop" "it came back by itself shortly after sleep"
+        # Security boundary: a broadcast with a wrong token must not bring it up
         am broadcast -a io.dsh.bridge.WAKE -n io.dsh.bridge/.WakeReceiver --es token 000000000000 >/dev/null 2>&1
         BAD=0
         for i in $(seq 1 8); do sleep 1; (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null && { BAD=1; break; }; done
-        [ "$BAD" = 0 ] && rec PASS "唤醒鉴权" "错误 token 的 WAKE 唤不醒（任何 App 都拉不起来）" \
-                       || rec FAIL "唤醒鉴权" "错误 token 也把它唤醒了"
-        # 恢复：带对 token 的广播应自动重新授权无障碍并恢复监听
+        [ "$BAD" = 0 ] && rec PASS "wake authentication" "a WAKE with a wrong token cannot wake it (no app can pull it up)" \
+                       || rec FAIL "wake authentication" "a wrong token woke it too"
+        # Recovery: a broadcast with the right token should re-authorise accessibility and resume listening on its own
         timeout 20 "$HOME_DIR/.local/bin/droid-sock" wake >/dev/null 2>&1
         BACK=0
         for i in $(seq 1 20); do sleep 1; (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null && { BACK=1; break; }; done
-        [ "$BACK" = 1 ] && rec PASS "自动重新授权" "带 token 的 WAKE 在 ${i}s 内自行恢复（全程不碰屏幕）" \
-                        || rec FAIL "自动重新授权" "唤不回来（需手动开无障碍）"
+        [ "$BACK" = 1 ] && rec PASS "automatic re-authorisation" "a token-bearing WAKE recovers by itself within ${i}s (never touching the screen)" \
+                        || rec FAIL "automatic re-authorisation" "cannot wake it back (accessibility must be enabled by hand)"
       fi
     else
-      rec FAIL "v1.7 真停" "droid-sock sleep 无响应"
+      rec FAIL "v1.7 real stop" "droid-sock sleep does not respond"
     fi
   else
-    rec PASS "桥能力探测" "当前是旧版桥：只能软停（关端口），系统重绑无障碍时会自己回来 → 装 v1.7 可根治"
+    rec PASS "bridge capability probe" "this is an old bridge: soft stop only (closes the port) and it returns whenever the system rebinds accessibility → installing v1.7 fixes it properly"
     if timeout 15 "$HOME_DIR/.local/bin/droid-sock" stop >/dev/null 2>&1; then
       sleep 1
       if (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null; then
-        rec FAIL "桥软停/唤醒" "软停后端口仍开"
+        rec FAIL "bridge soft stop/wake" "the port is still open after the soft stop"
       else
-        # 实测软停后的自恢复：15 秒内端口自己回来 = 用户说的「关了它自己又开」
+        # Measured self-recovery after a soft stop: the port returns within 15s = the user's 'I closed it and it reopened itself'
         CAME=0
         for i in $(seq 1 15); do sleep 1; (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null && { CAME=1; break; }; done
         if [ "$CAME" = 1 ]; then
-          rec PASS "软停自恢复实测" "软停后端口在 ${i}s 自己回来了 —— 实测坐实「关了又自己开」（v1.7 sleep 可根治）"
+          rec PASS "soft stop self-recovery" "the port came back by itself ${i}s after the soft stop — measured proof of 'closed it and it reopened' (v1.7 sleep fixes it)"
         else
-          rec PASS "软停自恢复实测" "15 秒内没有自己回来（自恢复取决于系统何时重绑无障碍，不是每次都触发）"
+          rec PASS "soft stop self-recovery" "it did not come back within 15s (self-recovery depends on when the system rebinds accessibility; it does not always trigger)"
         fi
         am broadcast -a io.dsh.bridge.WAKE -n io.dsh.bridge/.WakeReceiver \
           --es token "$(cat "$HOME_DIR/.dsh-bridge-token" 2>/dev/null)" >/dev/null 2>&1
         sleep 2
-        if (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null; then rec PASS "桥软停/唤醒" "软停→广播唤醒 往返成功"
-        else rec FAIL "桥软停/唤醒" "唤醒失败（需打开 App 或装 v1.7）"; fi
+        if (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null; then rec PASS "bridge soft stop/wake" "soft stop → broadcast wake round trip succeeded"
+        else rec FAIL "bridge soft stop/wake" "wake failed (open the app or install v1.7)"; fi
       fi
-    else rec FAIL "桥软停/唤醒" "droid-sock stop 无响应"; fi
+    else rec FAIL "bridge soft stop/wake" "droid-sock stop does not respond"; fi
   fi
 fi
 
-# ── L5：组件 1 冷启动沙箱 + 半启动取证 ──
-line "【L5】组件 1 冷启动（8099 沙箱）+「端口先开、路由后挂」取证"
+# ── L5: widget 1 cold-start sandbox + half-start evidence ──
+line "[L5] Widget 1 cold start (8099 sandbox) + 'port opens first, routes mount later' evidence"
 cp -f "$HOME_DIR/.dsh-restart.log" "$HOME_DIR/.smoke/restart.log.save" 2>/dev/null
-cp -f "$HOME_DIR/.dsh-url" "$HOME_DIR/.smoke/dsh-url.save" 2>/dev/null   # 沙箱会覆写它，必须还原
-SAVED=1   # 从这个点起，收尾（含被打断时）才允许还原这两个文件
-# 沙箱实例必须带 --patch 关掉 filetransfer：主实例已占着 3199，第二个实例抢不到端口
-# 会在插件树加载阶段 EADDRINUSE 崩掉（实测过）。注意 --patch 要放在 --port 之前。
+cp -f "$HOME_DIR/.dsh-url" "$HOME_DIR/.smoke/dsh-url.save" 2>/dev/null   # the sandbox overwrites it, so it must be restored
+SAVED=1   # from here on, cleanup (including when interrupted) may restore these two files
+# The sandbox instance must pass --patch to disable filetransfer: the main instance already holds 3199, so a second one cannot take the port
+# and dies with EADDRINUSE while loading the plugin tree (seen for real). Note: --patch must come before --port.
 DSH_PORT=8099 DSH_WEB_EXTRA="--patch $HOME_DIR/.smoke/patch.yml" \
-  timeout 200 bash "$T/1_启动DSH.sh" --no-open > "$TMPLOG" 2>&1 &
+  timeout 200 bash "$T/1_start-dsh.sh" --no-open > "$TMPLOG" 2>&1 &
 WPID=$!
 SAMPLES=""
 while kill -0 "$WPID" 2>/dev/null; do
@@ -530,38 +539,38 @@ while kill -0 "$WPID" 2>/dev/null; do
 done
 wait "$WPID"; WRC=$?
 SBURL=$(grep -oE 'http://127\.0\.0\.1:8099/\?token=[A-Za-z0-9_-]+' "$TMPLOG" | tail -1)
-if grep -q '就绪校验通过' "$TMPLOG"; then
-  rec PASS "1_启动DSH.sh 冷启动" "等到真就绪并通过 200 校验（用时 $(grep -oE '用时 [0-9]+s' "$TMPLOG" | tail -1)）"
+if grep -q 'Startup complete' "$TMPLOG"; then
+  rec PASS "1_start-dsh.sh cold start" "waited for real readiness and passed the 200 check (took $(grep -oE 'took [0-9]+s' "$TMPLOG" | tail -1))"
 else
-  rec FAIL "1_启动DSH.sh 冷启动" "没有走完真就绪校验（exit=$WRC，见 $TMPLOG）"
+  rec FAIL "1_start-dsh.sh cold start" "never finished the real readiness check (exit=$WRC, see $TMPLOG)"
 fi
-# 取证：冷启动期间出现过的 HTTP 码序列。旧逻辑只看「非 000」，第一个码就会被当成就绪。
+# Evidence: the sequence of HTTP codes seen during the cold start. The old logic only looked for 'not 000' and took the first code as ready.
 SEQ=$(printf '%s' "$SAMPLES" | sed 's/^ //')
 case "$SEQ" in
-  *404*) rec PASS "半启动取证" "采样到 HTTP 码序列：${SEQ}（404=路由还没挂，旧逻辑此时就会开浏览器）" ;;
-  *401*) rec PASS "半启动取证" "采样到 HTTP 码序列：${SEQ}（401=认证已挂但无 token，旧逻辑也当成就绪）" ;;
-  *)     rec PASS "半启动取证" "采样到 HTTP 码序列：${SEQ:-（没采到，可能启动过快）}" ;;
+  *404*) rec PASS "half-start evidence" "sampled HTTP code sequence: ${SEQ} (404=routes not mounted yet; the old logic would open the browser right here)" ;;
+  *401*) rec PASS "half-start evidence" "sampled HTTP code sequence: ${SEQ} (401=auth mounted but no token; the old logic called that ready too)" ;;
+  *)     rec PASS "half-start evidence" "sampled HTTP code sequence: ${SEQ:-(none sampled; startup may have been too fast)}" ;;
 esac
-[ -n "$SBURL" ] && url_ready "$SBURL" && rec PASS "沙箱 URL 可用" "token URL 返回 200：$SBURL" \
-  || rec FAIL "沙箱 URL 可用" "沙箱没产出可用 token URL"
-# 清理：**只按 --port 8099 精确匹配**杀沙箱（绝不碰你的 8080 实例），再还原日志
+[ -n "$SBURL" ] && url_ready "$SBURL" && rec PASS "sandbox URL usable" "token URL returns 200: $SBURL" \
+  || rec FAIL "sandbox URL usable" "the sandbox produced no usable token URL"
+# Cleanup: kill the sandbox by an **exact --port 8099 match only** (never your 8080 instance), then restore the log
 kill_sandbox
 sleep 1
 cp -f "$HOME_DIR/.smoke/restart.log.save" "$HOME_DIR/.dsh-restart.log" 2>/dev/null
 cp -f "$HOME_DIR/.smoke/dsh-url.save" "$HOME_DIR/.dsh-url" 2>/dev/null
 P8099=$( (exec 3<>/dev/tcp/127.0.0.1/8099) 2>/dev/null && echo open || echo closed )
-line "     沙箱清理：8099 = $P8099（应为 closed），启动日志与 .dsh-url 已还原"
+line "     sandbox cleanup: 8099 = $P8099 (should be closed); boot log and .dsh-url restored"
 
 # ── SKIP ──
-line "【SKIP】真跑会杀掉当前会话或需人工恢复"
-rec SKIP "0_紧急停止.sh" "真跑会吊销 token + 关无障碍 + 断 adb，需你手动恢复；已由音量键演练间接验证"
-rec SKIP "2_关闭DSH.sh" "真跑会停掉当前会话；各步骤已单独真跑（备份/轮换/端口等待/桥停），关窗口由 dsh-close-window 单独真跑过"
-rec SKIP "4_软重启DSH.sh" "真跑会重启服务、断开当前会话"
-rec SKIP "6_硬重启DSH.sh" "同上；这是唯一能验证 -9 强杀路径的方式（孤儿锁清理已由 L3⑤ 单测覆盖）"
+line "[SKIP] A real run would kill this session or needs manual recovery"
+rec SKIP "0_emergency-stop.sh" "a real run revokes the token + disables accessibility + drops adb and needs manual recovery; indirectly verified by the volume-key drill"
+rec SKIP "2_shutdown-dsh.sh" "a real run stops this session; every step has been run for real on its own (backup/rotation/port wait/bridge stop), and window closing was run for real via dsh-close-window"
+rec SKIP "4_soft-restart-dsh.sh" "a real run restarts the service and drops this session"
+rec SKIP "6_hard-restart-dsh.sh" "same as above; this is the only way to verify the -9 hard-kill path (orphan lock cleanup is covered by the L3 (5) unit test)"
 
 line ""
-line "════ 结果：通过 $PASS / 失败 $FAIL / 跳过 $SKIP ════"
-[ "$FAIL" = 0 ] && line "结论：全部可测项通过 ✅" || line "结论：有 $FAIL 项失败，需修 ❌"
+line "════ Result: $PASS passed / $FAIL failed / $SKIP skipped ════"
+[ "$FAIL" = 0 ] && line "Verdict: every testable item passed ✅" || line "Verdict: $FAIL item(s) failed, needs fixing ❌"
 printf '%b' "$REPORT" > "$HOME_DIR/.smoke/selftest-report.txt"
 rm -rf "$TMPD"
 exit "$FAIL"

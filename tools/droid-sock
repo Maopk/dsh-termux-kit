@@ -1,10 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/python3
-# droid-sock —— 与自建 App「DSH 桥」通信（127.0.0.1:8788，token 鉴权）
-# 用法（与 droid / droid-hub 对齐）：
-#   droid-sock ping | cur | ui [关键词] | shot [路径]
-#   droid-sock tap X Y | longpress X Y [毫秒] | swipe x1 y1 x2 y2 [毫秒]
-#   droid-sock text '文字' | key back|home|recents|notifications | start <包名>
-# token：先写进 ~/.dsh-bridge-token
+# droid-sock —— talk to the self-built 「DSH 桥」 App (127.0.0.1:8788, token auth)
+# Usage (aligned with droid / droid-hub): 
+#   droid-sock ping | cur | ui [keyword] | shot [path]
+#   droid-sock tap X Y | longpress X Y [ms] | swipe x1 y1 x2 y2 [ms]
+#   droid-sock text 'text' | key back|home|recents|notifications | start <package>
+# token: write it into ~/.dsh-bridge-token first
 import base64
 import json
 import os
@@ -27,11 +27,11 @@ def load_token():
 
 
 def wake_bridge(stage=1):
-    """唤醒桥：stage=1 用显式广播（不打扰用户）；stage=2 才拉起界面（会占用前台）
+    """Wake the bridge: stage=1 uses an explicit broadcast (does not disturb the user); stage=2 raises the UI (it takes the foreground)
 
-    广播里带上 token：桥 v1.7 起用它做「重新授权」——软停/自杀后无障碍被系统解绑，
-    只有带对 token 的唤醒才允许把自己重新挂回无障碍（否则任何 App 都能把它拉起来）。
-    旧版桥忽略这个 extra，行为不变。
+    The broadcast carries the token: since bridge v1.7 it is used for re-authorization — after a soft stop or self-kill the system unbinds accessibility,
+    and only a wake with the right token may re-attach itself to accessibility (otherwise any App could raise it).
+    Older bridges ignore this extra and behave as before.
     """
     import subprocess
     try:
@@ -62,19 +62,19 @@ def _connect_once(timeout):
 def call(obj, timeout=40):
     tok = load_token()
     if not tok:
-        print('❌ 还没有 token。请打开手机上的「DSH 桥」App，把它显示的 token 发我，'
-              '或自己写进 ' + TOKEN_FILE, file=sys.stderr)
+        print('❌ no token yet. Open the 「DSH 桥」 App on the phone and send me the token it shows,'
+              'or write it into ' + TOKEN_FILE, file=sys.stderr)
         sys.exit(2)
     req = dict(obj)
     req['token'] = tok
     try:
         s = _connect_once(timeout)
     except Exception as first:
-        # 阶梯唤醒：① 广播（静默，不打扰）→ ② 拉界面（兜底）
-        # ⚠ 2026-09-27 实测教训：广播**叫不醒已经死掉的 App 进程**（Android 后台启动限制），
-        #   而 stage 2 以前被 DSH_BRIDGE_WAKE_UI=1 挡着 → 桥一死就再也回不来，只能人工点图标。
-        #   现在默认就会走 stage 2（代价：桥的界面会被拉到前台一次）；不想被占屏设
-        #   DSH_BRIDGE_NO_UI=1 关掉兜底。
+        # staged wake: ① broadcast (silent, does not disturb) → ② raise the UI (fallback)
+        # ⚠ 2026-09-27 lesson: a broadcast **cannot wake an already dead App process** (Android background start limits),
+        #   and stage 2 used to be blocked by DSH_BRIDGE_WAKE_UI=1 → once the bridge died it never came back and you had to tap the icon by hand.
+        #   Now stage 2 runs by default (cost: the bridge UI is pulled to the foreground once); to avoid that set
+        #   DSH_BRIDGE_NO_UI=1 to disable the fallback.
         s = None
         if os.environ.get('DSH_BRIDGE_NO_UI') == '1':
             stages = (1,)
@@ -88,8 +88,8 @@ def call(obj, timeout=40):
             except Exception:
                 s = None
         if s is None:
-            print('❌ 连不上 DSH 桥（%s:%d）：广播唤醒 + 拉起桥界面都试过了仍失败\n'
-                  '   请确认：无障碍里「DSH 桥」是开启状态（重新开启必须由你本人在系统设置里确认）'
+            print('❌ cannot reach the DSH bridge (%s:%d): both the broadcast wake and raising the bridge UI failed\n'
+                  '   check that 「DSH 桥」 is enabled in accessibility (re-enabling must be confirmed by you in system settings)'
                   % (HOST, PORT), file=sys.stderr)
             sys.exit(3)
     s.sendall((json.dumps(req, ensure_ascii=False) + '\n').encode('utf-8'))
@@ -103,7 +103,7 @@ def call(obj, timeout=40):
     finally:
         s.close()
     if not buf:
-        print('❌ 没有响应', file=sys.stderr)
+        print('❌ no response', file=sys.stderr)
         sys.exit(4)
     return json.loads(buf.decode('utf-8', 'replace'))
 
@@ -112,12 +112,12 @@ def main():
     a = sys.argv[1:]
     if not a:
         print(__doc__ or '')
-        print('用法: droid-sock ping|cur|ui|shot|tap|longpress|swipe|text|key|start ...')
-        print('      droid-sock ping --fast   # 只探一次，不唤醒（给状态收集这类"必须快"的场景）')
+        print('Usage: droid-sock ping|cur|ui|shot|tap|longpress|swipe|text|key|start ...')
+        print('      droid-sock ping --fast   # probe once, no wake (for cases like status collection that "must be fast")')
         return 2
-    # --fast：单次连接、失败立刻返回，**不做唤醒阶梯**。
-    # 为什么要它：dsh-status-pub 要给控制台 APK 在超时窗口内回话，
-    # 而默认的 call() 在"端口在听但服务被冻结"时会走广播+拉界面（最多 14s）→ 整包超时。
+    # --fast: a single connection that returns at once on failure, **with no wake ladder**.
+    # Why: dsh-status-pub must answer the console APK inside its timeout window,
+    # while the default call() uses "broadcast + UI raise" when the port listens but the service is frozen (up to 14s) → the whole call times out.
     FAST = '--fast' in a
     a = [x for x in a if x != '--fast']
     if FAST:
@@ -126,11 +126,11 @@ def main():
             try:
                 s = _connect_once(3)
             except Exception as e:
-                print('❌ 桥没应答（--fast，未唤醒）：%s' % e, file=sys.stderr)
+                print('❌ bridge did not answer (--fast, no wake): %s' % e, file=sys.stderr)
                 sys.exit(3)
             tok = load_token()
             if not tok:
-                print('❌ 没有 token', file=sys.stderr)
+                print('❌ no token', file=sys.stderr)
                 sys.exit(2)
             req = dict(obj); req['token'] = tok
             s.sendall((json.dumps(req, ensure_ascii=False) + '\n').encode('utf-8'))
@@ -143,28 +143,28 @@ def main():
             finally:
                 s.close()
             if not buf:
-                print('❌ 没有响应', file=sys.stderr); sys.exit(4)
+                print('❌ no response', file=sys.stderr); sys.exit(4)
             return json.loads(buf.decode('utf-8', 'replace'))
     k = a[0]
     if k == 'ping':
         r = call({'action': 'ping'})
     elif k == 'cur':
         r = call({'action': 'cur'})
-    elif k == 'netstate':      # Wi-Fi 开关 + 是否真的能上网（桥直连测试）
+    elif k == 'netstate':      # Wi-Fi switch + whether the internet really works (bridge direct test)
         r = call({'action': 'netstate'}, timeout=15)
-    elif k == 'adbwifi':       # 开关「无线调试」（需要 WRITE_SECURE_SETTINGS）
+    elif k == 'adbwifi':       # toggle 「无线调试」 (needs WRITE_SECURE_SETTINGS)
         r = call({'action': 'adbwifi', 'value': int(a[1]) if len(a) > 1 else 1}, timeout=15)
-    elif k == 'caps':          # 桥支持的动作清单（判断新旧版本用；旧版会回错误）
+    elif k == 'caps':          # list of actions the bridge supports (to tell versions apart; old ones return an error)
         r = call({'action': 'caps'}, timeout=15)
-    elif k == 'sleep':         # 真停（v1.7+）：关端口 + 停前台服务 + 关闭自身无障碍，不会自恢复
+    elif k == 'sleep':         # hard stop (v1.7+): close the port + stop the foreground service + disable its own accessibility; it does not come back
         r = call({'action': 'sleep'}, timeout=20)
-    elif k == 'wake':          # 只唤醒，不取数据（带 token 时 v1.7 可重新授权无障碍）
+    elif k == 'wake':          # wake only, no data (with a token, v1.7 can re-authorize accessibility)
         wake_bridge(1)
-        print('已发送唤醒广播')
+        print('wake broadcast sent')
         return 0
-    elif k == 'stop':          # 软停：只关端口，无障碍保留（用于验证「广播唤醒」）
+    elif k == 'stop':          # soft stop: closes only the port, accessibility stays (used to verify the broadcast wake)
         r = call({'action': 'stop'})
-    elif k == 'panic':         # 硬停：关端口 + 关闭无障碍
+    elif k == 'panic':         # panic: close the port + disable accessibility
         r = call({'action': 'panic'})
     elif k == 'ui':
         r = call({'action': 'ui', 'keyword': a[1] if len(a) > 1 else '',
@@ -186,7 +186,7 @@ def main():
     elif k == 'start':
         r = call({'action': 'start', 'value': a[1]})
     else:
-        print('未知用法: ' + k, file=sys.stderr)
+        print('unknown usage: ' + k, file=sys.stderr)
         return 2
 
     if not r.get('ok'):
@@ -199,7 +199,7 @@ def main():
         path = a[1] if len(a) > 1 else os.path.join(IMG_DIR, 'droid-%s.png' % time.strftime('%Y%m%d-%H%M%S'))
         raw = base64.b64decode(d['png'])
         open(path, 'wb').write(raw)
-        print('已截图: %s (%.1f KB)' % (path, len(raw) / 1024))
+        print('screenshot saved: %s (%.1f KB)' % (path, len(raw) / 1024))
         return 0
 
     if 'nodes' in d:
@@ -208,7 +208,7 @@ def main():
             print('  [%d,%d] %-18s text=%-42s desc=%-24s id=%s' % (
                 c[0], c[1], n.get('cls', ''), repr(n.get('text', ''))[:42],
                 repr(n.get('desc', ''))[:24], (n.get('id', '') or '')[-30:]))
-        print('  共 %d 个节点' % d.get('count', 0))
+        print('  %d nodes' % d.get('count', 0))
         return 0
 
     print('✅ ' + json.dumps(d, ensure_ascii=False)[:800])

@@ -1,32 +1,35 @@
 package io.dsh.console;
 
 /**
- * 任务清单：id 就是 Termux 侧 ~/.shortcuts/tasks 里的脚本名（白名单由那边决定，这里只是菜单）。
+ * Task list: the id is the script name under ~/.shortcuts/tasks on the Termux side (that side owns the
+ * allowlist; this is only the menu).
  *
- * v0.5 起每个任务带**功能分类** cat，界面按分类分段显示，不再把所有按钮堆成一列。
- * 分类是显示用的，小部件（DshWidget）只看 WIDGET_SAFE，不受影响。
+ * Since v0.5 every task carries a **function category** cat, and the UI shows them in sections instead
+ * of stacking every button in one column. The category is display-only; the widget (DshWidget) looks
+ * only at WIDGET_SAFE and is unaffected.
  */
 final class Tasks {
-    /** 启动 / 停止：改变 DSH 自己的运行状态。 */
-    static final String RUN = "启动 / 停止";
-    /** 通道：桥（无障碍回环，不需要网络）与 adb（无线调试，必须有可用 Wi-Fi）是两条独立通道，永远分开列。 */
-    static final String LINK = "通道（adb 与桥分开）";
-    /** 维护：不改变运行状态，只动磁盘上的产物。 */
-    static final String CARE = "维护";
-    /** 紧急：撤销控制权，放最后但最显眼（红色）。 */
-    static final String SOS = "紧急";
-    /** 界面按这个顺序分段。 */
+    /** Start / stop: changes DSH's own running state. */
+    static final String RUN = Lang.t("Start / Stop");
+    /** Channels: the bridge (accessibility loopback, no network) and adb (wireless debugging, needs working Wi-Fi) are two independent channels, always listed separately. */
+    static final String LINK = Lang.t("Channels (adb and bridge separate)");
+    /** Maintenance: does not change run state, only touches artifacts on disk. */
+    static final String CARE = Lang.t("Maintenance");
+    /** Emergency: gives up control; listed last but kept most prominent (red). */
+    static final String SOS = Lang.t("Emergency");
+    /** The UI uses this order for its sections. */
     static final String[] CATS = { RUN, LINK, CARE, SOS };
 
     static final class T {
         final String id, label, hint, cat;
         final boolean danger;
-        /** 非空表示直接跑这条命令（不经过 ~/.shortcuts/tasks 里的组件脚本）。 */
+        /** Non-null means run this command directly (without the wrapper script in ~/.shortcuts/tasks). */
         final String cmd;
         /**
-         * 这条命令**通常最长**要等多久（秒）。为什么要它：以前所有任务共用一个 45 秒超时，
-         * 于是"备份/清理/重启"这种本来就要 1~5 分钟的任务**每次都报超时**（假警报），
-         * 而真正的失败又和它混在一起分不清。现在按任务给窗口，文案也说"这条通常 Ns 内回来"。
+         * How long this command **usually takes at most** (seconds). Why it exists: every task used to
+         * share one 45-second timeout, so tasks that inherently need 1-5 minutes (backup/cleanup/restart)
+         * **timed out every single time** (false alarms) while real failures were indistinguishable from
+         * them. Each task now gets its own window, and the text says "this one usually answers within Ns".
          */
         final int waitS;
         T(String id, String cat, String label, String hint, boolean danger) {
@@ -42,34 +45,35 @@ final class Tasks {
     }
 
     static final T[] ALL = new T[] {
-        // ── 启动 / 停止 ─────────────────────────────────────────────
-        new T("1_启动DSH", RUN, "启动 DSH", "已在跑则直接开页面；含启动互斥与真就绪判定", false, null, 240),
-        new T("open", RUN, "打开 Web UI", "用 ~/.dsh-url 里的地址开页面（优先桌面 PWA）", false, TermuxRunner.openUiCmd(), 60),
-        new T("4_软重启DSH", RUN, "软重启", "SIGTERM 后重启，会断开当前网页会话", true, null, 300),
-        new T("6_硬重启DSH", RUN, "硬重启", "-9 强杀后重启，会断开当前网页会话", true, null, 300),
-        new T("2_关闭DSH", RUN, "关闭 DSH", "停 DSH 并关掉 DSH 窗口；桥默认也软停（保留需 --keep-bridge）；Termux 保留，控制台随即可用", true, null, 200),
+        // ── Start / Stop ─────────────────────────────────────────────
+        new T("1_start-dsh", RUN, Lang.t("Start DSH"), "Opens the page directly if it is already running; includes the start mutex and a real readiness check", false, null, 240),
+        new T("open", RUN, Lang.t("Open Web UI"), "Opens the page at the address in ~/.dsh-url (prefers the desktop PWA)", false, TermuxRunner.openUiCmd(), 60),
+        new T("4_soft-restart-dsh", RUN, Lang.t("Soft restart"), "Restarts after SIGTERM; drops the current web session", true, null, 300),
+        new T("6_hard-restart-dsh", RUN, Lang.t("Hard restart"), "Restarts after a -9 kill; drops the current web session", true, null, 300),
+        new T("2_shutdown-dsh", RUN, Lang.t("Shut down DSH"), "Stops DSH and closes the browser; the bridge is a separate channel and is left alone by default", true, null, 200),
 
-        // ── 通道 ───────────────────────────────────────────────────
-        new T("8_自动开无线调试", LINK, "连 adb", "只走无线调试：置开关 → 找端口 → adb connect（需要可用 Wi-Fi）", false, null, 220),
-        // ⚠ 这两条必须写**绝对路径**：RUN_COMMAND 走 `bash -lc`，实测它的 PATH 只有
-        //   /data/data/com.termux/files/usr/bin:. —— 没有 ~/.local/bin，
-        //   所以以前写成裸 `dsh-bridge wake` 时这两条全是 exit=127（command not found）。
-        new T("bridge_wake", LINK, "唤醒桥", "只走无障碍回环：带 token 的广播，不需要网络", false,
+        // ── Channels ───────────────────────────────────────────────────
+        new T("8_enable-wireless-adb", LINK, Lang.t("Connect adb"), "Wireless debugging only: set the switch → find the port → adb connect (needs working Wi-Fi)", false, null, 220),
+        // ⚠ These two must use **absolute paths**: RUN_COMMAND goes through `bash -lc`, and its measured
+        //   PATH is only /data/data/com.termux/files/usr/bin:. — no ~/.local/bin, so when they were
+        //   written as a bare `dsh-bridge wake` both returned exit=127 (command not found).
+        new T("bridge_wake", LINK, Lang.t("Wake bridge"), "Accessibility loopback only: a broadcast carrying the token, no network needed", false,
                 TermuxRunner.HOME + "/.local/bin/dsh-bridge wake", 90),
-        new T("bridge_status", LINK, "看桥状态", "只查桥：端口 / 是否真应答 / 版本 / paused", false,
+        new T("bridge_status", LINK, "Check bridge status", "Bridge only: port / whether it really answers / version / paused", false,
                 TermuxRunner.HOME + "/.local/bin/dsh-bridge status", 40),
-        new T("7_重连AI通道", LINK, "全部恢复（adb + 桥）", "两条通道都要时用：先 adb，再桥；哪条失败会说哪条", false, null, 280),
+        new T("7_reconnect-ai", LINK, Lang.t("Restore everything (adb + bridge)"), Lang.t("For when you need both channels: adb first, then the bridge; a failure names the channel it came from"), false, null, 280),
 
-        // ── 维护 ───────────────────────────────────────────────────
-        // 注意：「密码使用权」（AI 能否动用用户的锁屏密码过身份验证）**不是按钮而是开关**，
-        // 画在维护类下面（见 MainActivity.buildAuthRow）——它管的不只是装包。
-        new T("3_备份DSH", CARE, "备份", "打包并校验归档（zstd -t + 条目数）", false, null, 420),
-        new T("5_清理DSH", CARE, "清理", "只删我的产物，不碰配置与笔记", false, null, 420),
+        // ── Maintenance ───────────────────────────────────────────────────
+        // Note: "password access" (whether the AI may use the user's lock-screen password to pass
+        // identity checks) is **a switch, not a button**, drawn under the maintenance section (see
+        // MainActivity.buildAuthRow) — it governs more than package installs.
+        new T("3_backup-dsh", CARE, Lang.t("Backup"), "Packs and verifies the archive (zstd -t + entry count)", false, null, 420),
+        new T("5_cleanup-dsh", CARE, Lang.t("Cleanup"), "Deletes only my own artifacts; never touches config or notes", false, null, 420),
 
-        // ── 紧急 ───────────────────────────────────────────────────
-        new T("0_紧急停止", SOS, "紧急停止", "撤销 AI 对手机的控制（桥 stop + 撤 token）", true, null, 180),
+        // ── Emergency ───────────────────────────────────────────────────
+        new T("0_emergency-stop", SOS, Lang.t("Emergency stop"), Lang.t("Revokes the AI's control of the phone (bridge stop + revoke token)"), true, null, 180),
     };
 
-    /** 小部件上只放安全动作——桌面上误触代价太大。 */
-    static final String[] WIDGET_SAFE = { "1_启动DSH", "8_自动开无线调试", "bridge_wake", "3_备份DSH" };
+    /** Only safe actions go on the widget — a mis-tap from the home screen costs too much. */
+    static final String[] WIDGET_SAFE = { "1_start-dsh", "8_enable-wireless-adb", "bridge_wake", "3_backup-dsh" };
 }

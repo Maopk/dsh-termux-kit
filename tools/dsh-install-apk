@@ -1,15 +1,15 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-install-apk —— 走 vivo 安装器把 APK 装上（全程桥 + 存好的安装密码，不需要 adb、不需要人手）
+# dsh-install-apk —— install an APK through the vivo installer (bridge + the stored password throughout; no adb, no hands)
 #
-# 为什么需要它：这台机器上从 Termux 装包**每次**都要过
-#   「超级守护」页 → 点那行蓝色小字「…您可授权本次安装」→ 系统「安全验证」
-#   → 指纹 或 「锁屏密码验证」+ 6 位数字键盘。
-# 人手的那一步用 ~/.dsh-auth-pass（600，语义＝"AI 可以动用你的锁屏密码"）里的 6 位数字代替。
-# **撤销入口**：控制台 App「紧急」里的『撤销安装密码授权』／小组件 9／或 rm 该文件。
+# Why: on this phone, installing from Termux **always** has to go through
+#   the 「超级守护」 screen → tap the small blue text 「…您可授权本次安装」 → the system 「安全验证」
+#   → fingerprint, or 「锁屏密码验证」 + the 6-digit keypad.
+# The manual step is replaced by the 6 digits in ~/.dsh-auth-pass (600, meaning "the AI may use your lockscreen password").
+# **To revoke**: the 『撤销安装密码授权』 entry under 「紧急」 in the Console App / widget 9 / or rm that file.
 #
-# 用法：dsh-install-apk <apk路径> [--verify] [--dry-run]
-#   --verify 装完再打开一次同一 APK，确认安装器说「已安装相同版本」（最硬的证据，多花 ~15s）
-# 退出码：0 成功；1 失败；3 未授权（需要先 dsh-auth-pass set）；4 前置不满足
+# Usage: dsh-install-apk <apk path> [--verify] [--dry-run]
+#   --verify after installing, open the same APK again and confirm the installer says 「已安装相同版本」 (the hardest evidence, costs ~15s more)
+# Exit: 0 success; 1 failure; 3 not authorized (run dsh-auth-pass set first); 4 preconditions unmet
 set -u
 HOME_DIR="/data/data/com.termux/files/home"
 SOCK="$HOME_DIR/.local/bin/droid-sock"
@@ -20,13 +20,13 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1 ;;
     --verify) VERIFY=1 ;;
-    -*) printf '未知参数 %s\n' "$1" >&2; exit 2 ;;
+    -*) printf 'unknown argument %s\n' "$1" >&2; exit 2 ;;
     *) APK="$1" ;;
   esac
   shift
 done
-[ -n "$APK" ] || { printf '用法: dsh-install-apk <apk路径> [--verify] [--dry-run]\n' >&2; exit 2; }
-[ -f "$APK" ] || { printf '找不到 APK：%s\n' "$APK" >&2; exit 4; }
+[ -n "$APK" ] || { printf 'Usage: dsh-install-apk <apk path> [--verify] [--dry-run]\n' >&2; exit 2; }
+[ -f "$APK" ] || { printf 'APK not found: %s\n' "$APK" >&2; exit 4; }
 
 log()  { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*"; }
 step() { printf '\n▶ %s\n' "$*"; }
@@ -36,7 +36,7 @@ bad()  { printf '   ✘ %s\n' "$*"; }
 
 ui()      { timeout 25 "$SOCK" ui 2>/dev/null; }
 cur_pkg() { timeout 20 "$SOCK" cur 2>/dev/null | sed -n 's/.*"pkg": "\([^"]*\)".*/\1/p'; }
-# 在无障碍树里按 text 或 desc 找元素中心坐标（$1=文案 $2=text|desc）
+# find an element center by text or desc in the accessibility tree ($1=label $2=text|desc)
 xy_of() {
   ui | awk -v w="$1" -v f="$2" '
     { key = (f=="desc" ? "desc=" : "text=") "\x27" w "\x27"
@@ -45,100 +45,100 @@ xy_of() {
 tap_xy()  { timeout 25 "$SOCK" tap "${1%,*}" "${1#*,}" >/dev/null 2>&1; }
 tap_txt() { local xy; xy=$(xy_of "$1" text);  [ -n "$xy" ] && { tap_xy "$xy"; return 0; }; return 1; }
 tap_dsc() { local xy; xy=$(xy_of "$1" desc);  [ -n "$xy" ] && { tap_xy "$xy"; return 0; }; return 1; }
-# 有些控件文案在 text 上、有些在 desc 上（血泪：『锁屏密码验证』是 text，『本次允许使用权限』是 desc）
+# some widgets carry their label in text, others in desc (hard-won: 『锁屏密码验证』 is text, 『本次允许使用权限』 is desc)
 tap_any() { tap_txt "$1" || tap_dsc "$1"; }
 
-# ── 前置 ──
-step "① 前置检查"
+# ── preconditions ──
+step "① precondition check"
 DIGITS=""
 if [ "$DRY" != 1 ]; then
-  DIGITS=$("$HELPER" digits 2>/dev/null) || { bad "未授权：$("$HELPER" status 2>&1)"; exit 3; }
-  case "$DIGITS" in [0-9][0-9][0-9][0-9][0-9][0-9]) ok "已拿到授权密码（6 位，来自 $("$HELPER" path)）" ;;
-    *) bad "密码格式不对（不是 6 位数字）"; exit 3 ;; esac
+  DIGITS=$("$HELPER" digits 2>/dev/null) || { bad "not authorized: $("$HELPER" status 2>&1)"; exit 3; }
+  case "$DIGITS" in [0-9][0-9][0-9][0-9][0-9][0-9]) ok "got the authorized password (6 digits, from $("$HELPER" path))" ;;
+    *) bad "bad password format (not 6 digits)"; exit 3 ;; esac
 else
-  # 预演也要说实话：没授权就说没授权 —— 真跑一定会在这一步停住（不然"预演成功"是骗人的）
+  # A dry run must tell the truth: with no authorization, say so — a real run will always stop here (otherwise "dry run passed" is a lie)
   if "$HELPER" status >/dev/null 2>&1; then
-    ok "（dry-run）已授权：真跑能读到密码"
+    ok "(dry-run) authorized: a real run can read the password"
   else
-    bad "（dry-run）未授权：$("$HELPER" status 2>&1 | head -1)"
-    printf '   → 真跑会在这一步以退出码 3 停住，不会碰屏幕\n'
+    bad "(dry-run) not authorized: $("$HELPER" status 2>&1 | head -1)"
+    printf '   → a real run will stop here with exit code 3 and never touch the screen\n'
     exit 3
   fi
 fi
-"$SOCK" ping >/dev/null 2>&1 || { bad "桥不在（先 dsh-bridge wake）"; exit 4; }
-ok "桥在应答"
+"$SOCK" ping >/dev/null 2>&1 || { bad "the bridge is not there (run dsh-bridge wake first)"; exit 4; }
+ok "the bridge answers"
 
-# ── 打开安装器 ──
-step "② 打开安装包（复制成 ASCII 路径，避免中文 URI 编码问题）"
+# ── open the installer ──
+step "② open the package (copied to an ASCII path to avoid Chinese-URI encoding problems)"
 if [ "$DRY" = 1 ]; then
   printf '   · [dry] cp %s %s\n   · [dry] am start -a VIEW -d file://%s -t application/vnd.android.package-archive\n' "$APK" "$TMP_APK" "$TMP_APK"
-  ok "（dry-run）"
+  ok "(dry-run)"
 else
-  cp -f "$APK" "$TMP_APK" || { bad "复制失败"; exit 1; }
+  cp -f "$APK" "$TMP_APK" || { bad "copy failed"; exit 1; }
   timeout 25 am start -a android.intent.action.VIEW -d "file://$TMP_APK" \
     -t application/vnd.android.package-archive >/dev/null 2>&1
   sleep 4
-  ok "已请求安装器打开"
+  ok "asked the installer to open it"
 fi
 
-# ── 一次性安装权限 ──
-step "③ 安装来源权限（选「本次允许」，不留长期授权）"
-if [ "$DRY" = 1 ]; then printf '   · [dry] 点「本次允许使用权限」\n'; ok "（dry-run）"
-elif tap_dsc "本次允许使用权限"; then ok "已点「本次允许使用权限」"; sleep 8
-elif ui | grep -q "已安装相同版本"; then ok "已有「已安装相同版本」页（跳过权限框）"
-else warn "没看到权限框（可能已授权过），继续"; fi
+# ── one-time install permission ──
+step "③ install-source permission (choose 「本次允许」; no long-term grant)"
+if [ "$DRY" = 1 ]; then printf '   · [dry] tap 「本次允许使用权限」\n'; ok "(dry-run)"
+elif tap_dsc "本次允许使用权限"; then ok "tapped 「本次允许使用权限」"; sleep 8
+elif ui | grep -q "已安装相同版本"; then ok "the 「已安装相同版本」 page is already up (skipping the permission dialog)"
+else warn "no permission dialog seen (maybe already granted); continuing"; fi
 
-# ── 蓝色小字 ──
-step "④ 点那行蓝色小字「…您可授权本次安装」（文案/排版会变，位置按颜色现找）"
-if [ "$DRY" = 1 ]; then printf '   · [dry] 先用无障碍树取段落 y，再用 dsh-find-blue 在带内找蓝字并点它\n'; ok "（dry-run）"
+# ── the small blue text ──
+step "④ tap the small blue line 「…您可授权本次安装」 (the wording and layout change, so the spot is found by color)"
+if [ "$DRY" = 1 ]; then printf '   · [dry] first read the paragraph y from the accessibility tree, then use dsh-find-blue to find the blue text in that band and tap it\n'; ok "(dry-run)"
 else
   GOT=0
-  # 那行字**不在无障碍树里**（树里只有整段一个节点）→ 用段落的 y 定一个带，再按颜色找蓝字。
-  # 实测两种版式：段落 y≈1135（"未经vivo人工亲测"）与 y≈1255（"未核准（备案）"），链接都在段尾。
+  # that line is **not in the accessibility tree** (the tree has one node for the whole paragraph) → use the paragraph y as a band and find the blue text by color.
+  # two layouts measured: paragraph y≈1135 ("未经vivo人工亲测") and y≈1255 ("未核准（备案）"), with the link at the end of the paragraph.
   BAND=$(ui | awk 'index($0,"本次安装")>0 && index($0,"text=")>0 {
             match($0,/\[[0-9]+,[0-9]+\]/); if (RSTART>0) { split(substr($0,RSTART+1,RLENGTH-2),p,","); print p[2]; exit } }')
   CANDS=""
   if [ -n "$BAND" ]; then
     Y1=$((BAND-170)); Y2=$((BAND+230)); [ "$Y1" -lt 0 ] && Y1=0
     P=$(timeout 45 "$HOME_DIR/.local/bin/dsh-find-blue" "$Y1" "$Y2" 2>/dev/null) && CANDS="$P"
-    if [ -n "$CANDS" ]; then ok "蓝字定位：$CANDS（段落 y=$BAND，搜索带 $Y1..$Y2）"
-    else warn "颜色定位没找到，退回固定坐标"; fi
+    if [ -n "$CANDS" ]; then ok "blue text located: $CANDS (paragraph y=$BAND, search band $Y1..$Y2)"
+    else warn "color location found nothing; falling back to fixed coordinates"; fi
   else
-    warn "树上没找到含「本次安装」的段落，退回固定坐标"
+    warn "no paragraph containing 「本次安装」 in the tree; falling back to fixed coordinates"
   fi
   for pt in $CANDS "338,1151" "348,1152" "330,1150"; do
     [ -n "$pt" ] || continue
     tap_xy "$pt"; sleep 3
-    if [ "$(cur_pkg)" = "com.android.systemui" ] || ui | grep -q "安全验证"; then GOT=1; ok "验证框已出现（点 $pt）"; break; fi
-    warn "点 $pt 没反应，换下一个"
+    if [ "$(cur_pkg)" = "com.android.systemui" ] || ui | grep -q "安全验证"; then GOT=1; ok "the verification dialog appeared (tapped $pt)"; break; fi
+    warn "no reaction at $pt; trying the next one"
   done
-  [ "$GOT" = 1 ] || { bad "没能叫出「安全验证」（安装器页面变了吗？）"; rm -f "$TMP_APK"; exit 1; }
+  [ "$GOT" = 1 ] || { bad "could not bring up 「安全验证」 (did the installer screen change?)"; rm -f "$TMP_APK"; exit 1; }
 fi
 
-# ── 锁屏密码 ──
-step "⑤ 走「锁屏密码验证」→ 数字键盘"
-if [ "$DRY" = 1 ]; then printf '   · [dry] 点「锁屏密码验证」→ 按 6 位数字\n'; ok "（dry-run）"
+# ── lockscreen password ──
+step "⑤ go through 「锁屏密码验证」 → the digit keypad"
+if [ "$DRY" = 1 ]; then printf '   · [dry] tap 「锁屏密码验证」 → press the 6 digits\n'; ok "(dry-run)"
 else
-  if tap_any "锁屏密码验证"; then ok "已点「锁屏密码验证」"; else bad "没找到「锁屏密码验证」"; exit 1; fi
+  if tap_any "锁屏密码验证"; then ok "tapped 「锁屏密码验证」"; else bad "「锁屏密码验证」 not found"; exit 1; fi
   sleep 3
   i=0
   for (( n=0; n<${#DIGITS}; n++ )); do
     d="${DIGITS:$n:1}"
     xy=$(xy_of "$d" text)
-    [ -n "$xy" ] || { bad "键盘上找不到数字 $d"; exit 1; }
+    [ -n "$xy" ] || { bad "digit $d not found on the keypad"; exit 1; }
     tap_xy "$xy"; i=$((i+1)); sleep 0.7
   done
-  ok "已输入 $i 位"
+  ok "entered $i digits"
 fi
 
-# ── 完成页 ──
-step "⑥ 等完成页并关掉向导"
-if [ "$DRY" = 1 ]; then printf '   · [dry] 等「打开/完成」并点完成\n'; ok "（dry-run）"
+# ── the done page ──
+step "⑥ wait for the done page and close the wizard"
+if [ "$DRY" = 1 ]; then printf '   · [dry] wait for 「打开/完成」 and tap 完成\n'; ok "(dry-run)"
 else
   DONE=0; VER=""
   for i in $(seq 1 30); do
     if ui | grep -qE "desc='(完成|打开)'"; then DONE=1; break; fi
-    # 向导也可能**自己关掉**（安装完它有时直接退出）——那时前台不再是安装器/系统验证
+    # the wizard may also **close itself** (it sometimes just exits after installing) — then the foreground is no longer the installer or the system verification
     case "$(cur_pkg)" in
       com.android.packageinstaller|com.android.systemui) ;;
       *) sleep 1; if ui | grep -qE "desc='(完成|打开)'"; then DONE=1; break; fi
@@ -149,31 +149,31 @@ else
   if [ "$DONE" = 1 ]; then
     VER=$(ui | grep -oE "版本：[0-9.]+" | head -1)
     tap_dsc "完成"; sleep 3
-    ok "安装完成（$VER）"
+    ok "install complete ($VER)"
   elif [ "$DONE" = 2 ]; then
-    ok "向导已关闭（安装器退出）→ 交给下一步的复核判定"
+    ok "wizard closed (the installer exited) → leaving the verdict to the verification step"
   else
-    bad "60 秒内既没完成页、向导也没关（认证超时？密码错？）"; rm -f "$TMP_APK"; exit 1
+    bad "within 60 seconds neither the done page appeared nor the wizard closed (auth timeout? wrong password?)"; rm -f "$TMP_APK"; exit 1
   fi
 fi
 
-# ── 复核（可选）──
+# ── verification (optional)──
 if [ "$VERIFY" = 1 ] && [ "$DRY" != 1 ]; then
-  step "⑦ 复核（**这才是最终判据**）：再打开一次同一 APK，应提示「已安装相同版本」"
-  # 注意：装完这台安装器会把源 APK 删掉（实测"安装包不存在"）→ 复核前先重新复制一份
-  cp -f "$APK" "$TMP_APK" 2>/dev/null || warn "临时副本复制失败，复核可能不准"
+  step "⑦ verification (**this is the real verdict**): open the same APK again; it should say 「已安装相同版本」"
+  # Note: after installing, this installer deletes the source APK (measured: "package does not exist") → copy it again before verifying
+  cp -f "$APK" "$TMP_APK" 2>/dev/null || warn "failed to copy the temp file; verification may be inaccurate"
   timeout 25 am start -a android.intent.action.VIEW -d "file://$TMP_APK" \
     -t application/vnd.android.package-archive >/dev/null 2>&1; sleep 4
   tap_dsc "本次允许使用权限" >/dev/null 2>&1; sleep 7
   if ui | grep -q "已安装相同版本"; then
-    ok "安装器确认：$(ui | grep -oE '已安装相同版本[^ ]*' | head -1)"
+    ok "installer confirms: $(ui | grep -oE '已安装相同版本[^ ]*' | head -1)"
     tap_dsc "取消" >/dev/null 2>&1
   else
-    bad "安装器没说「已安装相同版本」——不确定是否真装上"
+    bad "the installer did not say 「已安装相同版本」 — cannot be sure it is really installed"
     rm -f "$TMP_APK"; exit 1
   fi
 fi
 
 rm -f "$TMP_APK"
 printf '\n【%s】完成：%s\n' "$(basename "$0")" "$(basename "$APK")"
-printf '   提示：更新后 App 里显示的版本号可能还是旧的（旧进程还活着）→ 冷启动一次再看。\n'
+printf '   Note: after an update the version shown in the App may still be the old one (the old process is alive) → cold start it once and look again.\n'

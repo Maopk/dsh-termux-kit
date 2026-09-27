@@ -19,8 +19,8 @@ import android.widget.Toast;
 import java.security.SecureRandom;
 
 /**
- * DSH 桥界面：显示 token、开启无障碍、以及最重要的——**一键紧急停止**。
- * 界面全代码搭，无 layout 资源。
+ * DSH Bridge UI: shows the token, lets you enable accessibility, and most importantly — **one-tap emergency stop**.
+ * The whole UI is built in code, with no layout resources.
  */
 public class MainActivity extends Activity {
 
@@ -40,26 +40,26 @@ public class MainActivity extends Activity {
         root.setPadding(pad, pad, pad, pad);
 
         TextView title = new TextView(this);
-        // 版本号从包信息动态读取 —— 不许再硬编码（上次就因为这个，清单升到 1.6 而界面还写着 1.5）
+        // Version read dynamically from package info — never hard-coded again (last time the manifest went to 1.6 while the UI still said 1.5)
         String ver = "?";
         try {
             ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-        } catch (Throwable t) { /* 忽略 */ }
-        title.setText("DSH 桥  v" + ver);
+        } catch (Throwable t) { /* ignore */ }
+        title.setText("DSH Bridge  v" + ver);
         title.setTextSize(22f);
         root.addView(title);
 
         TextView desc = new TextView(this);
-        desc.setText("v1.6 关键改动：改用**前台服务**常驻，避免被系统/厂商省电策略冻结失联。\n"
-                + "（v1.5 新增：联网时自动打开无线调试，供小组件 8 使用）\n"
-                + "让 Termux 里的 DSH 帮你操作手机（读屏/点击/滑动/输入）。\n"
-                + "权限只有「无障碍」和「本机回环端口 127.0.0.1:8788」，没有联网上传。\n\n"
-                + "★ 紧急停止（四个都行）：\n"
-                + "   1. 下面这个红按钮\n"
-                + "   2. 音量 + 和音量 − 同时按住 3 秒\n"
-                + "   3. 通知栏「DSH 桥正在运行」里的「紧急停止」\n"
-                + "   4. Termux 桌面小组件「0_紧急停止」\n"
-                + "（另外：本 App 不会开机自启，重启手机后不会自己跑起来）");
+        desc.setText("v1.6 key change: switched to a **foreground service** to stay resident, so system/vendor battery savers cannot freeze it and lose contact.\n"
+                + "(new in v1.5: turns wireless debugging on automatically when online, used by widget 8)\n"
+                + "Lets the DSH inside Termux operate the phone for you (read screen / tap / swipe / type).\n"
+                + "The only permissions are accessibility and the local loopback port 127.0.0.1:8788; nothing is uploaded.\n\n"
+                + "★ Emergency stop (any of the four):\n"
+                + "   1. The red button below\n"
+                + "   2. Hold volume + and volume − together for 3 seconds\n"
+                + "   3. Emergency stop inside the DSH Bridge is running notification\n"
+                + "   4. The Termux home-screen widget item 0_紧急停止\n"
+                + "(Also: this app does not autostart; it will not come up by itself after a phone restart)");
         desc.setTextSize(13f);
         desc.setPadding(0, pad / 2, 0, pad / 2);
         root.addView(desc);
@@ -70,31 +70,31 @@ public class MainActivity extends Activity {
         root.addView(tokenView);
 
         Button copy = new Button(this);
-        copy.setText("复制 token");
+        copy.setText("Copy token");
         copy.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 android.content.ClipboardManager cm =
                         (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                 cm.setPrimaryClip(android.content.ClipData.newPlainText("token", token(MainActivity.this)));
-                toast("token 已复制，可以粘贴发给 DSH");
+                toast("Token copied; you can paste it to DSH");
             }
         });
         root.addView(copy);
 
         Button open = new Button(this);
-        open.setText("① 打开无障碍设置");
+        open.setText("① Open accessibility settings");
         open.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
                     startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                } catch (Throwable t) { toast("打开设置失败：" + t.getMessage()); }
+                } catch (Throwable t) { toast("Failed to open settings: " + t.getMessage()); }
             }
         });
         root.addView(open);
 
         Button refresh = new Button(this);
-        refresh.setText("② 刷新状态 / 恢复监听");
+        refresh.setText("② Refresh state / resume listening");
         refresh.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 BridgeService svc = BridgeService.INSTANCE;
@@ -111,7 +111,7 @@ public class MainActivity extends Activity {
         root.addView(idleBtn);
 
         Button panic = new Button(this);
-        panic.setText("紧急停止（立即关闭无障碍）");
+        panic.setText("Emergency stop (turn accessibility off now)");
         panic.setTextSize(17f);
         panic.setBackgroundColor(0xFFB3261E);
         panic.setTextColor(0xFFFFFFFF);
@@ -121,10 +121,10 @@ public class MainActivity extends Activity {
             @Override public void onClick(View v) {
                 BridgeService svc = BridgeService.INSTANCE;
                 if (svc != null) {
-                    svc.panic("App 内按钮");
-                    toast("已紧急停止，无障碍服务已关闭");
+                    svc.panic("In-app button");
+                    toast("Emergency stop done; the accessibility service is off");
                 } else {
-                    toast("服务当前未运行；如需彻底关闭，请在系统无障碍设置里关掉「DSH 桥」");
+                    toast("The service is not running right now; to shut it down completely, turn DSH Bridge off in the system accessibility settings");
                 }
                 updateState();
             }
@@ -138,7 +138,7 @@ public class MainActivity extends Activity {
         root.addView(warnView);
 
         Button notif = new Button(this);
-        notif.setText("③ 打开本应用的通知设置（让「通知栏紧急停止」可用）");
+        notif.setText("③ Open this app's notification settings (so notification-bar emergency stop works)");
         notif.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
@@ -146,7 +146,7 @@ public class MainActivity extends Activity {
                             .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName())
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(i);
-                } catch (Throwable t) { toast("打不开通知设置：" + t.getMessage()); }
+                } catch (Throwable t) { toast("Cannot open notification settings: " + t.getMessage()); }
             }
         });
         root.addView(notif);
@@ -161,7 +161,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         setContentView(sv);
 
-        tokenView.setText("token：" + token(this));
+        tokenView.setText("token: " + token(this));
         requestNotifPermission();
         updateIdleBtn();
         updateState();
@@ -171,18 +171,18 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         BridgeService svc = BridgeService.INSTANCE;
-        if (svc != null) svc.resumeListening();   // 打开 App 即恢复监听（配合空闲自动停止）
+        if (svc != null) svc.resumeListening();   // opening the app resumes listening (pairs with idle auto-stop)
         updateState();
     }
 
-    // ---------- 状态 / 设置 ----------
+    // ---------- State / settings ----------
     private void updateState() {
         boolean on = isAccessibilityEnabled(this);
         BridgeService svc = BridgeService.INSTANCE;
-        String listen = (svc != null && svc.isListening()) ? "正在监听 127.0.0.1:" + BridgeService.PORT : "未在监听";
-        stateView.setText("无障碍：" + (on ? "已开启 ✅" : "未开启 ❌")
-                + "\n端口：" + listen
-                + (on ? "" : "\n请点「① 打开无障碍设置」，在列表里打开「DSH 桥」"));
+        String listen = (svc != null && svc.isListening()) ? "Listening on 127.0.0.1:" + BridgeService.PORT : "Not listening";
+        stateView.setText("Accessibility: " + (on ? "on ✅" : "off ❌")
+                + "\nPort: " + listen
+                + (on ? "" : "\nTap ① Open accessibility settings and switch DSH Bridge on in the list"));
         boolean notifOk = true;
         try {
             android.app.NotificationManager nm =
@@ -191,15 +191,15 @@ public class MainActivity extends Activity {
         } catch (Throwable t) { notifOk = true; }
         if (warnView != null) {
             warnView.setText(notifOk ? ""
-                    : "⚠️ 通知权限未开启：「通知栏紧急停止」这一层现在是失效的。\n"
-                      + "   请点下面「③ 打开本应用的通知设置」把它打开。\n"
-                      + "   （不影响音量键手势、App 内红按钮、Termux 小组件这三层）");
+                    : "⚠️ Notification permission is off: the notification-bar emergency stop layer is currently dead.\n"
+                      + "   Tap ③ Open this app's notification settings below to enable it.\n"
+                      + "   (The volume-key gesture, the in-app red button and the Termux widget are unaffected)");
         }
     }
 
     private void updateIdleBtn() {
         int m = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE).getInt("idleMin", 30);
-        idleBtn.setText("空闲自动停止：" + (m <= 0 ? "已关闭（一直监听）" : m + " 分钟无指令则停止") + " · 点此切换");
+        idleBtn.setText("Idle auto-stop: " + (m <= 0 ? "off (always listening)" : m + " min idle → stop") + " · tap to switch");
     }
 
     private void cycleIdle() {
@@ -207,7 +207,7 @@ public class MainActivity extends Activity {
         int next = (m == 30) ? 15 : (m == 15) ? 60 : (m == 60) ? 0 : 30;
         getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE).edit().putInt("idleMin", next).apply();
         updateIdleBtn();
-        toast(next <= 0 ? "已关闭空闲自动停止" : "空闲 " + next + " 分钟自动停止");
+        toast(next <= 0 ? "Idle auto-stop is off" : "Auto-stop after " + next + " min idle");
     }
 
     private void requestNotifPermission() {
@@ -216,7 +216,7 @@ public class MainActivity extends Activity {
                     && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
             }
-        } catch (Throwable t) { /* 忽略 */ }
+        } catch (Throwable t) { /* ignore */ }
     }
 
     private void toast(String s) {

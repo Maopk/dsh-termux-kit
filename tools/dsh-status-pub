@@ -1,21 +1,21 @@
 #!/data/data/com.termux/files/usr/bin/python3
-"""dsh-status-pub —— 把「当前状态」发布成一个文件，给外部 App（未来的控制台 APK）读。
+"""dsh-status-pub —— publish the current status as a file for an external App (the future console APK) to read.
 
-为什么需要它：控制台 APK 和 Termux 是**不同 UID**，它读不到 ~/.smoke 里的日志和任何私有文件。
-所以这里把状态写进**共享存储**（Download/dsh/状态/），APK 读那个文件就能显示状态灯。
+Why: the console APK and Termux are **different UIDs**, so it cannot read the logs in ~/.smoke or any private file.
+So the status is written into **shared storage** (Download/dsh/状态/) and the APK reads that file to show its status lamps.
 
-产物：
-  Download/dsh/状态/status.json   机器可读（APK 用）
-  Download/dsh/状态/status.txt    人可读（你自己用文件管理器/编辑器看）
+Output:
+  Download/dsh/状态/status.json   machine-readable (used by the APK)
+  Download/dsh/状态/status.txt    human-readable (for you, via a file manager or editor)
 
-内容：DSH(端口+HTTP码) / 桥(端口+版本+能否应答) / adb(已连设备) / 每个组件上次跑的结果与时间 /
-      启动锁与凭证锁是否残留 / 生成时间。
+Contents: DSH(port+HTTP code) / bridge(port+version+answering) / adb(connected devices) / last run result and time per component /
+      whether boot and credential locks are left over / generation time.
 
-用法：
-  dsh-status-pub            # 发布一次（整包硬预算 6 秒，撞预算的部分标 partial）
-  dsh-status-pub --quiet    # 不打印（给组件收尾调用）
-  dsh-status-pub --print    # 只打印不写文件
-  dsh-status-pub --budget 3 # 自定义整包预算（秒）；控制台走 25 秒超时，默认 6 秒足够
+Usage: 
+  dsh-status-pub            # publish once (whole run has a hard 6s budget; anything that misses it is marked partial)
+  dsh-status-pub --quiet    # print nothing (for components calling it at the end)
+  dsh-status-pub --print    # print only, write no file
+  dsh-status-pub --budget 3 # set the whole-run budget in seconds; the console waits 25s, so the default 6s is plenty
 """
 import json
 import os
@@ -31,13 +31,13 @@ JSON_PATH = os.path.join(OUTDIR, 'status.json')
 TXT_PATH = os.path.join(OUTDIR, 'status.txt')
 TASK_DIR = os.path.join(HOME, '.shortcuts', 'tasks')
 LOG_DIR = os.path.join(HOME, '.smoke')
-DANGEROUS = {'2_关闭DSH', '4_软重启DSH', '6_硬重启DSH', '0_紧急停止'}
+DANGEROUS = {'2_shutdown-dsh', '4_soft-restart-dsh', '6_hard-restart-dsh', '0_emergency-stop'}
 
 
-# ── 全局时间预算（2026-09-27 加）──
-# 为什么：控制台 APK 的「刷新状态」只等 25 秒，而这里每一步各带自己的超时
-# （桥 ping 14s + adb 12s + curl 8s…），最坏情况能拼到 30s+ → App 端先超时，
-# 手机上表现为"点了刷新刷不出来"。现在整包有硬预算（默认 6s），每一步只许用剩下的。
+# ── global time budget (added 2026-09-27)──
+# Why: the console APK refresh-status waits only 25 seconds, while every step here carries its own timeout
+# (bridge ping 14s + adb 12s + curl 8s…), which in the worst case adds up past 30s → the App times out first,
+# which shows on the phone as "refresh does nothing". Now the whole run has a hard budget (6s by default) and each step may only use what is left.
 DEADLINE = None
 BUDGET_S = 6.0
 
@@ -80,7 +80,7 @@ def tasks_state():
         names = sorted(n[:-3] for n in os.listdir(TASK_DIR) if n.endswith('.sh'))
     except Exception:
         names = []
-    brief = '--brief' in sys.argv     # 给控制台 APK 用：不要每个任务的 tail（那 12 行占了整包的大半）
+    brief = '--brief' in sys.argv     # for the console APK: skip the per-task tail (those 12 lines are most of the payload)
     for n in names:
         p = os.path.join(LOG_DIR, 'widget-%s.log' % n)
         item = {'label': n.split('_', 1)[-1].replace('DSH', ' DSH').strip(),
@@ -90,7 +90,9 @@ def tasks_state():
                 with open(p, 'rb') as f:
                     f.seek(max(0, os.path.getsize(p) - 4000))
                     tail = f.read().decode('utf-8', 'replace')
-                res = re.findall(r'【[^】]+】(完成|失败|未执行)', tail)
+                res = _TERM = re.compile(r'(?:\[(?P<n1>[^\]]{1,60})\]\s*(?P<s1>done|failed|skipped)\b|【(?P<n2>[^】]{1,60})】\s*(?P<s2>完成|失败|未执行))')
+                _NORM = {'完成': 'done', '失败': 'failed', '未执行': 'skipped'}
+                res = [_NORM.get(m.group('s2') or m.group('s1'), m.group('s1')) for m in _TERM.finditer(tail)]
                 stamps = re.findall(r'^===== ([\d\-]+ [\d:]+)', tail, re.M)
                 item['last'] = res[-1] if res else None
                 item['at'] = stamps[-1] if stamps else None
@@ -114,10 +116,10 @@ def collect():
     dsh['http'] = code or '?'
     dsh['ok'] = dsh['port'] and code not in ('', '000', '404')
     st['dsh'] = dsh
-    # 桥
+    # bridge
     br = {'port': port_open(8788), 'ok': False, 'ver': None, 'paused': None}
     if br['port']:
-        # --fast：单次连接、失败/被冻结立刻返回，不走"广播+拉界面"的唤醒阶梯（那条最多 14s）
+        # --fast: a single connection that returns at once on failure or freeze, skipping the "broadcast + raise UI" wake ladder (which takes up to 14s)
         pong = sh([os.path.join(HOME, '.local/bin/droid-sock'), 'ping', '--fast'], timeout=budget(4))
         br['ok'] = '"pong": true' in pong
         m = re.search(r'"ver":\s*"([^"]+)"', pong)
@@ -132,35 +134,35 @@ def collect():
         if '\tdevice' in line:
             devs.append(line.split('\t')[0])
     st['adb'] = {'devices': devs, 'ok': bool(devs)}
-    # 残留
+    # leftovers
     st['locks'] = {
         'boot': os.path.exists(os.path.join(HOME, '.dsh-boot-8080.lock')),
         'credentials': os.path.exists(os.path.join(HOME, '.dsh', '.credentials.yaml.lock')),
     }
-    # 灯（给 UI 直接用的三色摘要）
+    # lamps (three-color summary the UI can use directly)
     st['lamps'] = {
         'dsh': 'green' if st['dsh']['ok'] else ('yellow' if st['dsh']['port'] else 'red'),
         'bridge': 'green' if st['bridge']['ok'] else ('yellow' if st['bridge']['port'] else 'red'),
         'adb': 'green' if st['adb']['ok'] else 'red',
     }
     st['tasks'] = tasks_state()
-    st['partial'] = out_of_time()   # true = 撞到预算、有些项是"没来得及问"而不是"真的红"
+    st['partial'] = out_of_time()   # true = the budget was hit; some items are "not asked in time" rather than "really red"
     return st
 
 
 def text_of(st):
     L = []
-    L.append('DSH 状态  %s' % st['ts'])
+    L.append('DSH status  %s' % st['ts'])
     L.append('─' * 34)
-    L.append('DSH Web : %s  (端口 %s, HTTP %s)' % ('在跑' if st['dsh']['ok'] else '停了',
-                                                   '开' if st['dsh']['port'] else '关', st['dsh']['http']))
-    L.append('DSH 桥  : %s  %s' % ('在' if st['bridge']['ok'] else ('端口在但不应答' if st['bridge']['port'] else '无'),
+    L.append('DSH Web : %s  (port %s, HTTP %s)' % ('up' if st['dsh']['ok'] else 'down',
+                                                   'open' if st['dsh']['port'] else 'closed', st['dsh']['http']))
+    L.append('DSH brg : %s  %s' % ('up' if st['bridge']['ok'] else ('port open, no answer' if st['bridge']['port'] else 'none'),
                                    ('v' + st['bridge']['ver']) if st['bridge']['ver'] else ''))
-    L.append('adb     : %s' % (st['adb']['devices'][0] if st['adb']['devices'] else '未连接'))
+    L.append('adb     : %s' % (st['adb']['devices'][0] if st['adb']['devices'] else 'not connected'))
     if st['locks']['boot'] or st['locks']['credentials']:
-        L.append('⚠ 锁残留: %s' % ', '.join(k for k, v in st['locks'].items() if v))
+        L.append('⚠ locks left over: %s' % ', '.join(k for k, v in st['locks'].items() if v))
     L.append('')
-    L.append('组件（上次结果）')
+    L.append('components (last result)')
     for name, t in st['tasks'].items():
         L.append('  %-16s %-6s %s' % (name, t['last'] or '—', t['at'] or ''))
     return '\n'.join(L) + '\n'
@@ -181,7 +183,7 @@ def main():
                 pass
     quiet = '--quiet' in sys.argv
     only_print = '--print' in sys.argv
-    as_json = '--json' in sys.argv      # 只把 JSON 打到 stdout（给控制台 APK 用）
+    as_json = '--json' in sys.argv      # print JSON to stdout only (for the console APK)
     st = collect()
     if as_json:
         print(json.dumps(st, ensure_ascii=False))
@@ -195,12 +197,12 @@ def main():
             with open(TXT_PATH, 'w', encoding='utf-8') as f:
                 f.write(txt)
         except Exception as e:
-            print('✘ 写状态文件失败: %s' % e, file=sys.stderr)
+            print('✘ failed to write the status file: %s' % e, file=sys.stderr)
             return 1
     if not quiet:
         print(txt, end='')
         if not only_print:
-            print('\n已写入: %s' % JSON_PATH)
+            print('\nwrote: %s' % JSON_PATH)
     return 0
 
 

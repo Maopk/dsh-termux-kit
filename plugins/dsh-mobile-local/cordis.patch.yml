@@ -1,4 +1,4 @@
-# 手机端 UI 增强：插入指向本包的组合行
+# Mobile UI enhancements: insert the composition row pointing at this package
 - insert:
     - id: mobileui
       name: dsh-mobile-local

@@ -1,5 +1,5 @@
-// dsh-selflook-local —— 让 DSH 界面把自身渲染成 PNG 回传（AI 自看）
-// bundle 规范：具名 name/inject + apply.inject + export default apply
+// dsh-selflook-local — let the DSH UI render itself to PNG and send it back (AI self-look)
+// bundle convention: named name/inject exports + apply.inject + export default apply
 export const name = 'dsh-selflook-local'
 export const inject = ['shell', 'sandboxPolicy', 'webServer']
 
@@ -9,9 +9,9 @@ const LAST = HOME + '/.dsh-look-last.txt'
 const OUTDIR = HOME + '/storage/downloads/dsh/图片'
 
 function apply(ctx) {
-  let inFlightAt = 0   // 上次触发时间；超过 15s 视为放弃，允许重新触发
-  // Termux 上没有可用的沙箱后端：必须显式用 danger-full-access，
-  // 否则 shell 服务会以“no sandbox backend is usable”拒绝执行。
+  let inFlightAt = 0   // last trigger time; past 15s counts as abandoned and may be retriggered
+  // No usable sandbox backend on Termux: danger-full-access must be set explicitly,
+  // otherwise the shell service refuses to run with "no sandbox backend is usable".
   const policy = () => ({ mode: 'danger-full-access', workspaceRoot: HOME })
 
   async function sh(command, stdin) {
@@ -53,12 +53,12 @@ function apply(ctx) {
 
         if (method === 'deliver') {
           const b64 = String(body.base64 || '')
-          if (b64 === '') throw new Error('空图像数据')
+          if (b64 === '') throw new Error('empty image data')
           const stamp = new Date().toISOString().replace(/[:.]/g, '-')
           const path = OUTDIR + '/self-look-' + stamp + '.png'
           await sh('mkdir -p ' + OUTDIR)
           const w = await sh('base64 -d > ' + path, b64)
-          if (w && w.exitCode !== 0) throw new Error('写入失败 exit=' + w.exitCode)
+          if (w && w.exitCode !== 0) throw new Error('write failed exit=' + w.exitCode)
           await sh('echo ' + path + ' > ' + LAST)
           inFlightAt = 0
           console.log('[selflook] saved ' + path)
@@ -68,12 +68,12 @@ function apply(ctx) {
         if (method === 'log') {
           const msg = String(body.message || '').slice(0, 2000)
           const line = '[' + new Date().toISOString() + '] ' + msg + '\n'
-          // 用 stdin 传入内容，避免任何 shell 转义/注入问题
+          // Pass the content through stdin to avoid any shell escaping/injection issues
           await sh('cat >> ' + HOME + '/.dsh-look-client.log', line)
           return send(200, { ok: true })
         }
 
-        return send(200, { ok: false, error: '未知方法 ' + method })
+        return send(200, { ok: false, error: 'unknown method ' + method })
       } catch (e) {
         inFlightAt = 0
         return send(500, { ok: false, error: (e && e.message) ? e.message : String(e) })

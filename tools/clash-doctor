@@ -1,14 +1,14 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# clash-doctor —— 一页纸自检 Clash Meta for Android（手机上最坑的那几条）
+# clash-doctor —— one-page self-check for Clash Meta for Android (the nastiest traps on this phone)
 #
-# 为什么写它：2026-09-27 半夜出过一次"Clash 连 GitHub 都打不开"，根因是
-#   **机场的节点域名被 Clash 自己的 fake-ip 吃掉**（解析成 198.18.x.x），
-#   而 mihomo 拒绝拿 FakeIP 去连代理服务器 → 所有走节点的请求 502，
-#   Clash 日志原文：`dial <组名> ... error: connect error: dns resolve failed: couldn't find ip`。
-#   而国内直连（百度/微信）一切正常，所以很像"机场挂了"，其实不是。
+# Why it exists: one night on 2026-09-27 "Clash could not open even GitHub", and the root cause was
+#   **the provider node domain was eaten by the Clash fake-ip** (resolved to 198.18.x.x),
+#   mihomo refuses to use a FakeIP to reach a proxy server → every node request got a 502,
+#   the Clash log said: `dial <group name> ... error: connect error: dns resolve failed: couldn't find ip`.
+#   direct domestic links (Baidu/WeChat) were fine, so it looked like "the provider was down", but it was not.
 #
-# 用法：clash-doctor [节点域名]        # 不给域名就自动从 ~/.clash-opt/*.yaml 里挑一个
-# 退出码：0 一切正常；1 有明确故障（并给出下一步）
+# Usage: clash-doctor [node domain]        # with no domain, one is picked from ~/.clash-opt/*.yaml
+# Exit codes: 0 all good; 1 a clear fault (with a next step)
 set -u
 SOCKS_PORT=7890
 PROXY="http://127.0.0.1:${SOCKS_PORT}"
@@ -20,25 +20,25 @@ port_open() { (exec 3<>/dev/tcp/127.0.0.1/"$1") 2>/dev/null && exec 3<&- 3>&-; }
 
 FAIL=0
 
-step "① Clash 核心在不在（混合端口 ${SOCKS_PORT}）"
-if port_open "$SOCKS_PORT"; then ok "端口在听 —— 核心运行中"
-else bad "端口没在听 —— 先打开 Clash 的主开关（运行中）"; exit 1; fi
+step "① is the Clash core there (mixed port ${SOCKS_PORT})"
+if port_open "$SOCKS_PORT"; then ok "port is listening — core is running"
+else bad "port is not listening — turn on the Clash main switch (Running)"; exit 1; fi
 
-step "② 直连（国内）与 DNS 劫持是否正常"
+step "② direct domestic link and DNS hijack are healthy"
 C=$(curl -s -o /dev/null -m 8 -w '%{http_code}' https://www.baidu.com 2>/dev/null)
-[ "$C" = 200 ] && ok "baidu 200（直连链路 + DNS 劫持正常）" || { bad "baidu $C —— 手机本身没网？"; FAIL=1; }
+[ "$C" = 200 ] && ok "baidu 200 (direct link + DNS hijack fine)" || { bad "baidu $C — the phone itself has no network?"; FAIL=1; }
 
-step "③ 走节点（代理）通不通"
+step "③ can traffic go through a node (proxy)"
 C1=$(curl -s -o /dev/null -m 12 -w '%{http_code}' -x "$PROXY" http://www.gstatic.com/generate_204 2>/dev/null)
 C2=$(curl -s -o /dev/null -m 18 -w '%{http_code}' -x "$PROXY" https://github.com 2>/dev/null)
 printf '   gstatic204=%s   github=%s\n' "$C1" "$C2"
-if [ "$C1" = 204 ] || [ "$C2" = 200 ]; then ok "代理链路正常"
-else bad "代理不通（502/000）—— 见第④步"; FAIL=1; fi
+if [ "$C1" = 204 ] || [ "$C2" = 200 ]; then ok "proxy path is fine"
+else bad "proxy is dead (502/000) — see step ④"; FAIL=1; fi
 
-step "④ 节点域名有没有被 fake-ip 吃掉（这条最坑：直连正常、代理全 502）"
+step "④ was the node domain eaten by fake-ip (the nastiest one: direct works, all proxies 502)"
 DOM="${1:-}"
 if [ -z "$DOM" ]; then
-  # 从我自己生成的优化配置里挑一个节点域名（只看 server 字段，不碰任何密钥）
+  # pick a node domain from the optimized config I generated (reads only the server field, no keys)
   for f in "$HOME"/.clash-opt/*.yaml; do
     [ -f "$f" ] || continue
     DOM=$(grep -oE 'server: *"?[a-z0-9.-]+\.[a-z]{2,}"?' "$f" 2>/dev/null | sed 's/server: *"\?//; s/"$//' \
@@ -46,29 +46,29 @@ if [ -z "$DOM" ]; then
     [ -n "$DOM" ] && break
   done
 fi
-if [ -z "$DOM" ]; then warn "没找到节点域名（可用 clash-doctor <域名> 指定）"
+if [ -z "$DOM" ]; then warn "no node domain found (pass one with clash-doctor <domain>)"
 else
   IP=$(getent hosts "$DOM" 2>/dev/null | awk '{print $1}' | head -1)
-  printf '   %s → %s\n' "$DOM" "${IP:-（解析不到）}"
+  printf '   %s → %s\n' "$DOM" "${IP:-unresolvable}"
   case "$IP" in
     198.18.*|198.19.*)
-      bad "被 fake-ip 吃了！mihomo 不会拿 FakeIP 去连代理服务器 → 所有走节点的请求必挂"
-      printf '   修法（两步，缺一不可）：\n'
-      printf '     1) Clash → 设置 → 覆写 → DNS → FakeIP 过滤器，把 **整个机场域名** 加进去，例如:\n'
+      bad "eaten by fake-ip! mihomo will not use a FakeIP to reach a proxy server → all node traffic will fail"
+      printf '   Fix (both steps are required):\n'
+      printf '     1) Clash → 设置 → 覆写 → DNS → FakeIP 过滤器, add **the whole provider domain**, e.g.:\n'
       printf '          +.%s\n' "${DOM#*.}"
-      printf '          （用 ~/.local/share/dsh-widgets/clash-override.py list "FakeIP 过滤器" <原有条目...> +.xxx.com）\n'
-      printf '     2) **让配置重新生成并重启核心**：配置页 → 点档位 → 更新；然后彻底退出 App 重进\n'
-      printf '        （只点「更新」不生效，实测必须让核心重启过）\n'
+      printf '          (use ~/.local/share/dsh-widgets/clash-override.py list "FakeIP 过滤器" <existing entries...> +.xxx.com)\n'
+      printf '     2) **regenerate the config and restart the core**: 配置页 → 点档位 → 更新; then fully exit the App and reopen\n'
+      printf '        (tapping 更新 alone does nothing; measured: the core must actually restart)\n'
       FAIL=1 ;;
-    "") warn "解析不到（可能已被过滤器排除 → 由 mihomo 内部解析，这通常是**正常**的）" ;;
-    *)  ok "解析到真实 IP（$IP），不是 fake-ip" ;;
+    "") warn "unresolvable (maybe excluded by the filter → mihomo resolves it internally, which is usually **normal**)" ;;
+    *)  ok "resolved to a real IP ($IP), not fake-ip" ;;
   esac
 fi
 
-step "⑤ 结论"
-if [ "$FAIL" = 0 ]; then printf '   一切正常 ✅\n'; else
-  printf '   有故障 ❌ —— 上面带 ✘ 的那一步就是原因\n'
-  printf '   取证办法：Clash → 日志 → 「Clash 日志捕捉工具」→ 点此启动（info 级）→ 再复现一次，\n'
-  printf '             日志里会直接写 `error: ... dns resolve failed: couldn'"'"'t find ip` 这类原因\n'
+step "⑤ Verdict"
+if [ "$FAIL" = 0 ]; then printf '   all good ✅\n'; else
+  printf '   fault found ❌ — the step marked ✘ above is the cause\n'
+  printf '   How to capture evidence: Clash → 日志 → 「Clash 日志捕捉工具」→ 点此启动 (info level) → reproduce it once more,\n'
+  printf '             the log will state it directly: `error: ... dns resolve failed: couldn'"'"'t find ip` — that kind of cause\n'
 fi
 exit "$FAIL"

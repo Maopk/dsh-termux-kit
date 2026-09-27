@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- id 命名规则：w_lamp_* = 状态灯，w_btn_* = 按钮。**绝不能重复**，
-     否则 RemoteViews 的 setOnClickPendingIntent 会挂到同名的灯上（v0.1~v0.3 的 w_adb 就是这个问题）。 -->
+<!-- id naming rule: w_lamp_* = status lamps, w_btn_* = buttons. They must **never repeat**,
+     or RemoteViews' setOnClickPendingIntent attaches to the same-named lamp (that was the w_adb bug in v0.1~v0.3). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -14,29 +14,29 @@
         android:orientation="horizontal"
         android:gravity="center_vertical">
         <TextView android:id="@+id/w_title" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="DSH 控制台" android:textColor="#E6EDF3"
+            android:layout_weight="1" android:text="DSH Console" android:textColor="#E6EDF3"
             android:textSize="13sp" android:textStyle="bold" />
         <TextView android:id="@+id/w_lamp_dsh" android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:text="● DSH" android:textColor="#8B949E" android:textSize="12sp" android:paddingEnd="6dp" />
         <TextView android:id="@+id/w_lamp_bridge" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="● 桥" android:textColor="#8B949E" android:textSize="12sp" android:paddingEnd="6dp" />
+            android:text="● Bridge" android:textColor="#8B949E" android:textSize="12sp" android:paddingEnd="6dp" />
         <TextView android:id="@+id/w_lamp_adb" android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:text="● adb" android:textColor="#8B949E" android:textSize="12sp" />
     </LinearLayout>
 
     <TextView android:id="@+id/w_status" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="点「刷新」读取状态" android:textColor="#8B949E" android:textSize="11sp"
+        android:text="Tap Refresh to read status" android:textColor="#8B949E" android:textSize="11sp"
         android:paddingTop="2dp" android:paddingBottom="4dp" />
 
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal">
         <Button android:id="@+id/w_btn_start" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="启动" android:textSize="12sp" />
+            android:layout_weight="1" android:text="Start" android:textSize="12sp" />
         <Button android:id="@+id/w_btn_adb" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="连 adb" android:textSize="12sp" />
+            android:layout_weight="1" android:text="Connect" android:textSize="12sp" />
         <Button android:id="@+id/w_btn_bridge" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="唤醒桥" android:textSize="12sp" />
+            android:layout_weight="1" android:text="Wake" android:textSize="12sp" />
         <Button android:id="@+id/w_btn_refresh" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="刷新" android:textSize="12sp" />
+            android:layout_weight="1" android:text="Refresh" android:textSize="12sp" />
     </LinearLayout>
 </LinearLayout>

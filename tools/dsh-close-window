@@ -1,23 +1,23 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-close-window —— 关掉 DSH 的浏览器 / PWA（WebAPK）窗口
+# dsh-close-window —— close the DSH browser / PWA (WebAPK) window
 #
-# 为什么需要单独一个工具：
-#   Termux 自带的 am 是 termux-am 0.8.1，**没有 force-stop 子命令**
-#   （`am force-stop X` → Error: unknown command）。所以"关闭 DSH"里原来那句
-#   `close_pkg com.android.chrome` 在没有 adb 时是**假的**——打印了"已关闭"，窗口根本没关。
-#   能真正关掉别的 App 窗口的只有两条路：
-#     ① adb（shell 身份）：adb shell am force-stop …
-#     ② 无障碍桥：把窗口带到前台，再连按系统返回键，直到前台不再是它
-#   （PWA/TWA 窗口的"前台包名"是 com.android.chrome —— Chrome 替 WebAPK 渲染，
-#     所以判定"窗口还在不在"看的就是 com.android.chrome。）
+# Why a separate tool:
+#   the am bundled with Termux is termux-am 0.8.1, which **has no force-stop subcommand**
+#   (`am force-stop X` → Error: unknown command). So the line in "close DSH" that called
+#   `close_pkg com.android.chrome` was **fake** without adb — it printed "closed" while the window stayed open.
+#   Only two routes can really close another App window:
+#     ① adb (shell identity): adb shell am force-stop …
+#     ② the accessibility bridge: bring the window to the front, then press system Back until it is no longer in front
+#   (the "foreground package" of a PWA/TWA window is com.android.chrome — Chrome renders for the WebAPK,
+#     so "is the window still there" is judged by com.android.chrome.)
 #
-# ⚠ 顺序要求：借桥关窗口必须在「停桥」之前做（2_关闭DSH.sh 已按此排序）。
+# ⚠ Ordering: closing the window through the bridge must happen before stopping the bridge (2_shutdown-dsh.sh is ordered that way).
 #
-# 用法：
-#   dsh-close-window            真正关（adb 优先，其次桥）
-#   dsh-close-window --probe    只报告状态，不动手（自测用）
-#   dsh-close-window --dry-run  只打印计划
-#   dsh-close-window --keep-chrome   只关 PWA 壳，不 force-stop Chrome（有 adb 时）
+# Usage: 
+#   dsh-close-window            really close it (adb first, then the bridge)
+#   dsh-close-window --probe    report state only, touch nothing (for self-tests)
+#   dsh-close-window --dry-run  print the plan only
+#   dsh-close-window --keep-chrome   close only the PWA shell, do not force-stop Chrome (when adb is available)
 set -u
 HOME_DIR=/data/data/com.termux/files/home
 SOCK="$HOME_DIR/.local/bin/droid-sock"
@@ -31,11 +31,11 @@ for a in "$@"; do case "$a" in
 esac; done
 say() { printf '%s\n' "$*"; }
 
-# 前台包名（快，不唤醒）
+# foreground package (fast, no wake)
 fg_pkg() {
   timeout 8 "$SOCK" cur 2>/dev/null | grep -o '"pkg":[[:space:]]*"[^"]*"' | cut -d'"' -f4
 }
-# PWA 包名：优先缓存（dsh-browser-open 写的），其次 adb 现查
+# PWA package: prefer the cache (written by dsh-browser-open), otherwise ask adb
 pwa_pkg() {
   local p=""
   [ -f "$PWAFILE" ] && p=$(head -1 "$PWAFILE" | tr -d '[:space:]')
@@ -53,12 +53,12 @@ dsh_url() {
 adb_ready() { adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q .; }
 
 PWA=$(pwa_pkg); FG=$(fg_pkg)
-say "PWA 包名   : ${PWA:-（未发现，dsh-browser-open 还没写过缓存）}"
-say "前台包名   : ${FG:-（桥没应答）}"
-say "adb        : $(adb_ready && echo 已连接 || echo 未连接)"
+say "PWA pkg    : ${PWA:-not found, dsh-browser-open has not written a cache yet}"
+say "foreground : ${FG:-bridge did not answer}"
+say "adb        : $(adb_ready && echo connected || echo not connected)"
 if [ "$PROBE" = 1 ]; then
-  if [ "$FG" = "com.android.chrome" ]; then say "判定        : DSH 窗口**在**前台（Chrome 托管）"
-  else say "判定        : 前台不是 Chrome → DSH 窗口此刻不在最前面"; fi
+  if [ "$FG" = "com.android.chrome" ]; then say "verdict     : the DSH window **is** in front (hosted by Chrome)"
+  else say "verdict     : the foreground is not Chrome → the DSH window is not in front right now"; fi
   exit 0
 fi
 
@@ -76,51 +76,51 @@ close_via_adb() {
 close_via_bridge() {
   local i prev
   if ! timeout 8 "$SOCK" ping --fast >/dev/null 2>&1; then
-    say "   ✘ 桥没应答（--fast），无法借它按键"
+    say "   ✘ the bridge did not answer (--fast); cannot press keys through it"
     return 1
   fi
-  # 记下"关窗口之前你在用哪个 App"：为了借返回键，我们必须先把 DSH 窗口拉到前台，
-  # 关完若不还回去，你就会停在桌面（实机踩到）。关完把它拉回前台（Termux/桌面除外）。
+  # remember "which App you were using before closing": to borrow the Back key we must first pull the DSH window to the front,
+  # and if we do not put it back you end up on the home screen (hit this on the real device). So we restore it afterwards (except Termux or the home screen).
   prev=$(fg_pkg)
   if [ "$prev" = "com.android.chrome" ]; then prev=""; fi
-  # 窗口必须在最前面才收得到返回键
+  # the window must be in front to receive the Back key
   if [ "$(fg_pkg)" != "com.android.chrome" ]; then
-    say "   · 把 DSH 窗口带到前台（这样才能给它发返回键）"
+    say "   · bringing the DSH window to the front (so Back can be sent to it)"
     timeout 15 am start -a android.intent.action.VIEW -d "$(dsh_url)" ${PWA:+-p "$PWA"} >/dev/null 2>&1
     sleep 2
   fi
-  # 关完把原来的 App 还到前台
+  # restore the previous App to the front
   restore_prev() {
     [ -z "$prev" ] && return 0
     case "$prev" in com.termux|com.bbk.launcher*|*launcher*) return 0 ;; esac
     timeout 12 am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "$prev" >/dev/null 2>&1 \
-      && say "   · 已把 $prev 拉回前台"
+      && say "   · brought $prev back to the front"
   }
   for i in 1 2 3 4 5 6; do
     if [ "$(fg_pkg)" != "com.android.chrome" ]; then
-      say "   ✔ 窗口已关（按了 $((i-1)) 次返回键）"
+      say "   ✔ window closed (pressed Back $((i-1)) times)"
       restore_prev
       return 0
     fi
     timeout 8 "$SOCK" key back >/dev/null 2>&1
     sleep 0.8
   done
-  [ "$(fg_pkg)" != "com.android.chrome" ] && { say "   ✔ 窗口已关（按了 6 次返回键）"; restore_prev; return 0; }
-  say "   ✘ 按了 6 次返回键窗口还在 —— 页面可能自己吞了返回键；有 adb 时用 adb 关更干净"
+  [ "$(fg_pkg)" != "com.android.chrome" ] && { say "   ✔ window closed (pressed Back 6 times)"; restore_prev; return 0; }
+  say "   ✘ the window is still there after 6 Back presses — the page may be swallowing Back; with adb available adb closes it more cleanly"
   return 1
 }
 
 if [ "$DRY" = 1 ]; then
-  say "· [dry] $(adb_ready && echo 'adb shell am force-stop com.android.chrome' || echo '借桥：带到前台 + 连按返回键')"
+  say "· [dry] $(adb_ready && echo 'adb shell am force-stop com.android.chrome' || echo 'via bridge: bring to front + press Back repeatedly')"
   exit 0
 fi
 
 if adb_ready; then
-  say "→ 走 adb 关闭"
-  close_via_adb && { say "✔ 已关闭（adb）：浏览器/PWA 窗口已消失"; exit 0; }
-  say "   adb 关了但前台仍是 Chrome → 试试借桥"
+  say "→ closing via adb"
+  close_via_adb && { say "✔ closed (adb): the browser/PWA window is gone"; exit 0; }
+  say "   adb closed it but Chrome is still in front → trying the bridge"
 fi
-say "→ 走桥关闭（无障碍）"
+say "→ closing via the bridge (accessibility)"
 if close_via_bridge; then exit 0; fi
-say "✘ 没关掉。可行的替代：① 手动从最近任务划掉；② 开一次无线调试让我用 adb 关"
+say "✘ could not close it. Alternatives: ① swipe it away from recents by hand; ② turn on wireless debugging once so I can close it with adb"
 exit 1

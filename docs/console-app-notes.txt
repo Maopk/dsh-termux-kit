@@ -1,0 +1,178 @@
+DSH Console v0.5.1 (package name io.dsh.console, versionCode 6)
+=====================================
+What it is
+  The "remote control" for this Termux environment: it turns the 9 desktop components into a proper App + a home-screen widget.
+  It does no computation of its own; it just asks Termux to run commands for it (through the official channel com.termux.RUN_COMMAND).
+
+Permissions (only 1, verifiable in system settings)
+  · com.termux.permission.RUN_COMMAND —— a permission defined by Termux, used to let other Apps ask it to execute commands
+  None of: storage access / network / accessibility / overlay windows / reading the app list / auto-start on boot
+
+Prerequisites
+  · Termux is installed, and allow-external-apps = true in ~/.termux/termux.properties (already enabled on this device)
+  · If the App reports a missing permission: Settings → Apps → DSH Console → Permissions → Allow RUN_COMMAND
+
+How to use it
+  1) Open "DSH Console" → tap "Refresh status" → the three lamps at the top change color (green = running, yellow = half-dead, red = none)
+  2) Find buttons by category: Start/Stop · Channel · Maintenance · Emergency
+  3) The "Log" button has a screen of its own: every send, response, exit code, and raw output is in there (copyable, clearable)
+  4) Long-press an empty spot on the home screen → Widgets → drag out "DSH Console" → the home screen then has it directly: three lamps + Start/Connect adb/Wake bridge/Refresh
+
+Safety and revocation
+  · Just uninstall the App; it does not affect Termux or DSH themselves
+  · It holds no long-lived channel: every execution is a one-shot command, and the Termux side can turn allow-external-apps off at any time to make it stop working
+
+v0.2 interaction changes (based on your feedback)
+  · Tapping a button reacts immediately: Toast + spinner at the top + "waited Ns" refreshed every second + the button grays out and cannot be tapped
+  · If nothing comes back within 45 seconds, the possible causes are listed explicitly (not authorized / allow-external-apps turned off / background start blocked)
+  · Buttons brighten when pressed (previously the flat color background covered the system ripple)
+  · On entering the foreground, if the status is more than 20 seconds old it refreshes once automatically
+  · Tapping a button in the home-screen widget immediately shows "⏳ Running: X …"
+
+Issues fixed in v0.3 (spotted in your screenshots)
+  · Lamp colors: v0.2 painted the color onto the letters/characters (the index was hard-coded to 0/4/8),
+    so "the text says bridge v1.8, but the lamp is gray". Now it colors dynamically by the dot's actual position, and the name behind the lamp changes color along with it.
+  · The output area repeated "Sent: Refresh status" three times: on foreground entry, onCreate and onResume each sent one.
+    Now nothing is sent if one is in flight, if the cache is fresh, or within 15 seconds of a previous send.
+  · Other buttons did not look grayed out while busy: the text now takes its color from the "enabled/disabled" state, and the disabled color is clearly darker.
+
+v0.4: fully separating "bridge" and "adb" (they were two independent channels all along)
+  · bridge = accessibility App + 127.0.0.1:8788 + token, over loopback, **no network needed**
+  · adb = wireless debugging + the wlan interface, **a working Wi-Fi network is required**
+  Corresponding UI changes:
+    "Connect adb"  → does only the wireless-debugging one (component 8)
+    "Wake bridge"  → does only the accessibility one (dsh-bridge wake, a broadcast carrying the token, re-authorizing automatically when necessary)
+    "View bridge status"→ queries only the bridge: port / whether it really responds / version / paused
+    "Restore all (adb + bridge)"→ use only when both are needed (component 7; on failure each one explains whose problem it is)
+  The widget's four buttons are separated the same way: Start / Connect adb / Wake bridge / Refresh.
+
+  Also fixed a hidden hazard: in the widget, the "Connect adb" button and the adb indicator lamp had colliding ids (both were called w_adb),
+  so RemoteViews attached the click to the lamp → now lamps use w_lamp_* and buttons use w_btn_*, with no overlap.
+
+v0.5: the output box at the bottom becomes the "Log" button + buttons grouped by function
+  ① The output box no longer sits permanently at the bottom of the page
+     · That box used to be blank whenever it had no content, which looked broken; it is now the "Log" button in the top-right corner
+     · Tapping it opens a screen of its own: send records / responses / exit codes / elapsed time / raw output, scrollable, long-press to select
+     · Three buttons: Copy all, Clear, Close (Clear only clears the display; it touches nothing on the Termux side)
+     · When there are unseen records the button carries a badge: "Log (2)", and opening it resets the count
+     · While waiting for a result the Log button does **not** gray out —— you can browse the records while you wait
+  ② Only a single "last result" summary line is left at the bottom: ✅ green / ⚠ red + exit code + elapsed time + time; tapping it also opens the Log.
+     When there is not a single record, this line is not shown (no more blank box)
+  ③ Buttons are split into four sections by function, each with a small blue heading:
+     · Start / Stop: Start DSH · Open Web UI · Soft restart · Hard restart · Stop DSH
+     · Channel (adb and bridge separate): Connect adb · Wake bridge · View bridge status · Restore all (adb + bridge)
+     · Maintenance: Backup · Cleanup
+     · Emergency: Emergency stop (red button, second confirmation)
+  ④ Dialogs now use a dark theme (previously the system default was light, leaving a white patch on the dark page)
+
+v0.5.1: self-check after installing v0.5 on the real device, which caught two problems on the spot (both of the "looks broken / looks like there was no error" kind)
+  ① `[errmsg] -1` appeared in the Log
+     Cause: in the Termux result bundle, `err` is an **integer error code**; only `errmsg` is a string message;
+     I printed `err` as if it were the message → now only an errmsg that actually has text is appended, and pure numbers are never shown.
+  ② After a task failed, the "last result" was overwritten with `✅ Refresh status`
+     Cause: whenever any task finishes, the Termux side automatically adds one status refresh; that response overwrote the just-failed
+     `⚠ Connect adb exit=3` with `✅ Refresh status exit=0` —— making it look like nothing had just failed.
+     Now only the **one the user tapped** updates that summary line.
+  Both of these were "only found once it ran": reading the code alone, you would not easily suspect a problem, but install it and tap twice and they show up.
+
+v0.6 (versionCode 7): **built, but not installed yet** (waiting for your fingerprint / password / or one round of turning on wireless debugging)
+  · Tiny change: when the App auto-refreshes the status on entering the foreground, the Log and summary show it as "auto refresh status",
+    telling it apart from a manually tapped "Refresh status" (the two used to look exactly the same, so you could not tell what triggered them).
+  · This version is also used as an "install flow rehearsal" (only raising the version number from 6 to 7 triggers vivo's identity verification).
+
+The real APK install flow on this machine (measured; do not step on it again):
+  1) If the version number is unchanged → the installer only says "same version already installed (x.y)"; only **when the version number changes** does it go through the "Super Guard" page;
+  2) The big button at the bottom of the "Super Guard" page is **"Cancel install"** —— tapping it means cancel;
+  3) The only way in is the **blue second half** of the small line "…if you trust this app, you may authorize this installation"
+     (measured: only the area around the two characters "Install" responds; tapping "Authorize" does nothing);
+  4) After that the system pops up "Security verification": fingerprint or "lock-screen password verification"; **after about 50 seconds of no action it times out on its own and the install does not happen**;
+  5) To confirm whether it really installed: **open the same APK once more** —— only if it shows "same version already installed (x.y)" did it really install.
+     (The version number shown inside the App is unreliable: after an update the old process is still alive, so you still see the old version)
+  6) To skip this whole dance entirely: turn on "wireless debugging" once, then use adb's `pm install` for a silent install that needs no verification at all.
+
+v0.6.1 (versionCode 8): **current version, installed and verified item by item**. Fixes two bugs "only found by tapping":
+  ① **"Wake bridge" and "View bridge status" were broken all along**: the commands they ran used the bare name `dsh-bridge wake`,
+     while RUN_COMMAND goes through `bash -lc`, whose PATH measured as only `/data/data/com.termux/files/usr/bin:.`
+     ——**with no `~/.local/bin`** → both commands ended up as `exit=127` (command not found).
+     Reproduced on the device: `env -i bash -lc 'command -v dsh-bridge'` → NOT FOUND.
+     **Fix**: rewritten to the absolute path `$HOME/.local/bin/dsh-bridge ...`; after the fix, measured on the device: View bridge status exit=0
+     and it responded "bridge: listening and responding, version v1.8, paused=false"; Wake bridge exit=0 (0.118s).
+  ② **The "last result" for a status refresh never appeared**: in v0.6, in the isStatus branch I cleared `pending` first
+     and then read `wasPending` → always false → the summary line was not shown (only by tapping twice on the device did I find the summary area empty).
+     **Fix**: read `wasPending` first, then clear; verified on the device: tap "Refresh status" → the summary line shows `✅ Refresh status exit=0 0.171s`.
+
+Install session record (went through "lock-screen password verification", I did all the tapping):
+  Blue text (338,1151) → "lock-screen password verification" (368,1503) → tap the 6 digits in order on the number pad → the completion page shows "Version: 0.6.1"
+  → tap "Done" → cold-start the App and it shows `v0.6.1`. **The password was never written to disk** (not in notes, memory, or any file).
+
+v0.7 / v0.7.1 (versionCode 9 / 10): **current version, installed and verified**
+  · v0.7: added two entries, "Revoke install password access" (emergency type) and "View install authorization status" (maintenance type) ——
+    with the companion `~/.dsh-install-pass` (600, stores the 6-digit install password) and the `dsh-install-pass` tool.
+    **Revoking = deleting that file**: after revocation the AI is blocked from installing packages (measured: `dsh-install-apk` exits 3 right away with `✘ not authorized`).
+  · v0.7.1: fixed a real fault —— after the status JSON grew to 6463 bytes, the App's "truncate to the last 4000 bytes" cut off the **head** of the JSON
+    and the UI showed "status parse failed: Value asks" …cannot be converted to JSONObject".
+    Now: the status payload is never truncated (limit 200,000), and only task output is truncated from the tail; `dsh-status-pub` also gained `--brief` (6463→1560 bytes).
+
+How to revoke your password authorization (three entries, pick any one; none needs anything beyond looking at the screen / tapping a button):
+  1) Console App → "Emergency" → "Revoke install password access" (red button, second confirmation)
+  2) Termux home-screen widget → `9_Revoke install password access`
+  3) Directly in the terminal: `rm ~/.dsh-install-pass` (or `dsh-install-pass revoke`)
+  To restore after revoking: give me the 6-digit password once more (`printf password | dsh-install-pass set`), or press your fingerprint yourself.
+
+v0.8 (versionCode 11): **authorization becomes a switch** (you said "it should be a switch, not a button")
+  · Location: under the Console's "Maintenance" section —— "Install password authorization" + a Material switch, with the current state on the line below:
+      On: Current: authorized (the AI can install packages) (green)
+      Off: Current: not authorized (installing packages needs your fingerprint or re-authorization) (gray)
+  · **Flipping it off**: a confirmation pops up, "same as revoking: delete ~/.dsh-install-pass" → tap "Revoke" → the file is deleted at once,
+    the status line becomes not authorized (measured 0.115s; after revocation `dsh-install-apk` refuses to install with exit code 3).
+  · **Flipping it on** (while not authorized): an input box pops up asking for those 6 digits → tap "Authorize" → the 600 file is written back and the status line becomes authorized.
+    (The App cannot conjure credentials out of nothing, so you must enter it once; the input box is password-style and accepts only 6 digits.)
+  · The switch is not remembered locally: on every foreground entry / return it silently asks the helper once (`dsh-install-pass status`),
+    so if you revoked elsewhere (widget 9 / terminal rm), this also shows not authorized truthfully.
+  · Also fixed: the App side distinguishes the two truncation rules, "full status payload" and "task output tail" (see v0.7.1),
+    and it now carries the response's cmdId along, so the UI can tell whether a reply came from a query or from a task.
+
+v0.9 (versionCode 12): **semantic correction** —— this switch governs "whether the AI may use your password", not "whether it can install packages"
+  What you said woke me up: those 6 digits are the **general credential for system identity verification** —— installing an APK needs "Security verification",
+  lifting an app's "settings restriction", sensitive confirmations in developer options ... they all pop up the same thing. So:
+  · The switch is renamed: ~~Install password authorization~~ → **Password access**
+  · Description changed to: "On = the AI may use your 6-digit lock-screen password to pass identity verification on your behalf (installing packages, lifting settings restrictions, etc.); Off = revoked immediately"
+  · Status line: authorized (the AI can pass identity verification for you) / not authorized (any verification that needs the password must be done by you in person)
+  · The revoke confirmation box lists exactly what the consequences will be: an install's "Security verification", lifting settings restrictions, sensitive confirmations in developer options
+    will all stop at you; when restoring, it states clearly "use limited to: passing system identity verification on your behalf".
+  · Files and tools are renamed in step (the old ones migrate automatically):
+      ~/.dsh-install-pass → **~/.dsh-auth-pass** (600)
+      dsh-install-pass    → **dsh-auth-pass** (status/set/revoke/digits/path)
+      Widget 9_Revoke install password access →**9_Revoke password access**
+  · **A rule I set for myself (written here so you can check it)**: this password is read only when "passing system identity verification on your behalf"
+    (installing packages, lifting settings restrictions, and similar things you ask me to do); **never** for unlocking the phone to browse content, payments / password-free payment,
+    or any scenario unrelated to the task at hand. Three revoke entries: this switch / widget 9 / `rm ~/.dsh-auth-pass`.
+
+v1.0 (versionCode 13): **timeouts are now computed per task + the text tells the truth** (triggered by that false alarm at 00:10)
+  One line in the log you pasted: `00:10:34 Sent: auto refresh status` → `00:11:19 ⚠ no Termux response after 45 seconds`,
+  and the causes listed after it (not authorized / allow-external-apps / background start blocked) were **all pointing the wrong way**. The measured truth:
+  · At that moment I was running 58 self-checks (including a 1GB backup + sandbox DSH startup), and **the phone's load spiked to 7.11**;
+  · The status file stopped at 16:10:07, with **no new writes** after that → those two requests **never ran at all** (it was not a permission problem);
+  · That same command now normally takes **0.13 seconds**.
+  Changes:
+  ① **A waiting window per task** (previously all tasks shared 45 seconds → tasks like backup/cleanup/restart that inherently take 1~5 minutes
+     raised a false alarm every time): Start 240s, soft/hard restart 300s, Stop 200s, Connect adb 220s, Restore all 280s,
+     Backup/Cleanup 420s, Emergency stop 180s, View bridge status 40s, query-type 25s.
+     The busy line says it clearly too: "Running: X, waited Ns (this one is usually ≤Ns)".
+  ② **A query-type timeout automatically resends once** (a brief "busy moment" on the phone is very common, and a resend basically fixes it),
+     and only two silent attempts in a row raise an error, whose first line of text is "the phone was busy at the time (running a backup/self-check or similar in the background)".
+  ③ **Auto-refresh no longer writes to the Log** (previously every foreground entry added another "Sent: auto refresh status", drowning out the real results);
+     manually tapping "Refresh status" is still recorded, and the summary line still shows ✅/⚠ as usual.
+
+v1.1 (versionCode 14): **status queries now also leave a "completion line" in the Log** (your question, "so what about the response?")
+  · In the log you pasted there were 4 "Sent: Refresh status" lines and not a single completion line —— the responses were actually fine all along,
+    it was **my original design**: status-type results only update the lamps at the top and the summary at the bottom, **without writing to the Log**.
+    The Log was supposed to be the answer to "did it respond?", so that design was wrong.
+  · Now they appear in pairs (measured, OCR original text):
+      [00:20:43] Sent: Refresh status, waiting for Termux to respond…
+      [00:20:43] ✅ Refresh status done (exit=0, took 0.176s) —— the result was updated to the lamps at the top and the summary line below
+  · Auto-refresh (the one on foreground entry) is **still silent**: it only updates the lamps and the summary, and does not pour two lines into the Log, lest it drown out the real results.
+  · Also retracting my wrong statement from the previous entry: I used the timestamp of `Download/dsh/状态/status.json` to conclude
+    "none of your taps ran at all"——**that criterion was wrong**: in `--json` mode `dsh-status-pub`
+    prints and then returns (script lines 150~152), **without writing the status file at all**; only callers without `--json`
+    (widget/tasksd) write it. So "the file was not updated" ≠ "the command did not run".

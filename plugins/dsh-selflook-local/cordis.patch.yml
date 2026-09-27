@@ -1,4 +1,4 @@
-# 本地自看插件：插入组合行
+# Local self-look plugin: insert the composition row
 - insert:
     - id: selflook
       name: dsh-selflook-local

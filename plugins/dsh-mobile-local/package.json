@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "手机端 UI 增强：触屏命中区/底部安全区 + 任务快捷按钮（对接 dsh-tasksd 白名单执行器）",
+  "description": "Mobile UI enhancements: touch hit areas / bottom safe area + task shortcut buttons (wired to the dsh-tasksd allowlist runner)",
   "main": "./host.js",
   "exports": {
     ".": "./host.js",

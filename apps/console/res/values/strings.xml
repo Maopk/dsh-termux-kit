@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">DSH 控制台</string>
-    <string name="widget_label">DSH 控制台</string>
+    <string name="app_name">DSH Console</string>
+    <string name="widget_label">DSH Console</string>
 </resources>

@@ -42,15 +42,15 @@ function apply(ctx) {
     async function resolveWithin(root, path) {
       const rootTarget = await ctx.fs.resolve(String(root || ''))
       const info = await ctx.fs.stat(rootTarget)
-      if (!info || info.type !== 'directory') throw new Error('工作区根目录无效: ' + root)
+      if (!info || info.type !== 'directory') throw new Error('Invalid workspace root: ' + root)
       const target = await ctx.fs.resolve(String(path || ''))
-      if (!ctx.fs.contains(rootTarget, target)) throw new Error('路径不在工作区内')
+      if (!ctx.fs.contains(rootTarget, target)) throw new Error('Path is outside the workspace')
       return { rootTarget, target }
     }
 
     function policyFor(root) {
-      // Termux 上没有可用沙箱后端：必须显式 danger-full-access，
-      // 否则 shell 服务会以 no sandbox backend is usable 拒绝执行。
+      // No sandbox backend is available on Termux: danger-full-access must be explicit,
+      // otherwise the shell service refuses to run with "no sandbox backend is usable".
       return { mode: 'danger-full-access', workspaceRoot: String(root) }
     }
 
@@ -67,7 +67,7 @@ function apply(ctx) {
       if (result.exitCode !== 0) {
         const stderr = (result.stderr && result.stderr.text) || ''
         const stdout = (result.stdout && result.stdout.text) || ''
-        throw new Error((stderr || stdout).trim().slice(0, 400) || '命令执行失败')
+        throw new Error((stderr || stdout).trim().slice(0, 400) || 'Command failed')
       }
       return result
     }
@@ -98,7 +98,7 @@ function apply(ctx) {
           const path = String(args.path || root)
           const { target } = await resolveWithin(root, path)
           const info = await ctx.fs.stat(target)
-          if (!info || info.type !== 'directory') throw new Error('不是目录')
+          if (!info || info.type !== 'directory') throw new Error('Not a directory')
           const entries = await ctx.fs.listDir(target)
           return ok({
             root,
@@ -160,18 +160,18 @@ function apply(ctx) {
           const root = String(args.root || '')
           const dest = String(args.dest || '')
           const paths = Array.isArray(args.paths) ? args.paths.map(String) : []
-          if (!paths.length) throw new Error('未选择条目')
+          if (!paths.length) throw new Error('No items selected')
           const { target: destTarget } = await resolveWithin(root, dest)
           const destInfo = await ctx.fs.stat(destTarget)
-          if (!destInfo || destInfo.type !== 'directory') throw new Error('目标不是目录')
+          if (!destInfo || destInfo.type !== 'directory') throw new Error('Destination is not a directory')
           const destKey = destTarget.targetKey
           for (const p of paths) {
             const { target } = await resolveWithin(root, p)
-            if (target.targetKey === destKey) throw new Error('目标目录与源相同')
+            if (target.targetKey === destKey) throw new Error('Destination is the same as the source')
             const name = String(p).split('/').pop()
             const destPath = String(dest).replace(/\/+$/, '') + '/' + name
             const exists = await ctx.fs.stat(await ctx.fs.resolve(destPath)).catch(() => undefined)
-            if (exists) throw new Error('目标已存在同名条目：' + name)
+            if (exists) throw new Error('An item with the same name already exists there: ' + name)
           }
           for (const p of paths) {
             await shellRun(root, 'mv -- ' + shq(p) + ' ' + shq(String(dest).replace(/\/+$/, '')))
@@ -185,18 +185,18 @@ function apply(ctx) {
           const root = String(args.root || '')
           const dest = String(args.dest || '')
           const paths = Array.isArray(args.paths) ? args.paths.map(String) : []
-          if (!paths.length) throw new Error('未选择条目')
+          if (!paths.length) throw new Error('No items selected')
           const { target: destTarget } = await resolveWithin(root, dest)
           const destInfo = await ctx.fs.stat(destTarget)
-          if (!destInfo || destInfo.type !== 'directory') throw new Error('目标不是目录')
+          if (!destInfo || destInfo.type !== 'directory') throw new Error('Destination is not a directory')
           const destKey = destTarget.targetKey
           for (const p of paths) {
             const { target } = await resolveWithin(root, p)
-            if (target.targetKey === destKey) throw new Error('目标目录与源相同')
+            if (target.targetKey === destKey) throw new Error('Destination is the same as the source')
             const name = String(p).split('/').pop()
             const destPath = String(dest).replace(/\/+$/, '') + '/' + name
             const exists = await ctx.fs.stat(await ctx.fs.resolve(destPath)).catch(() => undefined)
-            if (exists) throw new Error('目标已存在同名条目：' + name)
+            if (exists) throw new Error('An item with the same name already exists there: ' + name)
           }
           for (const p of paths) {
             await shellRun(root, 'cp -r -- ' + shq(p) + ' ' + shq(String(dest).replace(/\/+$/, '')))
@@ -209,10 +209,10 @@ function apply(ctx) {
         try {
           const root = String(args.root || '')
           let zipName = String(args.zipName || '').trim()
-          if (!zipName) throw new Error('缺少压缩包名')
+          if (!zipName) throw new Error('Archive name is required')
           if (!/\.zip$/i.test(zipName)) zipName += '.zip'
           const paths = Array.isArray(args.paths) ? args.paths.map(String) : []
-          if (!paths.length) throw new Error('未选择要打包的条目')
+          if (!paths.length) throw new Error('No items selected to pack')
           for (const p of paths) await resolveWithin(root, p)
           const rels = paths.map((p) => toRel(root, p))
           const zipRel = toRel(root, String(root).replace(/\/+$/, '') + '/' + zipName)
@@ -228,7 +228,7 @@ function apply(ctx) {
           const destDir = String(args.destDir || root)
           const { target } = await resolveWithin(root, zipPath)
           const info = await ctx.fs.stat(target)
-          if (!info || info.type !== 'file') throw new Error('压缩包不存在')
+          if (!info || info.type !== 'file') throw new Error('Archive does not exist')
           await resolveWithin(root, destDir)
           await shellRun(root, 'unzip -o -q ' + shq(zipPath) + ' -d ' + shq(destDir))
           return ok({})
@@ -241,8 +241,8 @@ function apply(ctx) {
           const path = String(args.path || '')
           const { target } = await resolveWithin(root, path)
           const info = await ctx.fs.stat(target)
-          if (!info) throw new Error('文件不存在')
-          if (info.type !== 'file') throw new Error('不是文件')
+          if (!info) throw new Error('File does not exist')
+          if (info.type !== 'file') throw new Error('Not a file')
           if (info.size && info.size > MAX_TEXT_PREVIEW) return ok({ tooLarge: true, size: info.size })
           const content = await ctx.fs.readText(target)
           return ok({ tooLarge: false, content, size: info.size || content.length })
@@ -274,10 +274,10 @@ function apply(ctx) {
         try {
           const root = String(args.root || '')
           const path = String(args.path || '')
-          if (String(root).replace(/\/+$/, '') === String(path).replace(/\/+$/, '')) throw new Error('不能删除工作区根目录')
+          if (String(root).replace(/\/+$/, '') === String(path).replace(/\/+$/, '')) throw new Error('Cannot delete the workspace root')
           const { target } = await resolveWithin(root, path)
           const info = await ctx.fs.stat(target)
-          if (!info) throw new Error('目标不存在')
+          if (!info) throw new Error('Target does not exist')
           await shellRun(root, 'rm -rf -- ' + shq(path))
           return ok({})
         } catch (e) { return fail(e) }
@@ -288,12 +288,12 @@ function apply(ctx) {
           const root = String(args.root || '')
           const path = String(args.path || '')
           const newName = String(args.newName || '').trim()
-          if (!newName || newName.indexOf('/') >= 0 || newName === '.' || newName === '..') throw new Error('无效的文件名')
+          if (!newName || newName.indexOf('/') >= 0 || newName === '.' || newName === '..') throw new Error('Invalid file name')
           const parent = parentOf(path)
           const newPath = parent + '/' + newName
           const { target } = await resolveWithin(root, path)
           const info = await ctx.fs.stat(target)
-          if (!info) throw new Error('目标不存在')
+          if (!info) throw new Error('Target does not exist')
           await resolveWithin(root, newPath)
           await shellRun(root, 'mv -- ' + shq(path) + ' ' + shq(newPath))
           return ok({})
@@ -320,7 +320,7 @@ function apply(ctx) {
           const base64 = String(args.base64 || '')
           const key = root + '|' + path
           const entry = uploads.get(key)
-          if (!entry) throw new Error('上传会话不存在，请重试')
+          if (!entry) throw new Error('Upload session not found, please retry')
           try {
             const spec = ctx.shell.resolve({
               command: 'base64 -d >> ' + shq(entry.tmpPath),
@@ -342,7 +342,7 @@ function apply(ctx) {
               })
               result = await ctx.shell.run(spec2)
               if (result.exitCode !== 0) {
-                throw new Error(((result.stderr && result.stderr.text) || '').trim().slice(0, 300) || '写入失败')
+                throw new Error(((result.stderr && result.stderr.text) || '').trim().slice(0, 300) || 'Write failed')
               }
             }
             if (args.final) {
@@ -373,8 +373,8 @@ function apply(ctx) {
       },
     }
 
-    // Bundle 环境没有动态沙箱的 harness：把同一套 RPC 面通过 webServer 路由暴露，
-    // 客户端用 fetch 调用（动态环境下 host.call 仍可用，见 client.js 的双通道逻辑）。
+    // Bundle environments have no dynamic-sandbox harness: expose the same RPC surface through a webServer route,
+    // the client calls it with fetch (host.call still works in a dynamic environment, see the dual-channel logic in client.js).
     ctx.effect(() => ctx.webServer.register({
       kind: 'exact',
       path: '/__dsh__/filepanel/rpc',
@@ -387,7 +387,7 @@ function apply(ctx) {
           const method = String((parsed && parsed.method) || '')
           const fn = handlers[method]
           const result = fn === undefined
-            ? { ok: false, error: '未知方法: ' + method }
+            ? { ok: false, error: 'Unknown method: ' + method }
             : await fn((parsed && parsed.args) || {})
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify(result))
@@ -435,8 +435,8 @@ function apply(ctx) {
     console.log('[filepanel] host ready')
 }
 
-// Cordis 加载器会解包默认导出并只读它身上的 inject（具名导出会被忽略），
-// 因此必须把 inject 挂到默认导出的函数上（与 dsh-filetransfer 同款写法）。
+// The Cordis loader unwraps the default export and only reads inject from it (named exports are ignored),
+// so inject must be attached to the default-exported function (same pattern as dsh-filetransfer).
 apply.inject = inject
 
 export default apply

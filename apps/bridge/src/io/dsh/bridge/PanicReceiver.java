@@ -5,8 +5,9 @@ import android.content.Context;
 import android.content.Intent;
 
 /**
- * 通知栏「紧急停止」按钮的接收器：直接让正在运行的服务自杀（关闭无障碍 + 停止端口）。
- * 只在服务实例存活时有效；服务已停时它什么也不做。
+ * Receiver for the notification's "emergency stop" button: makes the running service kill itself
+ * (disable accessibility + stop the port). Only works while a service instance is alive; when the
+ * service is already stopped it does nothing.
  */
 public class PanicReceiver extends BroadcastReceiver {
     public static final String ACTION_PANIC = "io.dsh.bridge.PANIC";
@@ -16,9 +17,9 @@ public class PanicReceiver extends BroadcastReceiver {
         if (intent == null || !ACTION_PANIC.equals(intent.getAction())) return;
         BridgeService svc = BridgeService.INSTANCE;
         if (svc != null) {
-            svc.panic("通知栏紧急停止");
+            svc.panic("notification-bar emergency stop");
         } else {
-            android.widget.Toast.makeText(context, "DSH 桥已不在运行", android.widget.Toast.LENGTH_SHORT).show();
+            android.widget.Toast.makeText(context, "DSH Bridge is no longer running", android.widget.Toast.LENGTH_SHORT).show();
         }
     }
 }

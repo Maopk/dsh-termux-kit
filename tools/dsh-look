@@ -1,10 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-look —— DSH 自看：用无头 Chromium 把 DSH Web UI（或任意网页）截成图片
-# 用法：
-#   dsh-look                    # 截本机 DSH UI（自动取带 token 的 URL），存到 Download/dsh/图片/
-#   dsh-look <输出路径>          # 指定输出文件
-#   dsh-look <输出路径> <URL>    # 截指定 URL
-# 说明：token 从 ~/.dsh-restart.log 取（每次启动会写最新的一条）；失效时退化为普通地址。
+# dsh-look —— DSH self-look: screenshot the DSH Web UI (or any page) with headless Chromium
+# Usage: 
+#   dsh-look                    # screenshot the local DSH UI (auto-picks the token URL), saved under Download/dsh/图片/
+#   dsh-look <output path>          # write to a specific file
+#   dsh-look <output path> <URL>    # screenshot the given URL
+# Note: the token comes from ~/.dsh-restart.log (the latest one is written on each start); when stale it falls back to a plain address.
 set -u
 
 HOME_DIR="/data/data/com.termux/files/home"
@@ -19,7 +19,7 @@ if [ -z "$URL" ]; then
 fi
 
 if ! command -v chromium >/dev/null 2>&1; then
-  echo "chromium 未安装：pkg install chromium" >&2
+  echo "chromium is not installed: pkg install chromium" >&2
   exit 1
 fi
 
@@ -39,8 +39,8 @@ chromium \
   "$URL" >/dev/null 2>&1
 
 if [ -s "$OUT" ]; then
-  echo "已截图: $OUT ($(du -h "$OUT" | cut -f1))"
+  echo "screenshot saved: $OUT ($(du -h "$OUT" | cut -f1))"
 else
-  echo "截图失败（可试：DSH_LOOK_WAIT_MS=25000 dsh-look）" >&2
+  echo "screenshot failed (try: DSH_LOOK_WAIT_MS=25000 dsh-look)" >&2
   exit 1
 fi

@@ -1,24 +1,24 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-gh —— 维护 GitHub 仓库 `Maopk/dsh-termux-kit` 的小工具（用 ~/.dsh-gh-token 里的 token）
+# dsh-gh —— small tool to maintain the GitHub repo `Maopk/dsh-termux-kit` (uses the token in ~/.dsh-gh-token)
 #
-# 用法：
-#   dsh-gh status                     看仓库/发行版状态（不需要 token 也能看公开信息，但会带上 token 看私有）
-#   dsh-gh push [提交信息]             提交本机改动并推送（不带信息则只推送已有提交）
-#   dsh-gh release <tag> <标题> <文件...>   建发行版并上传资产（**资产名自动转 ASCII**，见下）
-#   dsh-gh revoke-hint                打印撤销 token 的正确做法（**光删文件无效**）
+# Usage: 
+#   dsh-gh status                     show repo/release status (public info works without a token, but the token is sent to see private data)
+#   dsh-gh push [commit message]             commit local changes and push (with no message it only pushes existing commits)
+#   dsh-gh release <tag> <title> <files...>   create a release and upload assets (**asset names are converted to ASCII**, see below)
+#   dsh-gh revoke-hint                print how to revoke the token properly (**deleting the file is not enough**)
 #
-# ⚠ 两个踩过的坑（写进代码里，别再犯）：
-#   1) 资产名**必须 ASCII**：GitHub 的 assets 上传接口会把中文名吞成 "DSH.-v1.1.apk"。
-#      本脚本自动把中文名转成 translit 风格（DSH控制台-v1.1.apk → dsh-console-v1.1.apk 由调用者给）。
-#   2) 光 `rm ~/.dsh-gh-token` **不会**让 token 失效：GitHub 那边授权还在，必须去
-#      Settings → Applications → Authorized OAuth Apps → GitHub CLI → Revoke。
+# ⚠ Two traps we hit (recorded here so they are not repeated):
+#   1) asset names **must be ASCII**: the GitHub assets upload API mangles Chinese names into "DSH.-v1.1.apk".
+#      This script converts Chinese names to translit style (DSH控制台-v1.1.apk → dsh-console-v1.1.apk, which the caller supplies).
+#   2) just `rm ~/.dsh-gh-token` does **not** invalidate the token: the GitHub authorization remains, so you must go
+#      Settings → Applications → Authorized OAuth Apps → GitHub CLI → Revoke.
 set -u
 TOKFILE="$HOME/.dsh-gh-token"
 REPO="Maopk/dsh-termux-kit"
 LOCAL="$HOME/dsh-termux-kit"
 API="https://api.github.com"
 
-tok() { [ -s "$TOKFILE" ] || { printf '✘ 没有 %s（先走一次设备码授权）\n' "$TOKFILE" >&2; exit 3; }; cat "$TOKFILE"; }
+tok() { [ -s "$TOKFILE" ] || { printf '✘ no %s (run the device-code authorization once first)\n' "$TOKFILE" >&2; exit 3; }; cat "$TOKFILE"; }
 
 case "${1:-status}" in
   status)
@@ -26,41 +26,41 @@ case "${1:-status}" in
     if [ -n "$T" ]; then
       curl -s -H "Authorization: token $T" "$API/repos/$REPO" | python3 -c "
 import json,sys;d=json.load(sys.stdin)
-print('仓库  :',d.get('full_name'),'| 公开:',not d.get('private'),'| 分支:',d.get('default_branch'))
-print('推送于:',d.get('pushed_at'),'| 大小:',d.get('size'),'KB')"
+print('repo   :',d.get('full_name'),'| public:',not d.get('private'),'| branch:',d.get('default_branch'))
+print('pushed:',d.get('pushed_at'),'| size:',d.get('size'),'KB')"
       curl -s -H "Authorization: token $T" "$API/repos/$REPO/releases" | python3 -c "
 import json,sys
 rs=json.load(sys.stdin)
 for r in (rs if isinstance(rs,list) else []):
-    print('发行版:',r['name'],'| tag',r['tag_name'])
-    for a in r['assets']: print('   ·',a['name'],'%.1f KB'%(a['size']/1024),'下载',a['download_count'])"
+    print('release:',r['name'],'| tag',r['tag_name'])
+    for a in r['assets']: print('   ·',a['name'],'%.1f KB'%(a['size']/1024),'downloads',a['download_count'])"
     else
-      curl -s "$API/repos/$REPO" | python3 -c "import json,sys;d=json.load(sys.stdin);print('仓库  :',d.get('full_name'),'| 公开:',not d.get('private'))"
-      printf '（没有 token，只看了公开信息）\n'
+      curl -s "$API/repos/$REPO" | python3 -c "import json,sys;d=json.load(sys.stdin);print('repo   :',d.get('full_name'),'| public:',not d.get('private'))"
+      printf '(no token, so only public info was read)\n'
     fi ;;
 
   push)
     T=$(tok); cd "$LOCAL" || exit 4
     MSG="${2:-}"
     if [ -n "$(git status --porcelain)" ]; then
-      [ -n "$MSG" ] || { printf '✘ 有未提交改动，给个提交信息：dsh-gh push "说明"\n' >&2; exit 2; }
+      [ -n "$MSG" ] || { printf '✘ there are uncommitted changes; give a commit message: dsh-gh push "message"\n' >&2; exit 2; }
       git add -A && git -c core.quotepath=false commit -q -m "$MSG" || exit 5
-      printf '＋ 已提交：%s\n' "$MSG"
+      printf '＋ committed: %s\n' "$MSG"
     fi
-    git -c credential.helper= push "https://x-access-token:$T@github.com/$REPO.git" HEAD:refs/heads/master && printf '✔ 已推送\n' ;;
+    git -c credential.helper= push "https://x-access-token:$T@github.com/$REPO.git" HEAD:refs/heads/master && printf '✔ pushed\n' ;;
 
   release)
-    T=$(tok); TAG="${2:?用法: dsh-gh release <tag> <标题> <文件...>}"; NAME="${3:?缺标题}"; shift 3
-    [ "$#" -gt 0 ] || { printf '✘ 至少给一个资产文件\n' >&2; exit 2; }
+    T=$(tok); TAG="${2:?Usage: dsh-gh release <tag> <title> <files...>}"; NAME="${3:?missing title}"; shift 3
+    [ "$#" -gt 0 ] || { printf '✘ give at least one asset file\n' >&2; exit 2; }
     RID=$(curl -s -X POST "$API/repos/$REPO/releases" -H "Authorization: token $T" \
           -H 'Accept: application/vnd.github+json' \
           -d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"master\",\"name\":\"$NAME\"}" \
           | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('id',''))")
-    [ -n "$RID" ] || { printf '✘ 建发行版失败\n' >&2; exit 5; }
-    printf '发行版已建：%s/releases/tag/%s\n' "https://github.com/$REPO" "$TAG"
+    [ -n "$RID" ] || { printf '✘ failed to create the release\n' >&2; exit 5; }
+    printf 'release created: %s/releases/tag/%s\n' "https://github.com/$REPO" "$TAG"
     for f in "$@"; do
       n=$(basename "$f")
-      case "$n" in *[!\ -~]*) printf '⚠ 资产名含非 ASCII（%s）→ GitHub 会吞名字，建议先改成 ASCII\n' "$n";; esac
+      case "$n" in *[!\ -~]*) printf '⚠ asset name contains non-ASCII (%s) → GitHub will mangle it; rename it to ASCII first\n' "$n";; esac
       code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
         "https://uploads.github.com/repos/$REPO/releases/$RID/assets?name=$n" \
         -H "Authorization: token $T" -H 'Content-Type: application/octet-stream' --data-binary @"$f")
@@ -69,11 +69,11 @@ for r in (rs if isinstance(rs,list) else []):
 
   revoke-hint)
     cat <<'EOF'
-撤销 token 的正确做法（**只删文件不够**）：
-  1) 打开 https://github.com/settings/applications → Authorized OAuth Apps
-  2) 找到 “GitHub CLI” → Revoke
-  3) 再删掉本机文件：rm ~/.dsh-gh-token
-另：token 的 scope 是 repo＝**名下所有仓库**的读写，不只本项目 —— 所以别把它复制到别处/别提交进仓库。
+How to revoke the token properly (**deleting the file is not enough**):
+  1) open https://github.com/settings/applications → Authorized OAuth Apps
+  2) find GitHub CLI → Revoke
+  3) then delete the local file: rm ~/.dsh-gh-token
+Also: the token scope repo = read/write on **every repo you own**, not just this project — so do not copy it elsewhere or commit it.
 EOF
     ;;
 

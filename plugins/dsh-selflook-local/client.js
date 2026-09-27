@@ -1,23 +1,23 @@
-// dsh-selflook-local —— 客户端半部：既能「自看」，也能「遥控」（bundle 规范 CJS 工厂）
+// dsh-selflook-local — client half: both "self-look" and "remote control" (bundle convention, CJS factory)
 //
-// 通道 A（自看）：每 2s 轮询宿主 /__dsh__/selflook/rpc；宿主侧 touch ~/.dsh-look-request 即截图回传。
-// 通道 B（遥控）：每 2s 读 ~/.dsh-look-cmd.json（借 filepanel 的读写 RPC），
-//   执行 {action: probe|click|swipe|scroll|capture|eval}，结果写回 ~/.dsh-look-cmd-result.json 并清空命令文件。
+// Channel A (self-look): poll the host /__dsh__/selflook/rpc every 2s; when the host touches ~/.dsh-look-request, capture a screenshot and send it back.
+// Channel B (remote control): read ~/.dsh-look-cmd.json every 2s (via filepanel's read/write RPC),
+//   run {action: probe|click|swipe|scroll|capture|eval}, write the result back to ~/.dsh-look-cmd-result.json and clear the command file.
 //
-// 手势与滚动的实测边界（2026-09-26）：
-//   · JS 驱动的拖拽（鲸鱼挂件、滑块、滑动删除）→ 合成 pointer/touch 事件有效 ✓
-//   · 原生滚动容器 → **合成 touchmove 有效（还带惯性：300px 拖拽滚了 582px）** ✓，合成 pointer 基本无效
-//   · 合成 wheel → 无效 ✗（untrusted wheel 不触发默认动作），要精确滚动请用 {action:'scroll'}
+// Measured limits of gestures and scrolling (2026-09-26):
+//   · JS-driven drags (whale widget, sliders, swipe-to-delete) → synthetic pointer/touch events work ✓
+//   · Native scroll containers → **synthetic touchmove works (with inertia: a 300px drag scrolled 582px)** ✓, synthetic pointer is mostly useless
+//   · Synthetic wheel → no effect ✗ (an untrusted wheel does not trigger the default action); for exact scrolling use {action:'scroll'}
 //
-// 渲染兜底：①整页+CSS ②视口+CSS ③整页无CSS ④文字快照（必定成功）
+// Render fallbacks: ① full page + CSS ② viewport + CSS ③ full page without CSS ④ text snapshot (always succeeds)
 //
-// ⚠️ 四个已经踩过的坑（2026-09-26 全部实测定案）：
-// 1) CSS 里含裸 `<`（如 url("data:image/svg+xml,<svg…>")）会让 SVG 解析失败 → 必须用 CDATA 包裹。
-// 2) **blob: URL 加载的 SVG 只要含 <foreignObject>，Chromium 就判为不透明源 → canvas 污染、导出被拒。**
-//    实测：blob:+纯SVG=干净、blob:+foreignObject=污染、**data:+foreignObject=干净** → 必须用 data: URL。
-// 3) 外链资源（含“同源”）在 SVG-as-image 里也可能算跨域 → 一律本地化成 data:，外部引用元素整个删掉。
-// 4) 合成指针事件时 setPointerCapture 会抛 NotFoundError，拖拽类组件（鲸鱼挂件）的 pointerdown
-//    会因此中断、点不动 → 点击时临时把 setPointerCapture 打桩成空函数。
+// ⚠️ Four pitfalls already hit (all confirmed by measurement on 2026-09-26):
+// 1) A bare `<` in CSS (e.g. url("data:image/svg+xml,<svg…>")) makes SVG parsing fail → it must be wrapped in CDATA.
+// 2) **For an SVG loaded from a blob: URL, any <foreignObject> makes Chromium treat it as an opaque origin → tainted canvas, export refused.**
+//    Measured: blob: + plain SVG = clean, blob: + foreignObject = tainted, **data: + foreignObject = clean** → a data: URL is required.
+// 3) External resources (even "same-origin" ones) can count as cross-origin in SVG-as-image → inline everything as data:, and delete externally referenced elements entirely.
+// 4) During synthetic pointer events setPointerCapture throws NotFoundError, so the pointerdown of drag components (whale widget)
+//    is interrupted and nothing responds → stub setPointerCapture to a no-op for the duration of a click.
 window.__ModuleLoader__.load({
   id: 'dsh-selflook-local',
   factory: (require) => {
@@ -31,7 +31,7 @@ window.__ModuleLoader__.load({
     const RES_PATH = HOME + '/.dsh-look-cmd-result.json';
     const MAX_RESULT = 60000;
 
-    // ---------- 通道工具 ----------
+    // ---------- channel helpers ----------
     async function post(url, body) {
       const resp = await fetch(url, {
         method: 'POST',
@@ -58,8 +58,8 @@ window.__ModuleLoader__.load({
 
     async function writeResult(obj) {
       let text = '';
-      try { text = JSON.stringify(obj, null, 1); } catch (e) { text = '{"error":"结果无法序列化"}'; }
-      if (text.length > MAX_RESULT) text = text.slice(0, MAX_RESULT) + '\n…（已截断，原始 ' + text.length + ' 字符）';
+      try { text = JSON.stringify(obj, null, 1); } catch (e) { text = '{"error":"result is not serializable"}'; }
+      if (text.length > MAX_RESULT) text = text.slice(0, MAX_RESULT) + '\n…(truncated, original ' + text.length + ' chars)';
       try { await fp('panel.writeText', { root: HOME, path: RES_PATH, content: text }); } catch (e) { /* ignore */ }
     }
 
@@ -70,7 +70,7 @@ window.__ModuleLoader__.load({
       } catch (e) { return false; }
     }
 
-    // ---------- DOM 工具（穿透 shadow DOM） ----------
+    // ---------- DOM helpers (piercing shadow DOM) ----------
     function deepAll(root) {
       const out = [];
       const walk = (node) => {
@@ -86,7 +86,7 @@ window.__ModuleLoader__.load({
     }
 
     function describe(el) {
-      if (!el || !el.tagName) return '(无)';
+      if (!el || !el.tagName) return '(none)';
       const r = el.getBoundingClientRect();
       const cls = (el.getAttribute && el.getAttribute('class')) || '';
       const id = (el.getAttribute && el.getAttribute('id')) || '';
@@ -143,7 +143,7 @@ window.__ModuleLoader__.load({
       return null;
     }
 
-    // 点击：要骗过拖拽类组件，必须先把 setPointerCapture 打桩（合成 pointerId 不是活动指针）
+    // Click: to get past drag components, setPointerCapture must be stubbed first (the synthetic pointerId is not an active pointer)
     function tap(el) {
       const r = el.getBoundingClientRect();
       const x = r.left + r.width / 2;
@@ -179,7 +179,7 @@ window.__ModuleLoader__.load({
       return document.getElementsByTagName('*').length + ':' + (document.body.innerText || '').length;
     }
 
-    // 外部引用清单：用来定位 canvas 污染源
+    // External reference inventory: used to locate the canvas taint source
     function externalInventory() {
       const inv = { img: 0, imgData: 0, svgImage: 0, use: 0, video: 0, audio: 0, iframe: 0, object: 0, embed: 0, inlineBg: 0, samples: [] };
       for (const el of deepAll()) {
@@ -209,7 +209,7 @@ window.__ModuleLoader__.load({
       return inv;
     }
 
-    // ---------- 渲染 ----------
+    // ---------- rendering ----------
     function repairXml(text) {
       return String(text).replace(/&(?!(#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);)/g, '&amp;');
     }
@@ -222,7 +222,7 @@ window.__ModuleLoader__.load({
       return String(css).replace(/url\(([^)]*)\)/g, (m, u) => (/^\s*['"]?\s*data:/i.test(u) ? m : 'none'));
     }
 
-    // ★ 关键：SVG 必须走 data: URL。blob: + foreignObject 会被 Chromium 判为不透明源（污染 canvas）
+    // ★ Key: the SVG must go through a data: URL. blob: + foreignObject is treated as an opaque origin by Chromium (taints the canvas)
     function svgToDataUrl(svg) {
       const bytes = new window.TextEncoder().encode(svg);
       let bin = '';
@@ -252,7 +252,7 @@ window.__ModuleLoader__.load({
       return new Promise((resolve, reject) => {
         const fr = new window.FileReader();
         fr.onload = () => resolve(fr.result);
-        fr.onerror = () => reject(new Error('FileReader 失败'));
+        fr.onerror = () => reject(new Error('FileReader failed'));
         fr.readAsDataURL(blob);
       });
     }
@@ -278,7 +278,7 @@ window.__ModuleLoader__.load({
         const s = n.getAttribute('style') || '';
         if (s.indexOf('url(') >= 0) n.setAttribute('style', stripExternalUrls(s));
       });
-      return '图片内联' + inlined + '/占位' + dropped;
+      return 'images inlined ' + inlined + '/placeholder ' + dropped;
     }
 
     function snapshotCanvases(clone) {
@@ -295,7 +295,7 @@ window.__ModuleLoader__.load({
           img.setAttribute('height', String(Math.round(r.height)));
           dsts[i].parentNode.replaceChild(img, dsts[i]);
           n++;
-        } catch (e) { /* 污染或空 canvas */ }
+        } catch (e) { /* tainted or empty canvas */ }
       }
       return n;
     }
@@ -306,7 +306,7 @@ window.__ModuleLoader__.load({
         if (css.length > 240000) break;
         try {
           for (const rule of Array.from(sheet.cssRules)) css += rule.cssText + '\n';
-        } catch (e) { /* 跨域样式表跳过 */ }
+        } catch (e) { /* cross-origin stylesheet, skipped */ }
       }
       return stripExternalUrls(css);
     }
@@ -333,10 +333,10 @@ window.__ModuleLoader__.load({
         repairXml(html) +
         '</div></foreignObject></svg>';
       const img = new win.Image();
-      // 用 data: 而不是 blob:（见文件头注释第 2 条）
+      // Use data: rather than blob: (see note 2 at the top of the file)
       await new Promise((resolve, reject) => {
         img.onload = resolve;
-        img.onerror = () => reject(new Error('SVG解析失败 svg=' + svg.length));
+        img.onerror = () => reject(new Error('SVG parse failed svg=' + svg.length));
         img.src = svgToDataUrl(svg);
       });
       const canvas = document.createElement('canvas');
@@ -376,41 +376,41 @@ window.__ModuleLoader__.load({
     }
 
     async function sendTextSnapshot(text) {
-      await report('TEXT-SNAPSHOT 开始，共 ' + text.length + ' 字符');
+      await report('TEXT-SNAPSHOT start, ' + text.length + ' chars total');
       const CH = 1500;
       for (let i = 0; i < text.length; i += CH) {
         await rpc('log', { message: 'SNAP|' + text.slice(i, i + CH) });
       }
-      await report('TEXT-SNAPSHOT 结束');
+      await report('TEXT-SNAPSHOT end');
     }
 
     async function capture(quiet) {
       const p = await prepare();
       if (!quiet) {
-        await report('收到触发：DOM=' + document.getElementsByTagName('*').length +
-          ' 视口=' + p.w + 'x' + p.viewH + ' 整页高=' + p.fullH +
+        await report('trigger received: DOM=' + document.getElementsByTagName('*').length +
+          ' viewport=' + p.w + 'x' + p.viewH + ' full-page height=' + p.fullH +
           ' css=' + p.css.length + ' raw=' + p.raw.length + ' | ' + p.imgInfo + ' canvas=' + p.nCanvas);
       }
       const attempts = [
-        ['整页+CSS', hardenHtml(p.raw, 1), p.css, p.w, p.fullH],
-        ['视口+CSS', hardenHtml(p.raw, 1), p.css, p.w, p.viewH],
-        ['整页无CSS', hardenHtml(p.raw, 1), '', p.w, p.fullH],
+        ['full page + CSS', hardenHtml(p.raw, 1), p.css, p.w, p.fullH],
+        ['viewport + CSS', hardenHtml(p.raw, 1), p.css, p.w, p.viewH],
+        ['full page without CSS', hardenHtml(p.raw, 1), '', p.w, p.fullH],
       ];
       for (const a of attempts) {
         try {
           const b64 = await renderToPng(a[1], a[2], a[3], a[4], p.bg);
-          await report(a[0] + ' 成功，base64=' + b64.length);
+          await report(a[0] + ' succeeded, base64=' + b64.length);
           return await rpc('deliver', { base64: b64 });
         } catch (e) {
-          await report(a[0] + ' 失败: ' + ((e && e.message) || e));
+          await report(a[0] + ' failed: ' + ((e && e.message) || e));
         }
       }
-      await report('三种渲染都失败 → 文字快照保底');
+      await report('all three renders failed → falling back to a text snapshot');
       await sendTextSnapshot(textSnapshot(400));
       return { ok: true, mode: 'text' };
     }
 
-    // ---------- 手势（滑动）与滚动 ----------
+    // ---------- gestures (swipe) and scrolling ----------
     function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
     function atPoint(x, y) {
@@ -438,8 +438,8 @@ window.__ModuleLoader__.load({
       } catch (e) { /* ignore */ }
     }
 
-    // 元素可能是不规则形状（鲸鱼是 clip-path 多边形）：包围盒中心不一定命中，
-    // 必须在矩形内扫描出「elementFromPoint 真能返回它」的点，否则事件到不了它身上。
+    // An element can be irregularly shaped (the whale is a clip-path polygon): the bounding box centre does not always hit,
+    // so the rectangle must be scanned for a point where elementFromPoint really returns it, otherwise events never reach it.
     function grabPoint(spec) {
       if (Array.isArray(spec)) return { x: spec[0], y: spec[1], el: atPoint(spec[0], spec[1]), grabbed: null };
       if (typeof spec === 'string' && spec.indexOf(',') > 0 && !isNaN(spec.split(',')[0])) {
@@ -464,7 +464,7 @@ window.__ModuleLoader__.load({
     async function doSwipe(cmd) {
       const A = grabPoint(cmd.from);
       const B = grabPoint(cmd.to);
-      if (!A || !B) return { ok: false, error: '起点或终点找不到', from: cmd.from, to: cmd.to };
+      if (!A || !B) return { ok: false, error: 'start or end point not found', from: cmd.from, to: cmd.to };
       const steps = Number(cmd.steps || 16);
       const stepMs = Number(cmd.stepMs || 16);
       const startEl = A.el || document.body;
@@ -509,7 +509,7 @@ window.__ModuleLoader__.load({
       const el = (cmd.selector && cmd.selector !== 'window')
         ? findTarget({ selector: cmd.selector })
         : document.scrollingElement;
-      if (!el) return { ok: false, error: '找不到滚动容器: ' + cmd.selector };
+      if (!el) return { ok: false, error: 'scroll container not found: ' + cmd.selector };
       const maxY = el.scrollHeight - el.clientHeight;
       const before = [Math.round(el.scrollLeft), Math.round(el.scrollTop)];
       let target = el.scrollTop;
@@ -527,7 +527,7 @@ window.__ModuleLoader__.load({
       };
     }
 
-    // ---------- 遥控动作 ----------
+    // ---------- remote actions ----------
     async function runAction(cmd) {
       const action = String((cmd && cmd.action) || 'capture');
       if (action === 'capture') {
@@ -546,7 +546,7 @@ window.__ModuleLoader__.load({
           const hitKeyword = kw === '' ? false : (hay.indexOf(kw) >= 0 || text.indexOf(kw) >= 0);
           const hitSelector = cmd.selector ? (() => { try { return el.matches(cmd.selector); } catch (e) { return false; } })() : false;
           if (hitKeyword || hitSelector) {
-            hits.push(describe(el) + (text ? ' | 文本: ' + text.slice(0, 40) : ''));
+            hits.push(describe(el) + (text ? ' | text: ' + text.slice(0, 40) : ''));
             if (hits.length >= Number(cmd.limit || 25)) break;
           }
         }
@@ -554,7 +554,7 @@ window.__ModuleLoader__.load({
       }
       if (action === 'click') {
         const el = findTarget(cmd);
-        if (!el) return { action: action, ok: false, error: '没找到目标', spec: cmd };
+        if (!el) return { action: action, ok: false, error: 'target not found', spec: cmd };
         const before = fingerprint();
         const target = (el.closest && el.closest('button,[role=button],a')) || el;
         try { target.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) { /* ignore */ }
@@ -589,7 +589,7 @@ window.__ModuleLoader__.load({
         else if (value && value.nodeType === 9) safe = 'document';
         return { action: action, ok: true, value: safe };
       }
-      return { action: action, ok: false, error: '未知动作: ' + action };
+      return { action: action, ok: false, error: 'unknown action: ' + action };
     }
 
     function apply(ctx) {
@@ -607,8 +607,8 @@ window.__ModuleLoader__.load({
             let cmd = null;
             try { cmd = JSON.parse(raw); } catch (e) { cmd = null; }
             if (cmd === null) {
-              await report('命令文件不是合法 JSON，已忽略');
-              await writeResult({ ok: false, error: '命令文件不是合法 JSON' });
+              await report('command file is not valid JSON, ignored');
+              await writeResult({ ok: false, error: 'command file is not valid JSON' });
               await clearCmd();
             } else {
               let out = null;
@@ -616,9 +616,9 @@ window.__ModuleLoader__.load({
               catch (e) { out = { ok: false, error: (e && e.message) || String(e), stack: String(e && e.stack).slice(0, 400) }; }
               await writeResult(Object.assign({ ts: new Date().toISOString(), cmd: cmd }, out));
               const cleared = await clearCmd();
-              // 只有确认清空成功才重置基线，否则同一条命令会被反复执行
+              // Only reset the baseline once the clear is confirmed, otherwise the same command gets executed over and over
               lastCmd = cleared ? '' : raw;
-              await report('遥控命令完成: ' + String(cmd.action || '') + ' ' + JSON.stringify(out).slice(0, 200));
+              await report('remote command done: ' + String(cmd.action || '') + ' ' + JSON.stringify(out).slice(0, 200));
             }
           }
           const now = Date.now();
@@ -627,11 +627,11 @@ window.__ModuleLoader__.load({
             const res = await rpc('poll', {});
             if (res && res.pending === true) {
               const out = await capture(false);
-              await report('本轮完成: ' + JSON.stringify(out));
+              await report('round done: ' + JSON.stringify(out));
             }
           }
         } catch (e) {
-          await report('本轮异常: ' + ((e && e.message) || e) + ' | ' + String(e && e.stack).slice(0, 200));
+          await report('round error: ' + ((e && e.message) || e) + ' | ' + String(e && e.stack).slice(0, 200));
         } finally {
           busy = false;
         }

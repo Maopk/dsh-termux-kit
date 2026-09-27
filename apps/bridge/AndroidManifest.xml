@@ -1,35 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  DSH 桥 —— 自建最小无障碍桥接 App（源码全部可读，无第三方 SDK）
-  权限只有三个，每个都有明确用途：
-    · INTERNET                 仅监听 127.0.0.1:8788（本机回环），代码里没有第二个联网点
-    · BIND_ACCESSIBILITY_SERVICE  无障碍服务系统要求
-    · POST_NOTIFICATIONS       常驻通知栏「正在运行 + 紧急停止」按钮（安全可见性）
-  没有：短信/通讯录/定位/相机/录音/读应用列表/悬浮窗/发起安装 等权限。
+  DSH Bridge — a self-built minimal accessibility bridge app (all source readable, no third-party SDK)
+  Only three permissions, each with a clear purpose:
+    · INTERNET                 listens on 127.0.0.1:8788 only (local loopback); there is no second network touchpoint in the code
+    · BIND_ACCESSIBILITY_SERVICE  required by the system for an accessibility service
+    · POST_NOTIFICATIONS       the persistent "running + emergency stop" notification (safety visibility)
+  None of: SMS / contacts / location / camera / microphone / app-list reading / overlay / install-packages permissions.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="io.dsh.bridge"
-    android:versionCode="8"
-    android:versionName="1.8">
+    android:versionCode="9"
+    android:versionName="1.9">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- 用途唯一：读写「无线调试」开关（Settings.Global.adb_wifi_enabled）与 Wi-Fi 状态。
-         该权限属 development 级，必须由用户用 adb 显式授予（pm grant），不会自动获得。 -->
+    <!-- Single purpose: read/write the wireless-debugging switch (Settings.Global.adb_wifi_enabled) and Wi-Fi state.
+         It is a development-level permission that the user must grant explicitly with adb (pm grant); it is never automatic. -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
-    <!-- 前台服务：让桥的进程不被系统/厂商省电策略冻结（冻结后连广播唤醒都收不到） -->
+    <!-- Foreground service: keeps the bridge process from being frozen by system/vendor battery savers (once frozen it cannot even receive the wake broadcast) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
 
     <application
-        android:label="DSH 桥"
+        android:label="DSH Bridge"
         android:allowBackup="false"
         android:debuggable="false">
 
         <activity
             android:name=".MainActivity"
-            android:label="DSH 桥"
+            android:label="DSH Bridge"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -39,7 +39,7 @@
 
         <service
             android:name=".BridgeService"
-            android:label="DSH 桥"
+            android:label="DSH Bridge"
             android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
@@ -56,13 +56,13 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="无障碍桥接保持常驻，防止厂商省电策略冻结导致失联" />
+                android:value="Keeps the accessibility bridge resident so vendor battery savers cannot freeze it and lose contact" />
         </service>
 
-        <!-- 唤醒接收器：Termux 用 am broadcast 就能让桥重新开监听（导出，因为其它 App 需要能发给它）。
-             服务还活着时：任何 App 都能唤醒，但端口仍要 token 才能下指令。
-             服务已被关闭时（sleep/panic/被系统解绑）：广播必须带对 token（extra 名为 token）
-             才允许把自己重新写回系统无障碍列表，否则任何 App 都能把用户关掉的无障碍拉起来。 -->
+        <!-- Wake receiver: the Termux side can make the bridge listen again with a plain am broadcast (exported, because other apps must be able to send it).
+             While the service is alive: any app may wake it, but the port still requires the token before commands can be issued.
+             Once the service is shut down (sleep / panic / unbound by the system): the broadcast must carry the right token (extra named token)
+             before it may write itself back into the system accessibility list; otherwise any app could pull up an accessibility service the user switched off. -->
         <receiver
             android:name=".WakeReceiver"
             android:exported="true">
@@ -71,7 +71,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- 通知栏「紧急停止」按钮的接收器；不导出，只有本 App 能发 -->
+        <!-- Receiver for the notification's "emergency stop" button; not exported, only this app can send it -->
         <receiver
             android:name=".PanicReceiver"
             android:exported="false">
