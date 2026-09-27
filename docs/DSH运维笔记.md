@@ -7,6 +7,33 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-09-28 01:45 · 定位"控制台启动 DSH 比 widget 慢得多"（结论：不是启动慢，是打开页面那一步被系统拦掉）
+
+做了什么：先量通道与执行环境，再读 opener 的实现：
+① 用**与控制台完全相同的 Intent**（`am startservice … com.termux.RUN_COMMAND`，含 `--ez …BACKGROUND true`）
+   跑一段纯 CPU 活：**1.27s**；同样的活在前台 shell 里：**1.25s** → **后台并不限速**。
+② 同一个 `1_start-dsh.sh --no-open`（DSH 已在跑，幂等）：控制台那条路墙钟 **2.4s**（脚本自报 2s），
+   前台 shell **1.5s**（自报 1s）→ 固定开销只多 ~0.9s，其中 RUN_COMMAND 通道本身 ~0.5s。
+③ 于是去看"打开浏览器"那一步 —— `dsh-browser-open` 的注释里**自己写着**这个坑：
+   > when Termux launches another App **as an app** it is **silently blocked** by Android background start limits
+   > (it only prints "Starting: Intent …" with no result). → with adb available it always launches through adb
+   代码也确实是两条路：**有 adb** → `adb shell am start -W`（shell 身份不受限）；**没 adb** → 退回 Termux 自己的
+   `am start` → 被静默拦掉。
+  而**此刻 adb 是断的**（`adb devices` 空，Wi-Fi 关着）→ opener 只能走被拦的那条路。
+**根因**：两条路的**启动速度其实一样**；差别在收尾的"把页面推到前台"：
+- widget：点组件会让 **Termux 到前台**，脚本结束时的 `am start` 合法 → 页面立刻出现；
+- 控制台：前台是**控制台 App**，Termux 在后台（实测 `oom_score_adj=945`＝缓存档）→ 后台启动 Activity 被系统
+  静默拦掉 → **页面根本不出现**，用户干等 → 感觉"慢得多"（其实是在等一个不会来的窗口）。
+次要因素：整段启动都在 Termux 处于后台/缓存档时进行（vivo 会冻结节流），这也解释了日志里 0s…57s 的巨大方差。
+为什么：用户问"为什么在控制台启动 dsh 比在 termux:widget 启用要慢的多"。
+结果：✅ 根因有了，且**证据是可复现的**（通道 0.5s / 固定开销 0.9s / opener 的两条路 + adb 当前为空）。
+**三种修法（待用户选）**：
+(a) 控制台自己开页面 —— 控制台是前台 App，`startActivity(ACTION_VIEW, url)` **允许**；需要脚本把 URL 放进任务输出
+    （或加一个回显 `~/.dsh-url` 的任务）。**推荐**，和控制台现有"项目主页"按钮同一套做法。
+(b) 结果那一行做成可点：「已就绪，点这里打开页面」—— 用户的手指＝前台动作，一定允许，且不抢焦点（多一次点击）。
+(c) 把 adb 接回来（Wi-Fi 开）—— opener 走 adb 那条可靠路，后台也能推窗口（今天只在 Wi-Fi+无线调试可用时才会发生）。
+下一步：等用户选 (a)/(b)/(c)（或组合），再动代码。
+
 2026-09-28 01:20 · 复核推送落地 + 摸清"时通时断"的真实形态（本条记录随同一次推送一起上）
 
 做了什么：① 三条推送的服务端确认：`60def57..e5252e0` / `e5252e0..4b4e10e` / `4b4e10e..b013871  HEAD -> master`
