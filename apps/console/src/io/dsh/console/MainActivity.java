@@ -295,21 +295,14 @@ public class MainActivity extends Activity {
             final String catId = cat[0];
             final boolean[] collapsed = { collapsedCats.contains(catId) };
             box.setVisibility(collapsed[0] ? View.GONE : View.VISIBLE);
-            // 分类名走生成表（cat[1] 是英文名；用 catEn 让"这串必须能在翻译表里查到"这件事由
-            // 生成器保证，而不是靠这行手写的索引 —— 桥的分类标题就是这么漏成英文的）。
-            final TextView head = sectionHeader((collapsed[0] ? "▸ " : "▾ ") + Lang.t(UiControls.catEn(cat[0])));
-            head.setOnClickListener(v -> {
-                collapsed[0] = !collapsed[0];
-                box.setVisibility(collapsed[0] ? View.GONE : View.VISIBLE);
-                head.setText((collapsed[0] ? "▸ " : "▾ ") + Lang.t(UiControls.catEn(cat[0])));
-                if (collapsed[0]) collapsedCats.add(catId); else collapsedCats.remove(catId);
-                getSharedPreferences("dsh-console", MODE_PRIVATE).edit()
-                        .putStringSet("collapsed", collapsedCats).apply();
-            });
-            root.addView(head);
-            root.addView(box);
             final LinearLayout catRoot = box;   // the section's controls go in here
             String openGroup = "";
+            // 标题上的 (N) 数的是**真正加进这一类的行数**：按钮/开关/文本各一行，灯那一整块算一行，
+            // 分组小标题（▸ 桥 / adb / 危险操作）不算行。
+            // 为什么要在这里数：用户 2026-09-27 报"标题旁的 (N) 跟展开后数出来的条目对不上"。
+            // 根因就是计数用了第二套数据（生成表里属于本分类的控件数），而渲染时灯会合并成一行、
+            // 有些控件根本不在这个界面出现 —— 两个数字必然漂。现在只有一处：加一行，计一个。
+            int rows = 0;
             for (UiControls.C ctrl : list) {
                 if (ctrl.group.length() > 0 && !ctrl.group.equals(openGroup)) {
                     openGroup = ctrl.group;
@@ -319,8 +312,10 @@ public class MainActivity extends Activity {
                     Button bt = controlButton(ctrl);
                     buttons.add(bt);
                     catRoot.addView(bt, wideLp());
+                    rows++;
                 } else if ("switch".equals(ctrl.kind)) {
                     catRoot.addView(switchRow(ctrl), wideLp());
+                    rows++;
                 } else if ("lamp".equals(ctrl.kind)) {
                     if (lamps == null) {
                         lamps = new TextView(this);
@@ -332,11 +327,26 @@ public class MainActivity extends Activity {
                         line.setTextColor(Palette.DIM);
                         line.setPadding(0, dp(4), 0, dp(8));
                         catRoot.addView(line);
+                        rows++;   // 三盏灯 + 一行明细＝一块，算一行
                     }
                 } else if ("text".equals(ctrl.kind)) {
                     catRoot.addView(textRow(ctrl), wideLp());
+                    rows++;
                 }
             }
+            final int rowCount = rows;
+            // 分类名走生成表（catEn 而不是手写索引 —— 桥的分类标题就是这么漏成英文的）。
+            final TextView head = sectionHeader(catLabel(cat[0], rowCount));
+            head.setOnClickListener(v -> {
+                collapsed[0] = !collapsed[0];
+                box.setVisibility(collapsed[0] ? View.GONE : View.VISIBLE);
+                head.setText(catLabel(cat[0], rowCount));
+                if (collapsed[0]) collapsedCats.add(catId); else collapsedCats.remove(catId);
+                getSharedPreferences("dsh-console", MODE_PRIVATE).edit()
+                        .putStringSet("collapsed", collapsedCats).apply();
+            });
+            root.addView(head);
+            root.addView(box);
         }
 
         // ── Last-result bar: **pinned to the bottom of the screen**, outside the ScrollView ──
@@ -951,6 +961,7 @@ public class MainActivity extends Activity {
         // bridge.state，两处各算各的；而 producer 根本不写 state，于是同一屏上出现
         // 「绿灯 + 桥：未知」的矛盾（用户 2026-09-27 实测）。现在只有 bridgeStateKey() 一个判定。
         String bridgeNow = "";
+        String dshNow = "";
         if (json != null && json.length() > 0) {
             try {
                 JSONObject o = new JSONObject(json);
@@ -960,14 +971,18 @@ public class MainActivity extends Activity {
                 bjOut = bj;
                 bridgeNow = bridgeStateKey(bj);
                 if (!bridgeNow.isEmpty()) br = lampOf(bridgeNow);   // 有 state 时，灯色只能由 state 推出来
+                // DSH 同一套做法：灯与文字都读 dsh.state（生产者算一次），不再一个按 ok、一个按 port
+                dshNow = dshStateKey(dj);
+                if (!dshNow.isEmpty()) d = lampOfDsh(dshNow);
                 // One line, at most three facts, no timestamps and no raw HTTP codes:
                 // "DSH 运行中 · 桥 v2.21 · adb 未连接（Wi-Fi 未连或无线调试未开）"
                 StringBuilder sb = new StringBuilder();
-                if (dj != null) sb.append("DSH ").append(Lang.t(dj.optBoolean("port") ? "running" : "stopped"));
+                if (dj != null) sb.append("DSH ").append(dshText(dshNow));
                 if (bj != null) sb.append(" · ").append(bridgeStateText(bridgeNow, bj));
                 if (aj != null) {
                     JSONArray ds = aj.optJSONArray("devices");
                     boolean on = ds != null && ds.length() > 0;
+                    a = on ? "green" : "red";   // 灯色与文字读同一个事实（devices），不再一处读 lamps、一处读 devices
                     sb.append(" · adb ").append(on ? ds.optString(0) : Lang.t("not connected"));
                     if (!on) sb.append(Lang.t(" (Wi-Fi off, or Wireless debugging not on)"));
                 }
@@ -1031,6 +1046,33 @@ public class MainActivity extends Activity {
         String note = bj.optString("note", "none");
         if (note.isEmpty() || "none".equals(note)) return "never";
         return ("soft".equals(note) || "running".equals(note)) ? "soft" : "silent";
+    }
+
+    /** DSH 状态：**唯一**判定处（生产者写 dsh.state，这里只读；老 producer 没有就按 port + http 现推一次）。 */
+    private static String dshStateKey(JSONObject dj) {
+        if (dj == null) return "";
+        String st = dj.optString("state", "");
+        if (st.length() > 0) return st;
+        String code = dj.optString("http", "?");
+        boolean port = dj.optBoolean("port", false);
+        if (port && !"".equals(code) && !"000".equals(code) && !"404".equals(code) && !"?".equals(code)) return "running";
+        return port ? "half" : "down";
+    }
+
+    /** state → 文案。文字与灯色读同一个 state，所以"黄灯 + 运行中"这种自相矛盾不可能出现。
+     *  三句话**在这里就翻好**：Lang.t() 的参数必须是字面量，否则查表永远查不到
+     *  （tools/i18n-audit 会拦，桥的分类标题就是栽在这上面）。 */
+    private String dshText(String state) {
+        if ("running".equals(state)) return Lang.t("running");
+        if ("half".equals(state)) return Lang.t("half-started (the port is listening, the page does not answer yet)");
+        return Lang.t("stopped");
+    }
+
+    /** 状态 → 灯色。与 dsh-status-pub 的 DSH_LAMP 是同一张表（tools/i18n-audit 逐项对拍）。 */
+    private static String lampOfDsh(String state) {
+        if ("running".equals(state)) return "green";
+        if ("half".equals(state)) return "yellow";
+        return "red";
     }
 
     /** 状态 → 灯色。与 dsh-status-pub 的 LAMP_OF_STATE 是同一张表（tools/i18n-audit 对拍）。 */
@@ -1239,6 +1281,12 @@ public class MainActivity extends Activity {
         t.setPadding(dp(2), dp(4), dp(2), dp(8));
         t.setText((ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.hintEn));
         return t;
+    }
+
+    /** 分类标题：「▾ 通道（adb 与桥分开）（8）」。数字永远来自实际渲染的行数（见上面的 rows）。 */
+    private String catLabel(String catId, int rows) {
+        boolean shut = collapsedCats.contains(catId);
+        return (shut ? "▸ " : "▾ ") + Lang.t(UiControls.catEn(catId)) + "（" + rows + "）";
     }
 
     /** The bridge's states, rendered from the ONE key computed by {@link #bridgeStateKey}. */

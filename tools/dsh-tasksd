@@ -84,6 +84,14 @@ VIRTUAL = {
     # Read-only status refresh: same command the console uses, so "refresh" means the same thing in
     # every surface (and never wakes a channel).
     'status_refresh': [os.path.join(HOME, '.local/bin/dsh-status-pub'), '--json', '--brief'],
+    # Language, one task per mode (no argument parsing, so there is no injection surface).
+    # Why through the tool instead of writing ~/.dsh-lang from the panel: `dsh-lang set` writes the file
+    # **and pushes the value into the bridge app** over the loopback socket. The panel used to write the
+    # file directly, which left the bridge on the old language until something else pushed it
+    # (checked 2026-09-27: console→all ✓, panel→bridge ✗, bridge→others ✗).
+    'lang_auto':     [os.path.join(HOME, '.local/bin/dsh-lang'), 'set', 'auto'],
+    'lang_zh':       [os.path.join(HOME, '.local/bin/dsh-lang'), 'set', 'zh'],
+    'lang_en':       [os.path.join(HOME, '.local/bin/dsh-lang'), 'set', 'en'],
 }
 AUTH_HELPER = os.path.join(HOME, '.local/bin/dsh-auth-pass')
 # These change the running state (they drop the current session), so the frontend must confirm first

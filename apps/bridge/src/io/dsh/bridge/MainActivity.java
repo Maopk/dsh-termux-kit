@@ -383,9 +383,13 @@ public class MainActivity extends Activity {
                 + "\n" + Lang.t("Port: ") + listen
                 + (on ? "" : "\n" + Lang.t("Tap ① Open accessibility settings and switch DSH Bridge on in the list")));
         if (bridgeState != null) {
+            // 开关与这行文字读**同一个事实**（listening）。顺带把第三种情况说清楚：
+            // 服务根本没起来时以前也写"刚断（可唤醒）"—— 那是句不准的话（用户 2026-09-27 要求查这类
+            // 自相矛盾）。现在 svc == null 就说"未运行"，并告诉他去哪儿把它叫起来。
             boolean listening = svc != null && svc.isListening();
-            bridgeState.setText(listening ? Lang.t("Bridge: running") + " · v" + ver
-                                          : Lang.t("Bridge: just dropped (wakeable)"));
+            if (listening) bridgeState.setText(Lang.t("Bridge: running") + " · v" + ver);
+            else if (svc != null) bridgeState.setText(Lang.t("Bridge: just dropped (wakeable)"));
+            else bridgeState.setText(Lang.t("Bridge: not running (the service is down; flip the switch above or wake it from the Console)"));
             if (runSwitch != null) { runGuard = true; runSwitch.setChecked(listening); runGuard = false; }
         }
         boolean notifOk = true;
@@ -466,9 +470,15 @@ public class MainActivity extends Activity {
         projBtn.setTextColor(LINK);
     }
 
+    /** 分组小标题专用类型：折叠计数时靠 instanceof 认出来。
+     *  为什么不用 tag：tag 已经被 keepColor 用来躲深色 pass 了（两个标记会互相覆盖）。 */
+    private static final class GroupLabel extends TextView {
+        GroupLabel(android.content.Context c) { super(c); }
+    }
+
     /** 子分类标题（ui/controls.json 的 groups）：把「危险操作」和普通开关分开，用琥珀色提醒。 */
     private TextView groupHeader(String groupId) {
-        TextView t = new TextView(this);
+        TextView t = new GroupLabel(this);
         t.setText(Lang.t(UiControls.groupEn(groupId)));
         t.setTextSize(12f);
         t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -499,12 +509,18 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         final boolean[] shut = { collapsed.contains(catId) };
         box.setVisibility(shut[0] ? View.GONE : View.VISIBLE);
-        final TextView head = section(CatLabel(catId, shut[0]));
+        // 标题上的 (N) = **这一类里"能操作/能看的条目"数**：说明行（HintLine）跟着它的控件算一条，
+        // 分组小标题（GroupLabel）不算 —— 跟控制台"一个控件 = 一行"的口径一致。
+        // 关于本应用是说明页，不显示数字）。用户 2026-09-27：标题旁的数字必须跟展开后数出来的一致。
+        int rows = 0;
+        for (View c : children) if (c != null && !(c instanceof GroupLabel) && !(c instanceof HintLine)) rows++;
+        final int rowCount = rows;
+        final TextView head = section(CatLabel(catId, shut[0], rowCount));
         head.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 shut[0] = !shut[0];
                 box.setVisibility(shut[0] ? View.GONE : View.VISIBLE);
-                head.setText(CatLabel(catId, shut[0]));
+                head.setText(CatLabel(catId, shut[0], rowCount));
                 if (shut[0]) collapsed.add(catId); else collapsed.remove(catId);
                 sp.edit().putStringSet("collapsed", collapsed).apply();
             }
@@ -514,20 +530,27 @@ public class MainActivity extends Activity {
         return box;
     }
 
-    private String CatLabel(String catId, boolean shut) {
+    private String CatLabel(String catId, boolean shut, int rows) {
         // ⚠ Translate FIRST, then add the fold arrow. It used to be the other way round: section()
         //   received "▸ Channels (adb and bridge separate)" and looked *that* up in the table, which
         //   can never match a key — so all three category headers stayed English while everything
         //   around them was Chinese (user report 2026-09-27). tools/i18n-audit now rejects any
         //   Lang.t() whose argument is not a plain literal, so this cannot come back.
         String name = "about".equals(catId) ? Lang.t("About this app") : Lang.t(UiControls.catEn(catId));
-        return (shut ? "▸ " : "▾ ") + name;
+        // 「关于本应用」是一页说明（不是控件列表），不挂数字；其余分类的数字来自实际渲染的行数。
+        if ("about".equals(catId)) return (shut ? "▸ " : "▾ ") + name;
+        return (shut ? "▸ " : "▾ ") + name + "（" + rows + "）";
+    }
+
+    /** 说明行专用类型：它属于上面那个控件，**不算一个条目**（否则"重读状态"这类控件会被数成 2 条）。 */
+    private static final class HintLine extends TextView {
+        HintLine(android.content.Context c) { super(c); }
     }
 
     /** A small grey consequence line under a control — every control carries one (spec §四). */
     private TextView hintOf(String id) {
         UiControls.C c = UiControls.get(id);
-        TextView t = new TextView(this);
+        TextView t = new HintLine(this);
         t.setTextSize(11.5f);
         t.setTextColor(Palette.MUTED);
         t.setText(c == null ? "" : ((c.danger ? "⚠ " : "") + Lang.t(c.hintEn)));
@@ -573,7 +596,21 @@ public class MainActivity extends Activity {
             lp.setMargins(0, 0, (int) (6 * getResources().getDisplayMetrics().density), 0);
             row.addView(b, lp);
         }
-        return row;
+        // 说清边界（用户 2026-09-27 要求查"语言切换后三处是否真的跟着变"）：
+        // 这一行只写本 App 的 SharedPreferences —— 桥没有 RUN_COMMAND，读不到也写不了 ~/.dsh-lang。
+        // 真正"三处一起变"的入口是控制台那一行（它调 dsh-lang set：写文件 + 把值推给桥）。
+        // 与其让用户以为改了全局，不如把这句话写在脸上。
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.addView(row);
+        TextView note = new TextView(this);
+        note.setTextSize(11f);
+        note.setTextColor(Palette.MUTED);
+        note.setPadding(0, (int) (4 * getResources().getDisplayMetrics().density), 0, 0);
+        note.setText(Lang.t("This row changes this app only. To move all three at once, use the Console's language row — it writes ~/.dsh-lang and pushes the value here."));
+        keepColor(note);
+        box.addView(note);
+        return box;
     }
 
     /** Full stop is dangerous **and** lives under Maintenance (user's call): confirm first, then say the cost. */

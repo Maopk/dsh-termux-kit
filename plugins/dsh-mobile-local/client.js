@@ -487,12 +487,6 @@ window.__ModuleLoader__.load({
           });
         }
 
-        function section(catId, body) {
-          return h('div', { key: catId },
-            h('div', { className: 'mb-cat' }, '▍' + catName(catId)),
-            body)
-        }
-
         // ── 状态 / 日志 ──
         // Group name (the adb / bridge sub-headers inside Channels), per language, from the generated data.
         const g = (gid) => {
@@ -515,13 +509,18 @@ window.__ModuleLoader__.load({
         // ── Sections ──
         // Collapsible, and only the first one starts open: a phone panel that dumps 17 buttons on you
         // is the thing the user complained about. Lamps render **only** in 状态/日志 (no duplicates).
-        const head = (catId) => h('div', {
+        // 分类标题上的 (N)：**数的是真正渲染出来的行数**，由调用方把 body 传进来算（见下面的 rowsOf）。
+        // 旧写法是 countOf(catId) = UI_CONTROLS.filter(c => c.cat === catId).length —— 那是**第二套数据**：
+        // 它不按 surfaces 过滤（面板不显示的项目主页也被算进去）、把状态/日志的 3 条灯算成 3 行
+        // （实际只画 1 行灯 + 2 个按钮）、也不管 bridge_state_text 被开关行吸收。于是标题写 8 项、
+        // 展开只有 7 行（用户 2026-09-27 报的"对不上"）。现在只有一处：body 里有什么就数什么。
+        const isGroupLabel = (x) => !!x && typeof x.key === 'string' && x.key.length > 1 && x.key.charAt(0) === 'g';
+        const rowsOf = (body) => body.filter((x) => x && !isGroupLabel(x)).length;
+        const head = (catId, rows) => h('div', {
           className: 'mb-cat',
           onClick: () => setCollapsed((cur) => { const n = Object.assign({}, cur); n[catId] = !n[catId]; return n; }),
           'aria-expanded': !collapsed[catId],
-        }, (collapsed[catId] ? '▸ ' : '▾ ') + catName(catId) + (collapsed[catId] ? (lang === 'zh' ? '　' + countOf(catId) + ' 项' : '  ' + countOf(catId)) : ''));
-
-        function countOf(catId) { return UI_CONTROLS.filter((c) => c.cat === catId).length; }
+        }, (collapsed[catId] ? '▸ ' : '▾ ') + catName(catId) + (lang === 'zh' ? '　' + rows + ' 项' : '  (' + rows + ')'));
 
         const lampRow = () => h('div', { className: 'mb-lamps' },
           h(Lamp, { color: lampOf('dsh', status), aria: t(ctl('lamp_dsh').label),
@@ -575,7 +574,7 @@ window.__ModuleLoader__.load({
               }));
             });
           }
-          return h('div', { key: cat.id }, head(cat.id), h('div', null, body));
+          return h('div', { key: cat.id }, head(cat.id, rowsOf(body)), h('div', null, body));
         });
 
         const logSheet = logOpen ? h('div', null,
@@ -652,9 +651,14 @@ window.__ModuleLoader__.load({
           h('button', { className: 'mb-fab', title: 'DSH', 'aria-label': 'DSH', onClick: () => setOpen(true) }, '☰'),
           open ? h(TaskSheet, { onClose: () => setOpen(false), lang: lang, langMode: langMode, onLang: async (m) => {
           setLangMode(m); setLang(pickLang(m));
-          // Persist to the kit's one language file so the widgets and the two apps follow too — the
-          // panel must not keep a private language of its own.
-          try { await rpc('panel.writeText', { root: HOME, path: HOME + '/.dsh-lang', content: m + '\n' }); } catch (e) {}
+          // 走 dsh-lang set（tasksd 的虚拟任务），**不是**自己写文件：那一步会同时把值推进桥 App
+          // （桥没有 RUN_COMMAND，只能被推）。自己写文件的话小组件和控制台会跟上，桥会留在旧语言。
+          try { await apiPost('/run', { id: 'lang_' + m }); } catch (e) { setErr(String(e && e.message || e)); }
+          try {
+            const r = await rpc('panel.readText', { root: HOME, path: HOME + '/.dsh-lang' });
+            const v = ((r && (r.content || r.text)) || '').trim();
+            if (v === 'zh' || v === 'en' || v === 'auto') { setLangMode(v); setLang(pickLang(v)); }
+          } catch (e) {}
         } }) : null)
       }
 

@@ -51,6 +51,7 @@ final class Lang {
         ZH.put("Bridge running", "桥运行中");
         ZH.put("Bridge state", "桥状态");
         ZH.put("Bridge: just dropped (wakeable)", "桥：刚断（可唤醒）");
+        ZH.put("Bridge: not running (the service is down; flip the switch above or wake it from the Console)", "桥：未运行（服务没起来；拨上面的开关，或从控制台唤醒）");
         ZH.put("Bridge: running", "桥：运行中");
         ZH.put("Cancel", "取消");
         ZH.put("Cannot open notification settings: ", "打不开通知设置：");
@@ -112,6 +113,7 @@ final class Lang {
         ZH.put("Tap ① Open accessibility settings and switch DSH Bridge on in the list", "点 ① 打开无障碍设置，在列表里把「DSH 桥」打开");
         ZH.put("The only permissions are accessibility and the local loopback port 127.0.0.1:8788; nothing is uploaded.", "唯一的权限是无障碍和本机回环端口 127.0.0.1:8788；任何内容都不上传。");
         ZH.put("The service is not running right now; to shut it down completely, turn DSH Bridge off in the system accessibility settings", "服务当前未运行；如需彻底关闭，请在系统无障碍设置里关掉「DSH 桥」");
+        ZH.put("This row changes this app only. To move all three at once, use the Console's language row — it writes ~/.dsh-lang and pushes the value here.", "这一行只改本 App。要让控制台、页面面板和小组件一起变，用控制台里的「语言」——它写 ~/.dsh-lang 并把值推给桥。");
         ZH.put("Token copied; you can paste it to DSH", "token 已复制，可以粘贴发给 DSH");
         ZH.put("Turns accessibility off right now. The same button sits in the notification bar, which is why notifications must stay on.", "立刻关掉无障碍服务。通知栏里有一颗同样的按钮，所以别关通知。");
         ZH.put("Version", "版本");

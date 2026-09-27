@@ -321,6 +321,23 @@ def audit_bridge_state():
     else:
         ok('桥的 state→灯色 两侧同表：%s' % pmap)
 
+    # DSH 那盏灯也一样（用户 2026-09-27：灯色和文字必须同源）
+    m = re.search(r'DSH_LAMP\s*=\s*\{(.*?)\}', py, re.S)
+    k = re.search(r'private static String lampOfDsh\(String state\)\s*\{(.*?)\n    \}', js, re.S)
+    if not m or not k:
+        bad('找不到 DSH_LAMP / lampOfDsh —— 灯色与文字可能又分成两处算了'); return
+    pdsh = dict(re.findall(r"'([a-z]+)':\s*'([a-z]+)'", m.group(1)))
+    body = k.group(1)
+    jdsh = dict(re.findall(r'"([a-z]+)"\.equals\(state\)\) return "([a-z]+)"', body))
+    last = re.findall(r'return "([a-z]+)";', body)
+    for st in pdsh:
+        if st not in jdsh:
+            jdsh[st] = last[-1] if last else None
+    if pdsh != jdsh:
+        bad('DSH 的 state→灯色 两边不一致：dsh-status-pub=%s 控制台=%s' % (pdsh, jdsh))
+    else:
+        ok('DSH 的 state→灯色 两侧同表：%s（文字读同一个 state）' % pdsh)
+
 
 # ── 7. 标题类文字不许残留英文（用户要的那条自检）───────────────────────────
 def english_left(text, allow=TERMS):
@@ -369,6 +386,60 @@ def audit_titles(zh, data):
 
 
 # ── 8. 界面文字模型（人看的）───────────────────────────────────────────────
+def _rows(data, cid, surface):
+    return category_counts(data)[surface].get(cid, 0)
+
+
+def category_counts(data):
+    """每个分类在三个界面上**实际会渲染出几个条目**，作为 (N) 的参考答案。
+
+    规则（三处一致）：一个控件/开关/文本 = 1 条；灯那一整块算 1 条；说明行跟着它的控件（不加）；
+    分组小标题不算；面板把 bridge_state_text 吸收进"桥运行中"那一行，所以面板比控制台少 1 条。
+    """
+    out = {}
+    for surface in ('console', 'bridge', 'panel'):
+        rows = {}
+        for cat in data['cats']:
+            cid = cat['id']
+            mine = [c for c in data['controls']
+                    if c['cat'] == cid and surface in c['surfaces']
+                    and (c['kind'] != 'lamp' or cid == 'statuslog')]
+            n = 0
+            lamps_done = False
+            for c in mine:
+                if c['kind'] == 'lamp':
+                    if not lamps_done:
+                        n += 1; lamps_done = True
+                    continue
+                if surface == 'panel' and c['id'] == 'bridge_state_text':
+                    continue          # 面板把这一行并进"桥运行中"开关
+                n += 1
+            if surface == 'bridge' and cid == 'about':
+                continue              # 桥的「关于本应用」是说明页，标题上不挂数字
+            if n:
+                rows[cid] = n
+        out[surface] = rows
+    return out
+
+
+def audit_counts(data):
+    """(N) 不许有两套数据：面板曾经用 UI_CONTROLS.filter(cat).length 另算一遍，
+    于是通道报 8 项、展开只有 7 条（用户 2026-09-27 报的"对不上"）。"""
+    js = io.open(os.path.join(ROOT, 'plugins', 'dsh-mobile-local', 'client.js'), encoding='utf-8').read()
+    js = re.sub(r'//[^\n]*', '', js)          # 注释里引用旧写法不算（本文件的说明就引用了它）
+    if re.search(r'UI_CONTROLS\.filter\([^)\n]*\)\s*\.length', js):
+        bad('面板里又出现了"按控件表另算一遍"的计数（UI_CONTROLS.filter(...).length）—— '
+            '标题上的数字必须数真正渲染的 body')
+    else:
+        ok('面板的 (N) 数的是渲染出来的 body（rowsOf(body)），没有第二套计数')
+    counts = category_counts(data)
+    for surface in ('console', 'bridge', 'panel'):
+        rows = counts[surface]
+        if rows:
+            ok('%-7s 各分类条目数：%s' % (surface, ' · '.join(
+                '%s=%d' % (next(c['zh'] for c in data['cats'] if c['id'] == k), v) for k, v in rows.items())))
+
+
 def screen_model(zh, data):
     L = []
     L.append('【控制台】')
@@ -378,7 +449,7 @@ def screen_model(zh, data):
         ctrls = [c for c in data['controls'] if c['cat'] == cat['id'] and 'console' in c['surfaces']]
         if not ctrls:
             continue
-        L.append('  ▾ %s' % cat['zh'])
+        L.append('  ▾ %s（%d）' % (cat['zh'], _rows(data, cat['id'], 'console')))
         grp = ''
         for c in ctrls:
             if c.get('group') and c['group'] != grp:
@@ -393,14 +464,14 @@ def screen_model(zh, data):
         ctrls = [c for c in data['controls'] if c['cat'] == cat['id'] and 'bridge' in c['surfaces']]
         if not ctrls:
             continue
-        L.append('  ▾ %s' % cat['zh'])
+        L.append('  ▾ %s（%d）' % (cat['zh'], _rows(data, cat['id'], 'bridge')))
         grp = ''
         for c in ctrls:
             if c.get('group') and c['group'] != grp:
                 grp = c['group']
                 L.append('     · %s' % next(g['zh'] for g in data['groups'] if g['id'] == grp))
             L.append('     [%s] %s' % (c['kind'], c['label']['zh']))
-    L.append('  ▾ 关于本应用')
+    L.append('  ▾ 关于本应用（说明页，不挂数字）')
     return L
 
 
@@ -417,6 +488,7 @@ def main():
     audit_theme(theme)
     audit_palette()
     audit_bridge_state()
+    audit_counts(data)
     audit_titles(zh, data)
 
     if not quiet:

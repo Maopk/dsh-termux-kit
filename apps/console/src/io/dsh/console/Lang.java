@@ -201,6 +201,7 @@ final class Lang {
         ZH.put("adb · wireless debugging, needs working Wi-Fi", "adb · 无线调试，需要可用 Wi-Fi");
         ZH.put("auto follows the system language", "自动跟随系统语言");
         ZH.put("bridge · accessibility loopback, no network", "桥 · 无障碍回环，不需要网络");
+        ZH.put("half-started (the port is listening, the page does not answer yet)", "半启动（端口在听，页面还没应答）");
         ZH.put("lifting app settings restrictions, sensitive confirmations in developer options… they all stop with you).\n", "解除应用设置限制、开发者选项里的敏感确认……都回到你自己手上）。\n");
         ZH.put("none", "无");
         ZH.put("not connected", "未连接");

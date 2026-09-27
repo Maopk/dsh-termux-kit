@@ -39,6 +39,25 @@ DANGEROUS = {'2_shutdown-dsh', '4_soft-restart-dsh', '6_hard-restart-dsh', '0_em
 # 可这里从来不写 state，于是 App 永远显示"桥：未知"，而灯是绿的。屏幕上就成了
 # 「绿灯 + 桥：未知」（用户 2026-09-27 实测抓到）。现在：state 在这里算一次，
 # lamps.bridge 由 state 推出来，谁都不许再自己算第二遍。
+# DSH 与 adb 也一样：**先定 state，再由 state 推灯色**，界面上的文字读同一个 state。
+# 为什么：DSH 的灯以前按 ok（端口 + HTTP 码）算，文字却按 port 算 —— 端口在听但页面还没挂路由时
+# （HTTP 404），灯是黄的说"半启动"、文字却说"运行中"（用户 2026-09-27 要求查这类"两套数据"）。
+DSH_LAMP = {'running': 'green', 'half': 'yellow', 'down': 'red'}
+ADB_LAMP = {'connected': 'green', 'disconnected': 'red'}
+
+
+def dsh_state(port, code):
+    """DSH 三态，唯一判定处：真拿得到 200 才算 running（dsh web 先绑端口后挂路由，窗口期是 404）。"""
+    if port and code not in ('', '000', '404', '?'):
+        return 'running'
+    return 'half' if port else 'down'
+
+
+def adb_state(devs):
+    """adb 两态：有设备就是连着（devices 是唯一事实，文字也读它）。"""
+    return 'connected' if devs else 'disconnected'
+
+
 BRIDGE_NOTE = os.path.join(HOME, '.dsh-bridge-state')   # dsh-bridge 写的状态记录：soft/full/running + 时间戳
 LAMP_OF_STATE = {
     'running': 'green',    # 在听且真应答
@@ -159,6 +178,7 @@ def collect():
                'http://127.0.0.1:%d/' % _dsh_port], timeout=budget(6))
     dsh['http'] = code or '?'
     dsh['ok'] = dsh['port'] and code not in ('', '000', '404')
+    dsh['state'] = dsh_state(dsh['port'], code)
     st['dsh'] = dsh
     # bridge
     br = {'port': port_open(8788), 'ok': False, 'ver': None, 'paused': None}
@@ -179,7 +199,7 @@ def collect():
     for line in out.splitlines()[1:]:
         if '\tdevice' in line:
             devs.append(line.split('\t')[0])
-    st['adb'] = {'devices': devs, 'ok': bool(devs)}
+    st['adb'] = {'devices': devs, 'ok': bool(devs), 'state': adb_state(devs)}
     # leftovers
     st['locks'] = {
         'boot': os.path.exists(dsh_common.boot_lock()),
@@ -189,9 +209,9 @@ def collect():
     # DSH / adb 的灯由各自的事实推；桥的灯**必须**由上面那个 state 推 —— 灯和文字同源，
     # 这是「绿灯 + 桥：未知」那次矛盾的根治办法。
     st['lamps'] = {
-        'dsh': 'green' if st['dsh']['ok'] else ('yellow' if st['dsh']['port'] else 'red'),
+        'dsh': DSH_LAMP[st['dsh']['state']],
         'bridge': LAMP_OF_STATE[st['bridge']['state']],
-        'adb': 'green' if st['adb']['ok'] else 'red',
+        'adb': ADB_LAMP[st['adb']['state']],
     }
     st['tasks'] = tasks_state()
     st['partial'] = out_of_time()   # true = the budget was hit; some items are "not asked in time" rather than "really red"
