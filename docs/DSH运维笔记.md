@@ -7,6 +7,19 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-09-28 01:12 · 检查 GitHub 连通性（用户问"现在 gh 连得上吗"）+ 修 pre-push-check 第 10 条
+
+做了什么：四条并行探针：① `dsh-gh status`（API + token 那条路）② `git ls-remote origin HEAD`（push 走这条）
+③ `clash-doctor`（GitHub 时通时断的老根因：核心被停/节点被 fake-ip 吃）④ 裸 TCP 连 github.com:443 与 api.github.com:443。
+为什么：用户要确认现在能不能推仓库 —— 之前几次 `git fetch` / `ls-remote` 都超时。
+结果：✅ **全通**：API 读到 repo/release（远端 HEAD = 60def57，发行版仍是 v1.11）；`git ls-remote` 立刻返回
+`60def577…`；clash-doctor 四项全绿（核心在跑、国内直连正常、代理路径 github=200）；两个 443 都可连。
+**推送形态**：`git fetch origin` 后本地**领先 20 个 commit、落后 0**，`merge-base --is-ancestor` 通过 →
+**快进推送**（无分叉、可 revert）；涉及 52 个文件、+3943/−698。
+**顺手修了清单第 10 条的 bug**：它只试 `@{u}`，而本地 master 没配上游 → fetch 成功了还报"没 fetch 过"。
+现在按 `@{u}` → `origin/<分支>` → `origin/HEAD` 逐个退，并区分"快进"与"有分叉"。
+下一步：等用户一句"推"就走 CONTRIBUTING §九（`dsh-gh push`），推完补推送记录。
+
 2026-09-28 01:00 · 用小挂件在屏幕上画爱心 → 拖回右侧 → 点三下（并修掉 droid-sock 的一个崩溃）
 
 做了什么：按用户要求分三步，全部通过桥（无障碍），坐标仍用「DOM ↔ 无障碍树」互标定：

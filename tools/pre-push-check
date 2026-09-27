@@ -86,12 +86,31 @@ done
 if [ -z "$miss" ]; then ok 9 ".gitignore 覆盖了 §八 要求的模式"
 else no 9 ".gitignore 缺：$miss"; fi
 
-# 10) pull --rebase（要联网，脚本不代做）
+# 10) 与远端的关系（要联网；这里只读不写，git pull --rebase 交给你）
+#     注意：本地 master 可能**没有配上游**（@{u} 直接报错），那就退回 origin/<当前分支> 或 origin/HEAD。
+#     第一版只试 @{u}，于是 fetch 成功了还报"没 fetch 过"（真踩，2026-09-28）。
 if git remote get-url origin >/dev/null 2>&1; then
-  ahead=$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo '?')
-  if [ "$ahead" = "?" ]; then warn_ 10 "还没 fetch 过远端，无法判断领先几个 commit —— push 前记得 git pull --rebase"
-  elif [ "$ahead" = "0" ]; then ok 10 "与远端同步（0 个待推 commit）"
-  else warn_ 10 "本地领先远端 $ahead 个 commit —— push 前先 git pull --rebase"; fi
+  br=$(git rev-parse --abbrev-ref HEAD)
+  up=""
+  for cand in "@{u}" "origin/$br" "origin/HEAD"; do
+    if git rev-parse --verify --quiet "$cand" >/dev/null 2>&1; then up="$cand"; break; fi
+  done
+  if [ -z "$up" ]; then
+    warn_ 10 "本地没有远端跟踪引用（先 git fetch origin）—— push 前记得 git pull --rebase"
+  else
+    ahead=$(git rev-list --count "$up"..HEAD 2>/dev/null || echo 0)
+    behind=$(git rev-list --count HEAD.."$up" 2>/dev/null || echo 0)
+    if [ "$behind" != "0" ]; then
+      no 10 "落后远端 $behind 个 commit —— 先 git pull --rebase"
+    elif [ "$ahead" = "0" ]; then ok 10 "与远端同步（$up，0 个待推 commit）"
+    else
+      if git merge-base --is-ancestor "$up" HEAD 2>/dev/null; then
+        ok 10 "领先远端 $ahead 个 commit，且是**快进**（无分叉，可 revert）"
+      else
+        warn_ 10 "领先远端 $ahead 个 commit，但**有分叉** —— 先 git pull --rebase"
+      fi
+    fi
+  fi
 else warn_ 10 "没有 origin 远端"; fi
 
 # 11) 自检套件（跑得快的那些；selftest.sh 全量会在手机上压负载，交给清单手动那一条）
