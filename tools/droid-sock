@@ -70,16 +70,18 @@ def call(obj, timeout=40):
     try:
         s = _connect_once(timeout)
     except Exception as first:
-        # staged wake: ① broadcast (silent, does not disturb) → ② raise the UI (fallback)
-        # ⚠ 2026-09-27 lesson: a broadcast **cannot wake an already dead App process** (Android background start limits),
-        #   and stage 2 used to be blocked by DSH_BRIDGE_WAKE_UI=1 → once the bridge died it never came back and you had to tap the icon by hand.
-        #   Now stage 2 runs by default (cost: the bridge UI is pulled to the foreground once); to avoid that set
-        #   DSH_BRIDGE_NO_UI=1 to disable the fallback.
+        # Wake ladder: ① a broadcast carrying the token (silent) → ② raise the bridge UI (takes your screen).
+        #
+        # ⚠ 2026-09-27, reversed again by an explicit user request ("我启动dsh后还会再跳转到桥一次，我不想跳转"):
+        #   **stage 2 is now opt-in**, the opposite of the earlier decision. The earlier one was made because a
+        #   broadcast supposedly cannot wake a dead App process — but that is only the "process was reclaimed"
+        #   case. Measured today on the phone: a bridge that was soft-stopped comes back **2 s** after one
+        #   token-carrying broadcast, and the foreground never leaves whatever you were looking at.
+        #   So the silent path covers the ordinary cases, and for the rare dead-process case it is better to say
+        #   "tap the 8_ widget / open the bridge once" than to yank your screen. Set DSH_BRIDGE_WAKE_UI=1 to get
+        #   the old behaviour back (it does steal the foreground once).
         s = None
-        if os.environ.get('DSH_BRIDGE_NO_UI') == '1':
-            stages = (1,)
-        else:
-            stages = (1, 2)
+        stages = (1, 2) if os.environ.get('DSH_BRIDGE_WAKE_UI') == '1' else (1,)
         for stage in stages:
             wake_bridge(stage)
             try:
@@ -87,10 +89,24 @@ def call(obj, timeout=40):
                 break
             except Exception:
                 s = None
+        if s is None and len(stages) == 1:
+            # One more silent beat: the system sometimes needs two binds before accessibility answers.
+            wake_bridge(1)
+            try:
+                s = _connect_once(timeout)
+            except Exception:
+                s = None
         if s is None:
-            print('❌ cannot reach the DSH bridge (%s:%d): both the broadcast wake and raising the bridge UI failed\n'
-                  '   check that 「DSH 桥」 is enabled in accessibility (re-enabling must be confirmed by you in system settings)'
-                  % (HOST, PORT), file=sys.stderr)
+            if len(stages) == 1:
+                print('❌ cannot reach the DSH bridge (%s:%d): the silent wake (a token-carrying broadcast) did not bring it back.\n'
+                      '   That usually means the App process was reclaimed and only you can start it again: tap the 「8_」 widget,\n'
+                      '   or open 「DSH 桥」 once from the launcher. I will not pull its window onto your screen;\n'
+                      '   if you want that fallback, set DSH_BRIDGE_WAKE_UI=1.\n'
+                      '   Also check that 「DSH 桥」 is still on in accessibility settings.' % (HOST, PORT), file=sys.stderr)
+            else:
+                print('❌ cannot reach the DSH bridge (%s:%d): both the broadcast wake and raising the bridge UI failed\n'
+                      '   check that 「DSH 桥」 is enabled in accessibility (re-enabling must be confirmed by you in system settings)'
+                      % (HOST, PORT), file=sys.stderr)
             sys.exit(3)
     s.sendall((json.dumps(req, ensure_ascii=False) + '\n').encode('utf-8'))
     buf = b''

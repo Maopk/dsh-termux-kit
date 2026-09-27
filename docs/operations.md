@@ -52,8 +52,11 @@ Measured baseline: right after a core start the first ~70 s are unreliable (3/10
 normal on this device, not a bug.
 
 **Fix:** `dsh-bridge wake` — a token-carrying broadcast. A cold start can take 20–40 s, so retry rather than
-declaring it dead. If a broadcast cannot wake it (the process is gone), the wake ladder falls back to launching
-the bridge UI once; that must be enabled (`DSH_BRIDGE_NO_UI=1` disables it if you do not want the screen used).
+declaring it dead. Since 2026-09-27 the silent broadcast is the **only** default path: the old fallback that
+launched the bridge UI (on the assumption a broadcast cannot wake a dead process) was removed at the user's
+explicit request — it stole the foreground on every DSH start. Measured: a soft-stopped bridge returns 2 s after
+one token-carrying broadcast, with the screen untouched. If the process really is gone the tools now say so and
+ask you to tap the 8_ widget, instead of yanking your screen; `DSH_BRIDGE_WAKE_UI=1` restores the old fallback.
 
 **Full stop is a one-way door here:** `dsh-bridge off` also disables Accessibility, and this ROM will not let a
 broadcast bring the app back — you must re-enable Accessibility by hand.

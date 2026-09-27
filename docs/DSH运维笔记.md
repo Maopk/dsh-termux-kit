@@ -2278,3 +2278,30 @@ dumpsys activity activities：目标 task 前后都是 visible=false，行数不
 - **App 的真源码在 `~/dsh-console` 和 `~/droid-bridge`**，仓库里的 `apps/` 是 `sync-apps.sh` 镜像出来的副本。
   我改了仓库那份、然后重启服务——当然没生效（tasksd 也一样：改仓库、跑安装位）。**改代码要改真源码，装要装安装位。**
 - **Termux 自带的 `am` 没有 `force-stop`**（报 unknown command）；要"冷启动"用 `am start -S -n <包>/<Activity>`（`-S` = 启动前先强停）。
+
+### 14.9 「启动 DSH 会跳转到桥」—— 去掉抢屏的唤醒（2026-09-27 晚，用户要求）
+
+**现象**：用户「我启动dsh后还会再跳转到桥一次，我不想跳转」。
+
+**两个源头，都是"拉界面"这种唤醒方式**：
+1. **我今天新加的 `droid-ensure`**：桥没在听时直接 `am start -n io.dsh.bridge/.MainActivity`。
+   它被接进了组件 1 的 `restore_channels` → **每次启动 DSH 都会走一遍**。
+2. `droid-sock` 的唤醒梯子 stage 2（代码注释自己写着 "raises the UI (it takes the foreground)"）。
+   它当时是**默认开**的，理由是"广播叫不醒已经死掉的 App 进程"，代价就是拉一次前台。
+   更早还踩过一次同类问题：`dsh-tasksd` 用不带 `--fast` 的 `ping` 探活 → 每刷一次状态灯就跳一次桥。
+
+**先证明"不抢屏也能唤醒"，再删**（实测，真机）：
+```
+桥软停 → ❌ Connection refused
+只发一条带 token 的广播（am broadcast -a io.dsh.bridge.WAKE -n io.dsh.bridge/.WakeReceiver --es token …）
+  +2s → ✅ 桥回来了
+全程前台: com.android.chrome → com.android.chrome   ← 一步没离开你的页面
+```
+
+**改法**：
+- `droid-ensure`：唤醒只用带 token 的广播，**不再起 UI**。
+- `droid-sock`：stage 2 从"默认开"改成**默认关**，要用旧行为得显式 `DSH_BRIDGE_WAKE_UI=1`
+  （旧的 `DSH_BRIDGE_NO_UI=1` 已无意义，docs/operations.md 同步更新）。
+- 广播确实叫不醒（进程被系统回收）时**如实说**：让你点一下组件 8 或手动开一次桥，
+  **不抢你的屏** —— 这条按用户的明确偏好定：宁可多一次点击，也不要被夺走焦点。
+- 两处唤醒路径都实测过：桥 2 秒回来，前台全程停在 Chrome。

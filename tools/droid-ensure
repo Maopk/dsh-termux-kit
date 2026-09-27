@@ -57,8 +57,16 @@ fi
 # ── 桥：只为了按「无线调试」那个开关 ──
 bridge_up() { timeout 12 "$SOCK" ping --fast >/dev/null 2>&1; }
 if ! bridge_up; then
-  log "· 桥没在听，发一次唤醒（带 token 的广播；不带 token 的广播在服务停止后会被忽略）"
-  timeout 25 am start -n io.dsh.bridge/.MainActivity >/dev/null 2>&1
+  # **只发广播，绝不起 UI**（用户明确要求：启动 DSH 后不能跳转到桥）。
+  # 带 token 的广播能让软停的桥 2 秒回来（实测），前台始终停在你正在看的页面上；
+  # 进程被系统回收那种情况广播叫不醒 —— 那时如实说明、让你点一下，也不抢你的屏。
+  TOK=$(cat "$HOME/.dsh-bridge-token" 2>/dev/null || true)
+  log "· 桥没在听，发唤醒广播（带 token；不带 token 的广播在服务停止后会被忽略）"
+  if [ -n "$TOK" ]; then
+    timeout 20 am broadcast -a io.dsh.bridge.WAKE -n io.dsh.bridge/.WakeReceiver --es token "$TOK" >/dev/null 2>&1
+  else
+    timeout 20 am broadcast -a io.dsh.bridge.WAKE -n io.dsh.bridge/.WakeReceiver >/dev/null 2>&1
+  fi
   for _ in $(seq 1 20); do bridge_up && break; sleep 1; done
 fi
 

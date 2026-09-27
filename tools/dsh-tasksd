@@ -141,13 +141,14 @@ def status():
     st['bridge'] = {'port': port_open(8788)}
     try:
         # --fast: one connection, return at once when the bridge is stopped or frozen.
-        # ⚠ Without it, droid-sock runs its wake ladder, whose **second stage launches the
-        #   Bridge's MainActivity** (am start -n io.dsh.bridge/.MainActivity) — so merely
-        #   reading the status yanked the Bridge app to the foreground. The user sees exactly
-        #   that as "opening DSH jumps me into the Bridge, twice" (measured 2026-09-27: one
-        #   jump per failing read, and both the panel and the console read on open).
-        #   Reading status must never take over the screen; waking the bridge is an explicit
-        #   action (the "Wake bridge" task), not a side effect of a lamp refresh.
+        # ⚠ Without it, droid-sock runs its wake ladder — and back then the ladder's **second stage
+        #   launched the Bridge's MainActivity** (am start -n io.dsh.bridge/.MainActivity), so merely
+        #   reading the status yanked the Bridge app to the foreground. The user saw exactly that as
+        #   "opening DSH jumps me into the Bridge, twice" (measured 2026-09-27: one jump per failing
+        #   read, and both the panel and the console read on open).
+        #   That stage is now **opt-in** (DSH_BRIDGE_WAKE_UI=1), so even a plain `ping` no longer takes
+        #   the screen — but `--fast` stays: reading a status lamp must not send wake broadcasts either,
+        #   and waking the bridge is an explicit action (the "Wake bridge" task), not a side effect.
         r = subprocess.run([os.path.join(HOME, '.local/bin/droid-sock'), 'ping', '--fast'],
                            capture_output=True, text=True, timeout=12).stdout
         m = re.search(r'"ver":\s*"([^"]+)"', r)
