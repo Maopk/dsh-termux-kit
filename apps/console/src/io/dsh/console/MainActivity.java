@@ -56,7 +56,7 @@ import java.util.List;
  *   · The log is never blank: with no entries it says exactly where to tap.
  */
 public class MainActivity extends Activity {
-    private static final String VER = "v1.5";
+    private static final String VER = "v1.6";
     private static final int TIMEOUT_S = 45;
     private static final int MAX_HISTORY = 60;
 
@@ -683,20 +683,29 @@ public class MainActivity extends Activity {
                     detail = Lang.t("Status parse failed (callback may be truncated): ") + t.getMessage();
                 }
         }
-        // Coloring: **find each dot's position dynamically** (hard-coded 0/4/8 painted over letters and characters — the v0.2 bug)
-        String lampText = Lang.t("● DSH　● Bridge　● adb");
+        // Colour the three lamps by MEASURING each label, never by hard-coded offsets.
+        // History: the first version hard-coded character offsets, then a "fix" hard-coded
+        // "Bridge".length() — which overran in Chinese ("● DSH　● 桥　● adb") and painted the adb DOT
+        // with the bridge's colour while its label stayed red (spans applied later win on overlap).
+        // Building the line from the parts and computing every offset from the actual lengths is
+        // language-proof: measured on the device, the adb dot showed green while adb was disconnected.
+        String dName = "DSH";
+        String bName = Lang.t("Bridge");
+        String aName = "adb";
+        String lampText = "● " + dName + "　● " + bName + "　● " + aName;
         SpannableString s = new SpannableString(lampText);
-        int i1 = lampText.indexOf('●');
-        int i2 = lampText.indexOf('●', i1 + 1);
-        int i3 = lampText.indexOf('●', i2 + 1);
-        if (i1 >= 0) s.setSpan(new ForegroundColorSpan(c(d)), i1, i1 + 1, 0);
-        if (i2 >= 0) s.setSpan(new ForegroundColorSpan(c(br)), i2, i2 + 1, 0);
-        if (i3 >= 0) s.setSpan(new ForegroundColorSpan(c(a)), i3, i3 + 1, 0);
-        // The name after each lamp is colored too, so you can tell at a glance which channel it is
-        if (i1 >= 0) s.setSpan(new ForegroundColorSpan(c(d)), i1 + 2, Math.min(i1 + 5, lampText.length()), 0);
-        if (i2 >= 0) s.setSpan(new ForegroundColorSpan(c(br)), i2 + 2,
-                    Math.min(i2 + 2 + "Bridge".length(), s.length()), 0);   // was i2+3: written for the single CJK char 桥
-        if (i3 >= 0) s.setSpan(new ForegroundColorSpan(c(a)), i3 + 2, Math.min(i3 + 5, lampText.length()), 0);
+        String[] names = {dName, bName, aName};
+        String[] cols = {d, br, a};
+        int cursor = 0;
+        for (int k = 0; k < names.length; k++) {
+            int dot = cursor;                       // the ● of this segment
+            int nameStart = dot + 2;                // "● " is two characters
+            int nameEnd = nameStart + names[k].length();
+            int col = c(cols[k]);
+            if (dot + 1 <= lampText.length()) s.setSpan(new ForegroundColorSpan(col), dot, dot + 1, 0);
+            if (nameEnd <= lampText.length()) s.setSpan(new ForegroundColorSpan(col), nameStart, nameEnd, 0);
+            cursor = nameEnd + 1;                   // skip the full-width separator
+        }
         lamps.setText(s);
         line.setText(detail + (perm ? "" : "　⚠ missing RUN_COMMAND permission"));
         refreshLogView();

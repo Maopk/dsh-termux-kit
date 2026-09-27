@@ -38,6 +38,7 @@ final class Lang {
         ZH.put("Authorize the AI to use your password", "授权 AI 使用你的密码");
         ZH.put("Authorized", "已授权");
         ZH.put("Backup", "备份");
+        ZH.put("Bridge", "桥");
         ZH.put("Bridge offline", "桥离线");
         ZH.put("Bridge online", "桥在线");
         ZH.put("Bridge only: port / whether it really answers / version / paused", "只查桥：端口 / 是否真应答 / 版本 / paused");

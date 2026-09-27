@@ -123,6 +123,21 @@ if timeout 60 bash "$T/2_shutdown-dsh.sh" --dry-run > "$TMPLOG" 2>&1 && grep -qE
   rec PASS "2_shutdown-dsh default" "the default stops the bridge (prefers sleep, falls back to stop on old versions)"
 else rec FAIL "2_shutdown-dsh default" "the default never reached the bridge-stopping branch"; fi
 
+# L2·guard: the lamp colours must be MEASURED, never hard-coded.
+# History: offsets were hard-coded for CJK labels, then "fixed" with "Bridge".length() — which overran in
+# Chinese ("● DSH　● 桥　● adb") and painted the adb DOT with the bridge colour while its label stayed red.
+# Verified by pixel analysis on the device: dot #41B351 (green) next to a red label.
+if grep -q 'setSpan' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" 2>/dev/null; then
+  if grep -qE '"[^"]+"\.length\(\)' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" \
+     && ! grep -q 'names\[k\]\.length()' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java"; then
+    rec FAIL "lamp offsets measured" "the lamp spans use a hard-coded label length again → colours desync per language"
+  else
+    rec PASS "lamp offsets measured" "lamp spans compute offsets from the actual label lengths (language-proof)"
+  fi
+else
+  rec SKIP "lamp offsets measured" "no local console source to inspect"
+fi
+
 # ── L3: regression tests for the readiness check / boot lock (the core of the 404 fix) ──
 line "[L3] Readiness check and boot lock (regression tests)"
 # The common library is already loaded (DRY=0); assertions run in a separate subshell
