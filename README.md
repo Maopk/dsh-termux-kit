@@ -16,7 +16,7 @@ Everything is built on **Termux + an Accessibility service + the official `RUN_C
 | `apps/bridge/` | Source of the **DSH Bridge app**: Accessibility service + loopback API so an AI can read the screen, tap, swipe and type |
 | `widgets/` | 9 Termux home-screen task widgets + the shared library `common.sh` |
 | `i18n/zh.json` | **The only translation source**: every English string → Chinese. `tools/i18n-table` generates the bash table and both apps' Java tables from it, each with that runtime's own escaping rules (see [`docs/i18n.md`](docs/i18n.md)) |
-| `tools/` | 28 command-line tools (start, backup, install APKs, tap UI by text, Clash self-check, i18n generation, …) |
+| `tools/` | 33 command-line tools (start, backup, install APKs, tap UI by text, Clash self-check, i18n generation, …) |
 | `plugins/` | 3 DSH page plugins (phone task panel / AI self-look & remote control / file panel) |
 | `tests/selftest.sh` | Self-test suite: 60 checks (syntax → dry-run → regression → real run → cold-start sandbox) |
 | `docs/` | [`operations.md`](docs/operations.md) — how to diagnose the recurring failures · [`architecture.md`](docs/architecture.md) — one-page architecture & data flow · `DSH运维笔记.md` — the raw Chinese engineering journal behind them |
