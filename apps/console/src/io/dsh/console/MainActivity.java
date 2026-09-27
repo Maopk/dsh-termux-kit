@@ -171,7 +171,7 @@ public class MainActivity extends Activity {
                     if (!silent) {
                         pushHistory("[" + now() + "] " + (code == 0 ? "✅ " : "⚠ ") + statusLabel
                                 + Lang.t(" completed (exit=") + code + (ms > 0 ? Lang.t(", took ") + (ms / 1000.0) + "s" : "")
-                                + ") — the lamps above and the summary line below are updated");
+                                + Lang.t(") — the lamps above and the summary line below are updated"));
                     }
                 }
                 render();
@@ -241,7 +241,7 @@ public class MainActivity extends Activity {
         LinearLayout top = new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL);
         Button bRefresh = mkBtn(Lang.t("Refresh status"), false, v -> { toast(Lang.t("Reading status…"));
             run("status", Lang.t("Refresh status"), TermuxRunner.statusCmd(), true, false, false, 25, true); });
-        logBtn = mkBtn(Lang.t("Log"), false, 0xFF79C0FF, v -> { toast("Opening log"); openLog(); });
+        logBtn = mkBtn(Lang.t("Log"), false, 0xFF79C0FF, v -> { toast(Lang.t("Opening log")); openLog(); });
         buttons.add(bRefresh);
         top.addView(bRefresh, lp());
         top.addView(logBtn, lp());
@@ -286,7 +286,7 @@ public class MainActivity extends Activity {
         TextView tip = new TextView(this);
         tip.setTextSize(11); tip.setTextColor(Color.parseColor("#6E7681"));
         tip.setPadding(0, dp(10), 0, 0);
-        tip.setText("Commands run through Termux (RUN_COMMAND channel); this app has no storage, network, or accessibility permission.\n"
+        tip.setText(Lang.t("Commands run through Termux (RUN_COMMAND channel); this app has no storage, network, or accessibility permission.\n")
                 + Lang.t("Every run is recorded in the log: sent, callback, exit code, raw output."));
         root.addView(tip);
 
@@ -316,7 +316,7 @@ public class MainActivity extends Activity {
         lastAuto = now;
         // v0.6: auto refresh uses different wording than a manual Lang.t("Refresh status") tap, otherwise the two
         // log/summary lines look exactly alike and you cannot tell "I tapped it" from "the app did it".
-        run("status", "Auto refresh status", TermuxRunner.statusCmd(), true, false, true, 20, true);
+        run("status", Lang.t("Auto refresh status"), TermuxRunner.statusCmd(), true, false, true, 20, true);
     }
 
     @Override protected void onDestroy() {
@@ -364,7 +364,7 @@ public class MainActivity extends Activity {
     /** Log body: the header states the entry count and purpose; with no entries it gives guidance (never blank). */
     private String logText() {
         StringBuilder sb = new StringBuilder();
-        sb.append("DSH Console ").append(VER)
+        sb.append(Lang.t("DSH Console ")).append(VER)
           .append("　").append(history.size()).append(Lang.t(" entries (keeps up to ")).append(MAX_HISTORY).append(")\n");
         sb.append("──────────────────────────\n");
         if (history.isEmpty()) {
@@ -392,16 +392,16 @@ public class MainActivity extends Activity {
     private void copyLog() {
         try {
             ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            if (cm == null) { toast("This device has no clipboard service"); return; }
-            cm.setPrimaryClip(ClipData.newPlainText("DSH Console log", logText()));
+            if (cm == null) { toast(Lang.t("This device has no clipboard service")); return; }
+            cm.setPrimaryClip(ClipData.newPlainText(Lang.t("DSH Console log"), logText()));
             // Android 13+ pops up its own "copied" itself, so don't stack another toast
-            if (Build.VERSION.SDK_INT < 33) toast("Log copied (" + history.size() + " entries)");
-        } catch (Throwable t) { toast("Copy failed: " + t.getMessage()); }
+            if (Build.VERSION.SDK_INT < 33) toast(Lang.t("Log copied (") + history.size() + Lang.t(" entries)"));
+        } catch (Throwable t) { toast(Lang.t("Copy failed: ") + t.getMessage()); }
     }
 
     private void updateLogBtn() {
         if (logBtn == null) return;
-        logBtn.setText(unread > 0 ? "Log (" + unread + ")" : Lang.t("Log"));
+        logBtn.setText(unread > 0 ? Lang.t("Log (") + unread + Lang.t(")") : Lang.t("Log"));
     }
 
     /** Last-result summary: green = success, red = failure; with no result the whole line is hidden. */
@@ -509,7 +509,7 @@ public class MainActivity extends Activity {
 
     /** Reads the helper's status (exit 0 = authorized, 1 = not authorized) so the switch reflects the real state. */
     private void refreshAuthState() {
-        run("installpass_query", "Query password access",
+        run("installpass_query", Lang.t("Query password access"),
                 TermuxRunner.HOME + "/.local/bin/dsh-auth-pass status", false, true);
     }
 
@@ -534,15 +534,15 @@ public class MainActivity extends Activity {
         if (wantOn == authOn) return;
         if (wantOn) { askPasswordAndAuthorize(); return; }
         new AlertDialog.Builder(this)
-                .setTitle("Revoke password access?")
-                .setMessage("This revokes it: ~/.dsh-auth-pass is deleted.\n"
-                        + "Afterwards the AI can no longer use those 6 digits to pass any identity check for you (the security check when installing an APK, "
-                        + "lifting app settings restrictions, sensitive confirmations in developer options… they all stop with you).\n"
-                        + "(Does not affect DSH / Bridge / adb — each has its own revoke entry.)")
+                .setTitle(Lang.t("Revoke password access?"))
+                .setMessage(Lang.t("This revokes it: ~/.dsh-auth-pass is deleted.\n")
+                        + Lang.t("Afterwards the AI can no longer use those 6 digits to pass any identity check for you (the security check when installing an APK, ")
+                        + Lang.t("lifting app settings restrictions, sensitive confirmations in developer options… they all stop with you).\n")
+                        + Lang.t("(Does not affect DSH / Bridge / adb — each has its own revoke entry.)"))
                 .setNegativeButton(Lang.t("Cancel"), (d, w) -> setAuthUi(true, authOn, null))
-                .setPositiveButton("Revoke", (d, w) -> {
-                    toast("Revoking…");
-                    run("installpass_revoke", "Revoke password access",
+                .setPositiveButton(Lang.t("Revoke"), (d, w) -> {
+                    toast(Lang.t("Revoking…"));
+                    run("installpass_revoke", Lang.t("Revoke password access"),
                             TermuxRunner.HOME + "/.local/bin/dsh-auth-pass revoke", false);
                 })
                 .show();
@@ -557,17 +557,17 @@ public class MainActivity extends Activity {
         int p = dp(16); et.setPadding(p, p, p, p);
         new AlertDialog.Builder(this)
                 .setTitle(Lang.t("Authorize the AI to use your password"))
-                .setMessage("Type that 6-digit lock-screen password → it is written to ~/.dsh-auth-pass (600).\n"
-                        + "Used only to pass system identity checks for you (installing packages, lifting settings restrictions, etc.).\n"
+                .setMessage(Lang.t("Type that 6-digit lock-screen password → it is written to ~/.dsh-auth-pass (600).\n")
+                        + Lang.t("Used only to pass system identity checks for you (installing packages, lifting settings restrictions, etc.).\n")
                         + Lang.t("Turn the switch off at any time to revoke."))
                 .setView(et)
                 .setNegativeButton(Lang.t("Cancel"), (d, w) -> setAuthUi(true, authOn, null))
                 .setPositiveButton(Lang.t("Authorize"), (d, w) -> {
                     String pw = et.getText() == null ? "" : et.getText().toString().trim();
-                    if (!pw.matches("[0-9]{6}")) { toast("Must be 6 digits"); setAuthUi(true, authOn, null); return; }
-                    toast("Writing authorization…");
+                    if (!pw.matches("[0-9]{6}")) { toast(Lang.t("Must be 6 digits")); setAuthUi(true, authOn, null); return; }
+                    toast(Lang.t("Writing authorization…"));
                     // Runs once through Termux only; the password never enters the log (history records the label only)
-                    run("installpass_set", "Write password authorization",
+                    run("installpass_set", Lang.t("Write password authorization"),
                             "printf '%s' '" + pw + "' | " + TermuxRunner.HOME + "/.local/bin/dsh-auth-pass set", false);
                 })
                 .show();
@@ -616,8 +616,8 @@ public class MainActivity extends Activity {
         }
         if (!TermuxRunner.hasPermission(this)) {
             try { requestPermissions(new String[] { TermuxRunner.PERM }, 1); } catch (Throwable t) {}
-            pushHistory("[" + now() + "] ⚠ RUN_COMMAND permission not granted yet; a permission prompt was shown.\n"
-                    + "   If no dialog appeared: Settings → Apps → DSH Console → Permissions → allow RUN_COMMAND.");
+            pushHistory("[" + now() + "] " + Lang.t("⚠ RUN_COMMAND permission not granted yet; a permission prompt was shown.\n")
+                    + Lang.t("   If no dialog appeared: Settings → Apps → DSH Console → Permissions → allow RUN_COMMAND."));
             render(); return;
         }
         if (!quiet) {
@@ -670,14 +670,14 @@ public class MainActivity extends Activity {
                 if (L != null) { d = L.optString("dsh", "grey"); br = L.optString("bridge", "grey"); a = L.optString("adb", "grey"); }
                 JSONObject dj = o.optJSONObject("dsh"), bj = o.optJSONObject("bridge"), aj = o.optJSONObject("adb");
                 detail = o.optString("ts", "");
-                if (dj != null) detail += "　DSH " + (dj.optBoolean("ok") ? "running (HTTP " + dj.optString("http") + ")" : (dj.optBoolean("port") ? "port open but not ready" : Lang.t("stopped")));
-                if (bj != null) detail += "　Bridge " + (bj.optBoolean("ok") ? "v" + bj.optString("ver") : (bj.optBoolean("port") ? "port open but not answering" : "none"));
+                if (dj != null) detail += Lang.t("　DSH ") + (dj.optBoolean("ok") ? Lang.t("running (HTTP ") + dj.optString("http") + Lang.t(")") : (dj.optBoolean("port") ? Lang.t("port open but not ready") : Lang.t("stopped")));
+                if (bj != null) detail += Lang.t("　Bridge ") + (bj.optBoolean("ok") ? "v" + bj.optString("ver") : (bj.optBoolean("port") ? Lang.t("port open but not answering") : Lang.t("none")));
                 if (aj != null) {
                     JSONArray ds = aj.optJSONArray("devices");
-                    detail += "　adb " + (ds != null && ds.length() > 0 ? ds.optString(0) : Lang.t("not connected"));
+                    detail += Lang.t("　adb ") + (ds != null && ds.length() > 0 ? ds.optString(0) : Lang.t("not connected"));
                 }
                 long ago = (System.currentTimeMillis() - Last.statusAt(this)) / 1000;
-                detail += "　(" + (ago < 2 ? "just now" : ago + "s ago") + ")";
+                detail += "　(" + (ago < 2 ? Lang.t("just now") : ago + Lang.t("s ago")) + ")";
             } catch (Throwable t) {
                     // Be honest: it is usually a truncated callback (cutting the status JSON from the tail removes its head)
                     detail = Lang.t("Status parse failed (callback may be truncated): ") + t.getMessage();
@@ -707,7 +707,7 @@ public class MainActivity extends Activity {
             cursor = nameEnd + 1;                   // skip the full-width separator
         }
         lamps.setText(s);
-        line.setText(detail + (perm ? "" : "　⚠ missing RUN_COMMAND permission"));
+        line.setText(detail + (perm ? "" : Lang.t("　⚠ missing RUN_COMMAND permission")));
         refreshLogView();
     }
 

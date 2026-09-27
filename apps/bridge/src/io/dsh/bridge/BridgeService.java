@@ -182,9 +182,9 @@ public class BridgeService extends AccessibilityService {
     // ---------- Self-rescue ----------
     /** Hard stop: close the port + disable its own accessibility service (it must be re-enabled in system settings before it can be used again) */
     public void panic(String reason) {
-        stopListening("Emergency stop: " + reason);
+        stopListening(null);   // one message, not two: panic() speaks for this stop
         try {
-            Toast.makeText(this, "DSH Bridge emergency-stopped (" + reason + ")", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, Lang.t("DSH Bridge emergency-stopped: ") + Lang.t(reason), Toast.LENGTH_LONG).show();
         } catch (Throwable t) { /* ignore */ }
         try { disableSelf(); } catch (Throwable t) { /* ignore */ }
     }
@@ -197,7 +197,7 @@ public class BridgeService extends AccessibilityService {
         serverSocket = null;
         try { stopService(new Intent(this, BridgeForeground.class)); } catch (Throwable t) { /* ignore */ }
         if (why != null && !why.isEmpty()) {
-            try { Toast.makeText(this, "DSH Bridge: " + why, Toast.LENGTH_SHORT).show(); } catch (Throwable t) { }
+            try { Toast.makeText(this, Lang.t("DSH Bridge: ") + Lang.t(why), Toast.LENGTH_SHORT).show(); } catch (Throwable t) { }
         }
     }
 

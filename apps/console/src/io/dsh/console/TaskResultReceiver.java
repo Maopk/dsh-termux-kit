@@ -52,7 +52,7 @@ public class TaskResultReceiver extends BroadcastReceiver {
         if (isStatus) {
             Last.setStatus(ctx, out);
         } else {
-            Last.set(ctx, "[" + (label == null ? cmdId : label) + "] exit=" + code + "\n" + out);
+            Last.set(ctx, "[" + (label == null ? cmdId : label) + Lang.t("] exit=") + code + "\n" + out);
             // Refresh status once more after a task finishes (the script publishes its own when it
             // wraps up; this keeps the UI in sync)
             TermuxRunner.run(ctx, "status", Lang.t("Refresh status"), TermuxRunner.statusCmd(), true);

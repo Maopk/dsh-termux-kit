@@ -10,12 +10,12 @@ public class WidgetActionReceiver extends BroadcastReceiver {
     public void onReceive(Context ctx, Intent intent) {
         String what = intent == null ? null : intent.getStringExtra("what");
         if (what == null) return;
-        Last.setPending(ctx, "status".equals(what) ? Lang.t("Refresh status") : ("open".equals(what) ? "Open UI" : labelOf(what)));
+        Last.setPending(ctx, "status".equals(what) ? Lang.t("Refresh status") : ("open".equals(what) ? Lang.t("Open UI") : labelOf(what)));
         refreshWidget(ctx);
         if ("status".equals(what)) {
             TermuxRunner.run(ctx, "status", Lang.t("Refresh status"), TermuxRunner.statusCmd(), true);
         } else if ("open".equals(what)) {
-            TermuxRunner.run(ctx, "open", "Open UI", TermuxRunner.openUiCmd(), false);
+            TermuxRunner.run(ctx, "open", Lang.t("Open UI"), TermuxRunner.openUiCmd(), false);
         } else {
             String label = what, command = TermuxRunner.taskCmd(what);
             for (Tasks.T t : Tasks.ALL) if (t.id.equals(what)) { label = t.label; if (t.cmd != null) command = t.cmd; }

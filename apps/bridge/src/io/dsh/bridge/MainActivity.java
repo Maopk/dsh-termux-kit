@@ -197,7 +197,7 @@ public class MainActivity extends Activity {
             warnView.setText(notifOk ? ""
                     : Lang.t("⚠️ Notification permission is off: the notification-bar emergency stop layer is currently dead.") + "\n"
                       + Lang.t("   Tap ③ Open this app's notification settings below to enable it.") + "\n"
-                      + "   (The volume-key gesture, the in-app red button and the Termux widget are unaffected)");
+                      + Lang.t("   (The volume-key gesture, the in-app red button and the Termux widget are unaffected)"));
         }
     }
 

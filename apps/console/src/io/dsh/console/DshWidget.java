@@ -38,7 +38,7 @@ public class DshWidget extends AppWidgetProvider {
         v.setOnClickPendingIntent(R.id.w_title, pi(ctx, "open"));
 
         String json = Last.status(ctx);
-        String dsh = "grey", bridge = "grey", adb = "grey", line = "Tap Refresh to read status";
+        String dsh = "grey", bridge = "grey", adb = "grey", line = Lang.t("Tap Refresh to read status");
         if (json != null && json.length() > 0) {
             try {
                 JSONObject o = new JSONObject(json);
@@ -52,11 +52,11 @@ public class DshWidget extends AppWidgetProvider {
                 JSONObject b = o.optJSONObject("bridge");
                 JSONObject a = o.optJSONObject("adb");
                 line = o.optString("ts", "");
-                if (d != null) line += "  DSH:" + (d.optBoolean("ok") ? Lang.t("running") : Lang.t("stopped"));
-                if (b != null) line += "  Bridge:" + (b.optString("ver", "?").isEmpty() ? "none" : "v" + b.optString("ver"));
+                if (d != null) line += Lang.t("  DSH:") + (d.optBoolean("ok") ? Lang.t("running") : Lang.t("stopped"));
+                if (b != null) line += Lang.t("  Bridge:") + (b.optString("ver", "?").isEmpty() ? Lang.t("none") : "v" + b.optString("ver"));
                 if (a != null) {
                     org.json.JSONArray ds = a.optJSONArray("devices");
-                    line += "  adb:" + (ds != null && ds.length() > 0 ? ds.optString(0) : Lang.t("not connected"));
+                    line += Lang.t("  adb:") + (ds != null && ds.length() > 0 ? ds.optString(0) : Lang.t("not connected"));
                 }
             } catch (Throwable t) {
                 line = Lang.t("Status parse failed: ") + t.getMessage();
@@ -69,7 +69,7 @@ public class DshWidget extends AppWidgetProvider {
         v.setTextViewText(R.id.w_lamp_adb, Lang.t("● adb"));
         v.setTextColor(R.id.w_lamp_adb, color(adb));
         String pend = Last.pending(ctx);
-        if (pend != null) line = "⏳ Running: " + pend + " …　" + line;
+        if (pend != null) line = Lang.t("⏳ Running: ") + pend + " …　" + line;
         v.setTextViewText(R.id.w_status, line);
         return v;
     }

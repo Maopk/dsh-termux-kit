@@ -19,7 +19,7 @@ public class PanicReceiver extends BroadcastReceiver {
         if (svc != null) {
             svc.panic("notification-bar emergency stop");
         } else {
-            android.widget.Toast.makeText(context, "DSH Bridge is no longer running", android.widget.Toast.LENGTH_SHORT).show();
+            android.widget.Toast.makeText(context, Lang.t("DSH Bridge is no longer running"), android.widget.Toast.LENGTH_SHORT).show();
         }
     }
 }

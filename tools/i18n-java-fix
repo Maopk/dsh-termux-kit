@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+r"""i18n-java-fix — repair escape-level damage in a generated Lang.java table.
+
+WHY THIS EXISTS
+---------------
+The language tables exist in two very different runtimes, and the escaping rules are
+opposites:
+
+  · bash  (widgets/i18n.sh): the table is `declare -A` with **single-quoted** values and a
+    missing key degrades to English. dsh_msg output is consumed by `printf "$(...)"`, so a
+    line break must be stored as the TWO characters \ and n — printf turns it into a newline
+    at print time. Storing a real newline there breaks the array quoting.
+
+  · Java  (…/Lang.java): Lang.t() does a **runtime string comparison**, and the values go
+    straight to setText(). So a line break must be the ONE-character escape \n in the Java
+    source — that is, the runtime value contains a real newline. Writing \\n into the source
+    yields the two characters \ and n at runtime: the key never matches its call site, and a
+    translated value would print a literal "\n" on screen.
+
+The generator that first emitted the Java tables was written for the bash convention, so every
+multi-line entry in both apps was dead: the string silently stayed English and any manually
+added Chinese value would have shown a raw \n. This tool normalises a Lang.java back to Java
+semantics, and is safe to re-run (it round-trips its own output).
+
+USAGE
+    i18n-java-fix <Lang.java> [--check]
+
+    --check   report what would change and exit 1 if anything is off (for CI / selftest);
+              changes nothing.
+"""
+import re
+import sys
+
+# A Java string literal, honouring backslash escapes.
+LIT = r'"(?:[^"\\]|\\.)*"'
+PUT = re.compile(r'(ZH\.put\(\s*)(' + LIT + r')(\s*,\s*)(' + LIT + r')(\s*\)\s*;)')
+
+
+def java_unescape(s: str) -> str:
+    """Java source literal body -> runtime value."""
+    out, i, n = [], 0, len(s)
+    while i < n:
+        c = s[i]
+        if c == '\\' and i + 1 < n:
+            e = s[i + 1]
+            mapped = {'n': '\n', 't': '\t', 'r': '\r', '"': '"', "'": "'", '\\': '\\'}
+            if e in mapped:
+                out.append(mapped[e])
+            else:
+                out.append('\\' + e)   # \uXXXX and friends: keep verbatim
+            i += 2
+            continue
+        out.append(c)
+        i += 1
+    return ''.join(out)
+
+
+def java_escape(v: str) -> str:
+    """Runtime value -> Java source literal body (never emits a real newline)."""
+    out = []
+    for ch in v:
+        if ch == '\n':
+            out.append('\\n')
+        elif ch == '\t':
+            out.append('\\t')
+        elif ch == '\r':
+            out.append('\\r')
+        elif ch == '"':
+            out.append('\\"')
+        elif ch == '\\':
+            out.append('\\\\')
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
+def fix(text: str):
+    """Return (new_text, changes).
+
+    Each change is (side, line_no, old_source_body, new_source_body) where side is 'key' or
+    'value' — reported in SOURCE form, because that is what a maintainer has to look at.
+    """
+    changes = []
+    line_of = {}
+    for i, line in enumerate(text.splitlines(), 1):
+        line_of[i] = line
+
+    def repl(m):
+        pre, k_lit, mid, v_lit, post = m.groups()
+        line_no = text.count('\n', 0, m.start()) + 1
+        k_raw, v_raw = k_lit[1:-1], v_lit[1:-1]
+
+        # The bug: a source-level \\n is the runtime value backslash+n. If the *runtime* value
+        # still contains backslash+n, that entry was written with the bash convention.
+        def repair(raw):
+            runtime = java_unescape(raw).replace('\\n', '\n').replace('\\t', '\t')
+            return java_escape(runtime)
+
+        k_out, v_out = repair(k_raw), repair(v_raw)
+        if k_out != k_raw:
+            changes.append(('key', line_no, k_raw, k_out))
+        if v_out != v_raw:
+            changes.append(('value', line_no, v_raw, v_out))
+        return pre + '"' + k_out + '"' + mid + '"' + v_out + '"' + post
+
+    return PUT.sub(repl, text), changes
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__)
+        return 2
+    path = sys.argv[1]
+    check = '--check' in sys.argv
+    src = open(path, encoding='utf-8').read()
+    out, changes = fix(src)
+    total = len(PUT.findall(src))
+    if check:
+        if not changes:
+            print(f'✅ {path}: {total} entries, all Java-escaped correctly')
+            return 0
+        print(f'❌ {path}: {len(changes)} side(s) written with the bash \\n convention')
+        for side, line, old, new in changes:
+            print(f'   L{line} {side:5} {old!r}')
+            print(f'   {" " * len(str(line))}   ->  {new!r}')
+        return 1
+    if not changes:
+        print(f'✅ {path}: nothing to fix ({total} entries)')
+        return 0
+    open(path, 'w', encoding='utf-8').write(out)
+    print(f'✅ {path}: fixed {len(changes)} side(s) across {total} entries')
+    for side, line, old, new in changes:
+        print(f'   L{line} {side}')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

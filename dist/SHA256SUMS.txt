@@ -1,2 +1,2 @@
-0d12620a9f9b1a912e6728f4cc1f37a9690c2cc0ea051472c2cd2157156d3674  dsh-console-v1.1.apk
-35e9adc8f1f8fac54d3ad69519e0aadef0442858dafa8ad9949f8d1a56e89e0b  dsh-bridge-v1.8.apk
+ce8cac8f9eb4b4492262f00422909b9f810f262e2bf5884ea29f083ad1f823a9  dsh-bridge-v2.10.apk
+ac1fd0dc31af587f0fb4ba54cbe9ee111d2cb8c15f14bbb4e76df0f744acd47a  dsh-console-v1.9.apk

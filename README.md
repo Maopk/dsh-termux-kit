@@ -15,7 +15,8 @@ Everything is built on **Termux + an Accessibility service + the official `RUN_C
 | `apps/console/` | Source of the **DSH Console app**: a GUI for the 9 task widgets + a home-screen widget |
 | `apps/bridge/` | Source of the **DSH Bridge app**: Accessibility service + loopback API so an AI can read the screen, tap, swipe and type |
 | `widgets/` | 9 Termux home-screen task widgets + the shared library `common.sh` |
-| `tools/` | 26 command-line tools (start, backup, install APKs, tap UI by text, Clash self-check, …) |
+| `i18n/zh.json` | **The only translation source**: every English string → Chinese. `tools/i18n-table` generates the bash table and both apps' Java tables from it, each with that runtime's own escaping rules (see [`docs/i18n.md`](docs/i18n.md)) |
+| `tools/` | 28 command-line tools (start, backup, install APKs, tap UI by text, Clash self-check, i18n generation, …) |
 | `plugins/` | 3 DSH page plugins (phone task panel / AI self-look & remote control / file panel) |
 | `tests/selftest.sh` | Self-test suite: 60 checks (syntax → dry-run → regression → real run → cold-start sandbox) |
 | `docs/` | [`operations.md`](docs/operations.md) — how to diagnose the recurring failures · [`architecture.md`](docs/architecture.md) — one-page architecture & data flow · `DSH运维笔记.md` — the raw Chinese engineering journal behind them |
@@ -82,7 +83,7 @@ Every widget supports `--dry-run` (print only, execute nothing).
 - Buttons are **grouped by function**: `Start·Stop` / `Channels (adb and bridge kept separate)` / `Maintenance` / `Emergency`.
 - **Logs** live on their own screen: command sent, result, exit code, raw output; the button shows an unread badge.
 - “PIN usage rights” is a **switch**: on = the AI may use your 6-digit lock-screen PIN to pass system verification; off = revoked immediately.
-- **Language switch** (System / 中文 / English) under Maintenance: it writes the shared `~/.dsh-lang`, so the app, the DSH page panel and the 10 widgets all follow the same choice. Source text is English; Chinese comes from a built-in table (see [`docs/i18n.md`](docs/i18n.md)).
+- **Language switch** (System / 中文 / English) under Maintenance: it writes the shared `~/.dsh-lang`, so the app, the DSH page panel and the 10 widgets all follow the same choice. Source text is English; Chinese comes from the shared table in `i18n/zh.json` (see [`docs/i18n.md`](docs/i18n.md)).
 - Dangerous actions (restart / shutdown / emergency stop / revoke) require confirmation.
 - Timeouts are per task (backup 420s / restart 300s / queries 25s with one automatic resend), and timeout messages state the real reason (e.g. “the phone was busy”).
 - It requests exactly one permission: `com.termux.permission.RUN_COMMAND`. No storage, network, accessibility or overlay permissions.
