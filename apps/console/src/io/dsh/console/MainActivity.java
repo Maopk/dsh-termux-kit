@@ -849,12 +849,16 @@ public class MainActivity extends Activity {
      */
     private void showUpdateResult(String out) {
         if (updateRow == null) return;
-        String latest = "";
+        String latest = "", curRaw = "";
         boolean ok = false;
         try {
             org.json.JSONObject o = new org.json.JSONObject((out == null ? "" : out).trim());
             ok = o.optBoolean("ok", false);
             latest = o.optString("latest_app", "");
+            // 本地版本取**同一次查询的回显**（dsh-update check --json 把 --current 原样回传），
+            // 不再一边用界面字段 ver、一边用返回里的 latest —— 两次交换之间版本变了，行里就会出现
+            // "你的是 vA / 仓库最新 vB" 这种半新半旧的话（用户 2026-09-27 通用约束第 3 条）。
+            curRaw = o.optString("current", ver);
         } catch (Throwable t) { ok = false; }
         if (!ok || latest.isEmpty()) {
             // 查不到就直说查不到 —— 显示"已是最新"会把"没网"说成"没问题"
@@ -863,18 +867,19 @@ public class MainActivity extends Activity {
             updateRow.setOnClickListener(null);
             return;
         }
-        String mine = ver.startsWith("v") ? ver.substring(1) : ver;
+        String shown = curRaw.startsWith("v") ? curRaw : "v" + curRaw;
+        String mine = shown.startsWith("v") ? shown.substring(1) : shown;
         if (isNewer(latest, mine)) {
-            updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" → the repo has ") + "v" + latest
+            updateRow.setText(Lang.t("Version: ") + shown + Lang.t(" → the repo has ") + "v" + latest
                     + Lang.t(" · tap this line to update"));
             updateRow.setTextColor(Palette.WARN);
             updateRow.setOnClickListener(v -> confirmUpdate());
         } else if (sameVer(latest, mine)) {
-            updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" · up to date"));
+            updateRow.setText(Lang.t("Version: ") + shown + Lang.t(" · up to date"));
             updateRow.setTextColor(Palette.OK);
             updateRow.setOnClickListener(null);
         } else {
-            updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" · local is newer than the repo (the repo only has v")
+            updateRow.setText(Lang.t("Version: ") + shown + Lang.t(" · local is newer than the repo (the repo only has v")
                     + latest + Lang.t(")"));
             updateRow.setTextColor(Palette.DIM);
             updateRow.setOnClickListener(null);
