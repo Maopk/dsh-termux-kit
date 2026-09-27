@@ -1,0 +1,30 @@
+{
+  "_readme": [
+    "两个 App（控制台 / 桥）的唯一色板源。改这里 → tools/ui-controls gen → 两份 Palette.java 同步；check 进自检。",
+    "为什么要有这个文件：2026-09-27 用户指出「控制台深色、桥浅色」，根因是桥的 Activity **没声明主题**（走系统默认浅色",
+    "窗口 + 浅色 ActionBar），而颜色常量又是两边各写各的 —— 于是同一个产品看着像两个。",
+    "现在：默认一律深色（用户 2026-09-27 的选择：与其跟随系统，不如两边一致），颜色只能从这里来。",
+    "androidTheme 是两份 AndroidManifest.xml 必须写的主题；由 tools/i18n-audit 检查两边一致。",
+    "术语：BG=页面底 / CARD=卡片与按钮底 / FG=正文 / DIM=次要说明 / MUTED=最弱的提示 / ACCENT=分类标题 / LINK=链接 / ",
+    "OK=成功 / WARN=等待与提示 / BAD=失败文字 / DANGER=危险描边与实心 / ON_DANGER=实心红上的文字 / DIVIDER=分割线。"
+  ],
+  "androidTheme": "@android:style/Theme.Material.NoActionBar",
+  "dark": {
+    "BG": "#0D1117",
+    "CARD": "#161B22",
+    "FG": "#E6EDF3",
+    "DIM": "#8B949E",
+    "MUTED": "#6E7681",
+    "ACCENT": "#58A6FF",
+    "LINK": "#79C0FF",
+    "OK": "#3FB950",
+    "WARN": "#D29922",
+    "BAD": "#F85149",
+    "DANGER": "#B3261E",
+    "ON_DANGER": "#FFFFFF",
+    "DANGER_FILL": "#FFFFFF",
+    "DISABLED": "#4A5058",
+    "DIVIDER": "#21262D",
+    "BTN_BORDER": "#30363D"
+  }
+}

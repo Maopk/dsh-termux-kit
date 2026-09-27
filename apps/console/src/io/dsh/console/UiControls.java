@@ -12,7 +12,7 @@ import java.util.List;
  * still works; the Chinese side lives in i18n/zh.json, the kit's single translation source.
  */
 final class UiControls {
-    static final String VERSION = "1.15";
+    static final String VERSION = "1.16";
 
     static final class C {
         final String id, kind, cat, group, icon, labelEn, hintEn;
@@ -33,6 +33,7 @@ final class UiControls {
         new C("bridge_wake", "button", "channels", "bridge", "🌉", "Wake bridge", "Sends one token-carrying broadcast. Never takes your screen. Can take 20-40s if the process was reclaimed.", false),
         new C("bridge_status", "button", "channels", "bridge", "🔎", "Bridge status", "Read-only: is the port listening, does it really answer, version, paused flag.", false),
         new C("7_reconnect-ai", "button", "channels", "bridge", "🔗", "Restore both channels", "adb first, then the bridge. Use only when you need both; a failure names the channel it came from.", false),
+        new C("bridge_full_stop", "button", "channels", "bridge", "⏻", "Fully stop bridge", "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.", true),
         new C("1_start-dsh", "button", "startstop", "", "▶", "Start DSH", "Starts DSH and opens the page; if it is already running it only opens the page.", false),
         new C("4_soft-restart-dsh", "button", "startstop", "", "↻", "Soft restart", "Restarts the service with SIGTERM. Cost: drops the current web session.", true),
         new C("6_hard-restart-dsh", "button", "startstop", "", "⛔", "Hard restart", "Restarts after a kill -9 and clears the orphan lock. Cost: drops the current web session.", true),
@@ -44,7 +45,6 @@ final class UiControls {
         new C("11_update-apps", "button", "maintenance", "", "⬆", "Update the two apps", "Downloads the two APKs from GitHub Releases, verifies SHA256, then installs them.", false),
         new C("3_backup-dsh", "button", "maintenance", "", "💾", "Backup", "Packs DSH state and verifies the archive; the result goes to Download/dsh/.", false),
         new C("5_cleanup-dsh", "button", "maintenance", "", "🧹", "Cleanup", "Deletes only this kit's own artifacts. Your files are not touched.", false),
-        new C("bridge_full_stop", "button", "channels", "bridge", "⏻", "Fully stop bridge", "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.", true),
         new C("lang", "switch", "maintenance", "", "🌐", "Language", "System / Chinese / English. The widgets and the page panel follow this too.", false),
         new C("project-page", "button", "maintenance", "", "🔗", "Project page", "Opens github.com/Maopk/dsh-termux-kit - source, releases and docs.", false),
         new C("version-update", "text", "maintenance", "", "·", "Version", "Installed version and whether a newer release exists. If the check fails it says so instead of claiming it is up to date.", false),
@@ -85,12 +85,12 @@ final class UiControls {
     }
 
     static String groupEn(String id) {
-        for (String[] g : GROUPS) if (g[0].equals(id)) return g[1];
+        for (String[] g : GROUPS) if (g[0].equals(id)) return g[2];
         return id;
     }
 
     static String groupZh(String id) {
-        for (String[] g : GROUPS) if (g[0].equals(id)) return g[2];
+        for (String[] g : GROUPS) if (g[0].equals(id)) return g[3];
         return id;
     }
 }

@@ -75,10 +75,10 @@ public class DshWidget extends AppWidgetProvider {
     }
 
     private static int color(String lamp) {
-        if ("green".equals(lamp)) return Color.parseColor("#3FB950");
-        if ("yellow".equals(lamp)) return Color.parseColor("#D29922");
-        if ("red".equals(lamp)) return Color.parseColor("#F85149");
-        return Color.parseColor("#8B949E");
+        if ("green".equals(lamp)) return Palette.OK;
+        if ("yellow".equals(lamp)) return Palette.WARN;
+        if ("red".equals(lamp)) return Palette.BAD;
+        return Palette.DIM;
     }
 
     private static PendingIntent pi(Context ctx, String what) {

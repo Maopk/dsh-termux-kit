@@ -88,7 +88,7 @@ public class BridgeService extends AccessibilityService {
 
     private final Runnable holdCheck = new Runnable() {
         @Override public void run() {
-            if (volUp && volDown) panic("volume-key emergency stop");
+            if (volUp && volDown) panic(Lang.t("volume-key emergency stop"));
         }
     };
 
@@ -169,14 +169,14 @@ public class BridgeService extends AccessibilityService {
 
     @Override
     public boolean onUnbind(Intent intent) {
-        stopListening("accessibility turned off");
+        stopListening(Lang.t("accessibility turned off"));
         INSTANCE = null;
         return super.onUnbind(intent);
     }
 
     @Override
     public void onDestroy() {
-        stopListening("service destroyed");
+        stopListening(Lang.t("service destroyed"));
         INSTANCE = null;
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
@@ -184,10 +184,12 @@ public class BridgeService extends AccessibilityService {
 
     // ---------- Self-rescue ----------
     /** Hard stop: close the port + disable its own accessibility service (it must be re-enabled in system settings before it can be used again) */
+    /** @param reason already translated (call sites pass Lang.t("…")): the table is keyed by the exact
+     *  English literal, so translating a *variable* can never hit an entry — tools/i18n-audit rejects it. */
     public void panic(String reason) {
         stopListening(null);   // one message, not two: panic() speaks for this stop
         try {
-            Toast.makeText(this, Lang.t("DSH Bridge emergency-stopped: ") + Lang.t(reason), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, Lang.t("DSH Bridge emergency-stopped: ") + reason, Toast.LENGTH_LONG).show();
         } catch (Throwable t) { /* ignore */ }
         try { disableSelf(); } catch (Throwable t) { /* ignore */ }
     }
@@ -200,7 +202,7 @@ public class BridgeService extends AccessibilityService {
         serverSocket = null;
         try { stopService(new Intent(this, BridgeForeground.class)); } catch (Throwable t) { /* ignore */ }
         if (why != null && !why.isEmpty()) {
-            try { Toast.makeText(this, Lang.t("DSH Bridge: ") + Lang.t(why), Toast.LENGTH_SHORT).show(); } catch (Throwable t) { }
+            try { Toast.makeText(this, Lang.t("DSH Bridge: ") + why, Toast.LENGTH_SHORT).show(); } catch (Throwable t) { }
         }
     }
 
@@ -328,7 +330,7 @@ public class BridgeService extends AccessibilityService {
         if (a.equals("sleep")) {          // real stop: close port + stop foreground service + disable its own accessibility
             setUserPaused(this, true);
             handler.post(new Runnable() { @Override public void run() {
-                stopListening("sleep command received: fully stopped (no self-recovery)");
+                stopListening(Lang.t("sleep command received: fully stopped (no self-recovery)"));
                 try { disableSelf(); } catch (Throwable t) { /* ignore */ }
             }});
             d.put("slept", true);
@@ -337,14 +339,14 @@ public class BridgeService extends AccessibilityService {
 
         if (a.equals("stop")) {           // soft stop: close port + remember "do not start yourself again" (process stays; one broadcast brings it back)
             setUserPaused(this, true);
-            handler.post(new Runnable() { @Override public void run() { stopListening("stop command received (remembered: no automatic recovery)"); } });
+            handler.post(new Runnable() { @Override public void run() { stopListening(Lang.t("stop command received (remembered: no automatic recovery)")); } });
             d.put("stopped", true);
             d.put("paused", true);
             return d;
         }
 
         if (a.equals("panic")) {          // hard stop: close port + disable accessibility
-            handler.post(new Runnable() { @Override public void run() { panic("remote emergency stop received"); } });
+            handler.post(new Runnable() { @Override public void run() { panic(Lang.t("remote emergency stop received")); } });
             d.put("panicked", true);
             return d;
         }

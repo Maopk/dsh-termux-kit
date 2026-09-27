@@ -84,6 +84,10 @@ public class MainActivity extends Activity {
     // "Install password authorization" switch (user requirement: authorization is a switch, not a button)
     private Switch authSwitch;
     private TextView authLine;
+    /** Raw `dsh-auth-pass status` text: for the long-press sheet and the log — never for the subtitle. */
+    private String authDetail = "";
+    /** Last state we logged, so a plain onResume does not append the same line again and again. */
+    private boolean lastAuthKnown = false, lastAuthOn = false;
     /** Don't treat onCheckedChanged as a user action when the program sets the switch state */
     private boolean authSyncing = false;
     private boolean authKnown = false;
@@ -231,7 +235,7 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         int p = dp(14); root.setPadding(p, p, p, p);
-        root.setBackgroundColor(Color.parseColor("#0D1117"));
+        root.setBackgroundColor(Palette.BG);
         sc.addView(root);
 
         // ── Title row (title + version; the version is visible at a glance so an old build is obvious) ──
@@ -240,10 +244,10 @@ public class MainActivity extends Activity {
         titleRow.setGravity(Gravity.BOTTOM);
         TextView t = new TextView(this);
         t.setText(Lang.t("DSH Console")); t.setTextSize(19); t.setTypeface(Typeface.DEFAULT_BOLD);
-        t.setTextColor(Color.parseColor("#E6EDF3"));
+        t.setTextColor(Palette.FG);
         titleRow.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         TextView vt = new TextView(this);
-        vt.setText(ver); vt.setTextSize(12); vt.setTextColor(Color.parseColor("#58A6FF"));
+        vt.setText(ver); vt.setTextSize(12); vt.setTextColor(Palette.ACCENT);
         vt.setPadding(0, 0, 0, dp(3));
         titleRow.addView(vt);
         root.addView(titleRow);
@@ -260,7 +264,7 @@ public class MainActivity extends Activity {
         sp.setMargins(0, 0, dp(10), 0);
         busyRow.addView(spinner, sp);
         busyText = new TextView(this);
-        busyText.setTextSize(12.5f); busyText.setTextColor(Color.parseColor("#D29922"));
+        busyText.setTextSize(12.5f); busyText.setTextColor(Palette.WARN);
         busyRow.addView(busyText);
         root.addView(busyRow);
 
@@ -277,11 +281,13 @@ public class MainActivity extends Activity {
             final String catId = cat[0];
             final boolean[] collapsed = { collapsedCats.contains(catId) };
             box.setVisibility(collapsed[0] ? View.GONE : View.VISIBLE);
-            final TextView head = sectionHeader((collapsed[0] ? "▸ " : "▾ ") + Lang.t(cat[1]));
+            // 分类名走生成表（cat[1] 是英文名；用 catEn 让"这串必须能在翻译表里查到"这件事由
+            // 生成器保证，而不是靠这行手写的索引 —— 桥的分类标题就是这么漏成英文的）。
+            final TextView head = sectionHeader((collapsed[0] ? "▸ " : "▾ ") + Lang.t(UiControls.catEn(cat[0])));
             head.setOnClickListener(v -> {
                 collapsed[0] = !collapsed[0];
                 box.setVisibility(collapsed[0] ? View.GONE : View.VISIBLE);
-                head.setText((collapsed[0] ? "▸ " : "▾ ") + Lang.t(cat[1]));
+                head.setText((collapsed[0] ? "▸ " : "▾ ") + Lang.t(UiControls.catEn(cat[0])));
                 if (collapsed[0]) collapsedCats.add(catId); else collapsedCats.remove(catId);
                 getSharedPreferences("dsh-console", MODE_PRIVATE).edit()
                         .putStringSet("collapsed", collapsedCats).apply();
@@ -309,7 +315,7 @@ public class MainActivity extends Activity {
                         catRoot.addView(lamps);
                         line = new TextView(this);
                         line.setTextSize(12);
-                        line.setTextColor(Color.parseColor("#8B949E"));
+                        line.setTextColor(Palette.DIM);
                         line.setPadding(0, dp(4), 0, dp(8));
                         catRoot.addView(line);
                     }
@@ -375,7 +381,7 @@ public class MainActivity extends Activity {
         logBody = new TextView(this);
         logBody.setTextSize(11.5f);
         logBody.setTypeface(Typeface.MONOSPACE);
-        logBody.setTextColor(Color.parseColor("#C9D1D9"));
+        logBody.setTextColor(Palette.FG);
         logBody.setTextIsSelectable(true);
         int p = dp(14); logBody.setPadding(p, p, p, p);
         logScroll.addView(logBody);
@@ -454,7 +460,7 @@ public class MainActivity extends Activity {
                 + Lang.t("　(tap here for the log)");
         if (lastLine != null) {
             lastLine.setText(lastSummary);
-            lastLine.setTextColor(Color.parseColor(ok ? "#3FB950" : "#F85149"));
+            lastLine.setTextColor((ok ? Palette.OK : Palette.BAD));
             lastLine.setVisibility(View.VISIBLE);
         }
     }
@@ -484,11 +490,11 @@ public class MainActivity extends Activity {
         texts.setOrientation(LinearLayout.VERTICAL);
         TextView t = new TextView(this);
         t.setText(Lang.t("Language")); t.setTextSize(13.5f);
-        t.setTextColor(Color.parseColor("#E6EDF3")); t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(Palette.FG); t.setTypeface(Typeface.DEFAULT_BOLD);
         texts.addView(t);
         TextView sub = new TextView(this);
         sub.setText(Lang.t("auto follows the system language") + " · " + Lang.t("the widgets and the page panel follow this too"));
-        sub.setTextSize(11); sub.setTextColor(Color.parseColor("#8B949E"));
+        sub.setTextSize(11); sub.setTextColor(Palette.DIM);
         sub.setPadding(0, dp(2), dp(8), 0);
         texts.addView(sub);
         row.addView(texts, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -509,8 +515,8 @@ public class MainActivity extends Activity {
             cb.setMinWidth(dp(58));
             cb.setPadding(dp(8), dp(6), dp(8), dp(6));
             boolean on = mode.equals(id);
-            cb.setTextColor(Color.parseColor(on ? "#0D1117" : "#79C0FF"));
-            cb.setBackgroundColor(Color.parseColor(on ? "#58A6FF" : "#161B22"));
+            cb.setTextColor((on ? Palette.BG : Palette.LINK));
+            cb.setBackgroundColor((on ? Palette.ACCENT : Palette.CARD));
             cb.setOnClickListener(v -> {
                 Lang.setMode(this, id);
                 run("lang", Lang.t("Language"), TermuxRunner.HOME + "/.local/bin/dsh-lang set " + id, false, true);
@@ -540,11 +546,11 @@ public class MainActivity extends Activity {
         texts.setOrientation(LinearLayout.VERTICAL);
         TextView t = new TextView(this);
         t.setText(Lang.t("Password access")); t.setTextSize(13.5f);
-        t.setTextColor(Color.parseColor("#E6EDF3")); t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(Palette.FG); t.setTypeface(Typeface.DEFAULT_BOLD);
         texts.addView(t);
         TextView sub = new TextView(this);
         sub.setText(Lang.t("On = the AI may use your 6-digit lock-screen password to pass identity checks for you (installing packages, lifting settings restrictions, etc.); Off = revoked at once"));
-        sub.setTextSize(11); sub.setTextColor(Color.parseColor("#8B949E"));
+        sub.setTextSize(11); sub.setTextColor(Palette.DIM);
         sub.setPadding(0, dp(2), dp(8), 0);
         texts.addView(sub);
         row.addView(texts, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -561,10 +567,13 @@ public class MainActivity extends Activity {
 
         authLine = new TextView(this);
         authLine.setTextSize(11.5f);
-        authLine.setTextColor(Color.parseColor("#8B949E"));
+        authLine.setTextColor(Palette.DIM);
         authLine.setPadding(0, dp(6), 0, 0);
         authLine.setText(Lang.t("Reading authorization state…"));
         box.addView(authLine);
+        // The technical detail (path / mode / mtime / length) lives here, on long-press — the subtitle
+        // stays a one-line meaning (user requirement 2026-09-27).
+        box.setOnLongClickListener(v -> { showAuthDetail(); return true; });
         return box;
     }
 
@@ -582,12 +591,40 @@ public class MainActivity extends Activity {
         authSwitch.setChecked(on);
         authSyncing = false;
         if (authLine != null) {
-            String head = !known ? Lang.t("State: unreadable (no callback from Termux; tap Refresh status to retry)")
-                    : (on ? Lang.t("Now: authorized (the AI can pass identity checks for you)") : Lang.t("Now: not authorized (any password-protected check needs you in person)"));
-            String d = detail == null ? "" : detail.trim();
-            authLine.setText(head + (d.isEmpty() ? "" : "　" + d));
-            authLine.setTextColor(Color.parseColor(!known ? "#D29922" : (on ? "#3FB950" : "#8B949E")));
+            // ⚠ The subtitle carries the **meaning**, nothing else. It used to end with the raw output of
+            //   `dsh-auth-pass status`, so the user read:
+            //     「当前：已授权（AI 可代你过身份验证） Authorized: /data/data/.../.dsh-auth-pass
+            //       (mode 600, written 2026-09-26 23:59:40, length 6 digits)」
+            //   — a file path, a mode, a timestamp and a byte count sitting in a settings subtitle
+            //   (user report 2026-09-27: "副标题只留 已授权/已收回，技术信息进长按详情或日志").
+            //   The detail now goes to the long-press sheet and, only when the state actually changes,
+            //   to the log.
+            authDetail = detail == null ? "" : detail.trim();
+            authLine.setText(authStateHead(known, on));
+            authLine.setTextColor((!known ? Palette.WARN : (on ? Palette.OK : Palette.DIM)));
+            if (known != lastAuthKnown || on != lastAuthOn) {
+                if (!authDetail.isEmpty()) pushHistory("[" + now() + "] " + Lang.t("Password access: ") + authDetail);
+                lastAuthKnown = known; lastAuthOn = on;
+            }
         }
+    }
+
+    /** 「当前：已授权（AI 可代你过系统身份验证）」/「当前：已收回」/ 读不到 —— 副标题只允许这一句。 */
+    private String authStateHead(boolean known, boolean on) {
+        if (!known) return Lang.t("Now: unreadable (no reply from Termux; tap Refresh status to retry)");
+        return on ? Lang.t("Now: authorized (the AI can pass system identity checks for you)")
+                  : Lang.t("Now: revoked");
+    }
+
+    /** Long-press on the password row: the full technical detail, on request, out of the way. */
+    private void showAuthDetail() {
+        String head = authStateHead(authKnown, authOn);
+        String d = authDetail.isEmpty() ? Lang.t("(no technical detail this time)") : authDetail;
+        new AlertDialog.Builder(this)
+                .setTitle(Lang.t("Password access"))
+                .setMessage(head + "\n\n" + Lang.t("Technical detail (kept out of the subtitle on purpose):") + "\n" + d)
+                .setPositiveButton(Lang.t("OK"), null)
+                .show();
     }
 
     private void onAuthToggled(boolean wantOn) {
@@ -638,22 +675,23 @@ public class MainActivity extends Activity {
     /** One entry point for a press: text comes from the generated control source, execution from Tasks. */
     private void fire(String id) {
         UiControls.C c = UiControls.get(id);
-        String label = c != null ? c.labelEn : id;
-        String hint = c != null ? c.hintEn : "";
-        boolean danger = c != null && c.danger;
-        if (danger) {
+        // ⚠ 只认表里有的 id：以前是 `c != null ? c.labelEn : id`，一旦真拿到 null 就会把控件 id
+        //   当文案显示出来（英文）；现在宁可不做，也不显示一个没翻译的 id。
+        //   顺带：Lang.t() 的参数必须是字面量或生成表字段，tools/i18n-audit 会拦下别的写法。
+        if (c == null) { toast(Lang.t("Unknown control: ") + id); return; }
+        if (c.danger) {
             new AlertDialog.Builder(this)
-                    .setTitle(Lang.t("Run ") + Lang.t(label) + "?")
-                    .setMessage(Lang.t(hint) + "\n\n⚠ " + Lang.t("Confirmation required: restart/shutdown drops the current web session, and a full stop of the bridge may need a manual open on this ROM."))
+                    .setTitle(Lang.t("Run ") + Lang.t(c.labelEn) + "?")
+                    .setMessage(Lang.t(c.hintEn) + "\n\n⚠ " + Lang.t("Confirmation required: restart/shutdown drops the current web session, and a full stop of the bridge may need a manual open on this ROM."))
                     .setNegativeButton(Lang.t("Cancel"), null)
                     .setPositiveButton(Lang.t("Run"), (d, w) -> {
-                        toast(Lang.t("Sent: ") + Lang.t(label));
+                        toast(Lang.t("Sent: ") + Lang.t(c.labelEn));
                         sendTask(id);
                     })
                     .show();
             return;
         }
-        toast(Lang.t("Sent: ") + Lang.t(label));
+        toast(Lang.t("Sent: ") + Lang.t(c.labelEn));
         sendTask(id);
     }
 
@@ -661,9 +699,9 @@ public class MainActivity extends Activity {
     private void sendTask(String id) {
         Tasks.T task = Tasks.get(id);
         UiControls.C c = UiControls.get(id);
-        String label = c != null ? c.labelEn : id;
+        if (c == null) return;   // 表里没有的 id：不猜文案，也不执行
         String cmd = task != null && task.cmd != null ? task.cmd : TermuxRunner.taskCmd(id);
-        run(id, Lang.t(label), cmd,
+        run(id, Lang.t(c.labelEn), cmd,
                 false, false, false, Tasks.waitOf(id), false);
     }
 
@@ -723,7 +761,7 @@ public class MainActivity extends Activity {
     private TextView buildProjectRow() {
         projRow = new TextView(this);
         projRow.setTextSize(12.5f);
-        projRow.setTextColor(0xFF79C0FF);
+        projRow.setTextColor(Palette.LINK);
         projRow.setPadding(dp(10), dp(10), dp(10), dp(10));
         projRow.setBackgroundResource(R.drawable.box);
         projRow.setText(Lang.t("Project page: ") + "github.com/Maopk/dsh-termux-kit");
@@ -741,7 +779,7 @@ public class MainActivity extends Activity {
     private TextView buildUpdateRow() {
         updateRow = new TextView(this);
         updateRow.setTextSize(12.5f);
-        updateRow.setTextColor(0xFF8B949E);
+        updateRow.setTextColor(Palette.DIM);
         updateRow.setPadding(dp(10), dp(10), dp(10), dp(10));
         updateRow.setBackgroundResource(R.drawable.box);
         updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" · checking for a newer release…"));
@@ -764,31 +802,75 @@ public class MainActivity extends Activity {
                 false, true, false, 25, true);
     }
 
+    /**
+     * 版本行：**只有三种情况**，而且必须靠比较版本号判断，不能靠 `update` 这个布尔（用户 2026-09-27 抓到的矛盾）：
+     *   本地 = 仓库 → 「已是最新」
+     *   本地 < 仓库 → 「→ 仓库最新 vX」+ 点这一行就更新
+     *   本地 > 仓库 → 直说本地比仓库新，**绝不显示"已是最新"**
+     * （旧代码只认 update=true/false，于是本地 1.15 > 仓库 1.14 时照旧显示"已是最新（仓库最新 v1.14）"。）
+     */
     private void showUpdateResult(String out) {
         if (updateRow == null) return;
-        String latest = "", tag = "";
-        boolean ok = false, has = false;
+        String latest = "";
+        boolean ok = false;
         try {
             org.json.JSONObject o = new org.json.JSONObject((out == null ? "" : out).trim());
             ok = o.optBoolean("ok", false);
             latest = o.optString("latest_app", "");
-            tag = o.optString("tag", "");
-            has = o.optBoolean("update", false);
         } catch (Throwable t) { ok = false; }
         if (!ok || latest.isEmpty()) {
             // 查不到就直说查不到 —— 显示"已是最新"会把"没网"说成"没问题"
             updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" · could not check for updates now (no network?)"));
-            updateRow.setTextColor(0xFF8B949E);
+            updateRow.setTextColor(Palette.DIM);
+            updateRow.setOnClickListener(null);
             return;
         }
-        if (has) {
-            updateRow.setText(Lang.t("⬆ New release available: ") + "v" + latest
-                    + Lang.t(" (you have ") + ver + Lang.t(") · tap the project page to get it"));
-            updateRow.setTextColor(0xFFD29922);
+        String mine = ver.startsWith("v") ? ver.substring(1) : ver;
+        if (isNewer(latest, mine)) {
+            updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" → the repo has ") + "v" + latest
+                    + Lang.t(" · tap this line to update"));
+            updateRow.setTextColor(Palette.WARN);
+            updateRow.setOnClickListener(v -> confirmUpdate());
+        } else if (sameVer(latest, mine)) {
+            updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" · up to date"));
+            updateRow.setTextColor(Palette.OK);
+            updateRow.setOnClickListener(null);
         } else {
-            updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" · up to date (latest v") + latest + ")");
-            updateRow.setTextColor(0xFF3FB950);
+            updateRow.setText(Lang.t("Version: ") + ver + Lang.t(" · local is newer than the repo (the repo only has v")
+                    + latest + Lang.t(")"));
+            updateRow.setTextColor(Palette.DIM);
+            updateRow.setOnClickListener(null);
         }
+    }
+
+    /** 版本号比较：逐段数字比大小（"1.10" > "1.9"）。相等只能由 sameVer 判定。 */
+    private static boolean isNewer(String a, String b) {
+        String[] x = (a == null ? "" : a).split("\\."), y = (b == null ? "" : b).split("\\.");
+        for (int i = 0; i < Math.max(x.length, y.length); i++) {
+            int xi = num(x, i), yi = num(y, i);
+            if (xi != yi) return xi > yi;
+        }
+        return false;
+    }
+
+    private static int num(String[] parts, int i) {
+        if (i >= parts.length) return 0;
+        try { return Integer.parseInt(parts[i].replaceAll("[^0-9]", "")); } catch (Throwable t) { return 0; }
+    }
+
+    private static boolean sameVer(String a, String b) {
+        return !isNewer(a, b) && !isNewer(b, a);
+    }
+
+    /** 版本行上的"更新"：一次确认，然后跑和「更新两个 App」同一个任务。 */
+    private void confirmUpdate() {
+        new AlertDialog.Builder(this)
+                .setTitle(Lang.t("Update the two apps"))
+                .setMessage(Lang.t("Downloads the two APKs from GitHub Releases, verifies SHA256, then installs them.")
+                        + "\n\n" + Lang.t("It takes a couple of minutes and needs your 6-digit password for the system install dialog."))
+                .setNegativeButton(Lang.t("Cancel"), null)
+                .setPositiveButton(Lang.t("Update"), (d, w) -> { toast(Lang.t("Sent: ") + Lang.t("Update the two apps")); sendTask("11_update-apps"); })
+                .show();
     }
 
     private void pushHistory(String s) {
@@ -836,6 +918,11 @@ public class MainActivity extends Activity {
         String d = "grey", br = "grey", a = "grey";
         String detail = Lang.t("No status yet — tap Refresh status");
         JSONObject bjOut = null;
+        // ── 桥的状态：**先算一次**，灯色 / 文字 / 开关都用它 ──
+        // 为什么必须放在最前面：旧代码的灯色取自 status.json 的 lamps.bridge，文字取自
+        // bridge.state，两处各算各的；而 producer 根本不写 state，于是同一屏上出现
+        // 「绿灯 + 桥：未知」的矛盾（用户 2026-09-27 实测）。现在只有 bridgeStateKey() 一个判定。
+        String bridgeNow = "";
         if (json != null && json.length() > 0) {
             try {
                 JSONObject o = new JSONObject(json);
@@ -843,11 +930,13 @@ public class MainActivity extends Activity {
                 if (L != null) { d = L.optString("dsh", "grey"); br = L.optString("bridge", "grey"); a = L.optString("adb", "grey"); }
                 JSONObject dj = o.optJSONObject("dsh"), bj = o.optJSONObject("bridge"), aj = o.optJSONObject("adb");
                 bjOut = bj;
+                bridgeNow = bridgeStateKey(bj);
+                if (!bridgeNow.isEmpty()) br = lampOf(bridgeNow);   // 有 state 时，灯色只能由 state 推出来
                 // One line, at most three facts, no timestamps and no raw HTTP codes:
                 // "DSH 运行中 · 桥 v2.21 · adb 未连接（Wi-Fi 未连或无线调试未开）"
                 StringBuilder sb = new StringBuilder();
                 if (dj != null) sb.append("DSH ").append(Lang.t(dj.optBoolean("port") ? "running" : "stopped"));
-                if (bj != null) sb.append(" · ").append(bridgeStateText(bj));
+                if (bj != null) sb.append(" · ").append(bridgeStateText(bridgeNow, bj));
                 if (aj != null) {
                     JSONArray ds = aj.optJSONArray("devices");
                     boolean on = ds != null && ds.length() > 0;
@@ -891,23 +980,43 @@ public class MainActivity extends Activity {
             }
         }
         lamps.setText(s);
-        // Four-state bridge line and the switch that mirrors it (option D: the switch always shows the
-        // state that was just read, and setting it here must not fire a task).
-        if (bridgeStateView != null) bridgeStateView.setText(bridgeStateText(bjOut));
+        if (bridgeStateView != null) bridgeStateView.setText(bridgeStateText(bridgeNow, bjOut));
         if (bridgeSwitch != null) {
             bridgeSwitchBusy = true;
-            bridgeSwitch.setChecked(bjOut != null && "running".equals(bjOut.optString("state", "")));
+            bridgeSwitch.setEnabled(!bridgeNow.isEmpty());   // 状态读不到时不许摆出一个"关"的假象
+            bridgeSwitch.setChecked("running".equals(bridgeNow));
             bridgeSwitchBusy = false;
         }
         line.setText(detail + (perm ? "" : Lang.t("　⚠ missing RUN_COMMAND permission")));
         refreshLogView();
     }
 
+    /** 桥状态：**唯一**判定处。灯色、那一行文字、开关位置都从这里取，不许第二处再算一遍。
+     *  数据源是 status.json 的 bridge.state（由 dsh-status-pub 算一次）；万一读到旧 producer 没有
+     *  这个字段，就在同一处按 port/ok/note 现推一次，仍然只有一份结果。 */
+    private static String bridgeStateKey(JSONObject bj) {
+        if (bj == null) return "";
+        String st = bj.optString("state", "");
+        if (st.length() > 0) return st;
+        boolean port = bj.optBoolean("port", false), ok = bj.optBoolean("ok", false);
+        if (port) return ok ? "running" : "frozen";
+        String note = bj.optString("note", "none");
+        if (note.isEmpty() || "none".equals(note)) return "never";
+        return ("soft".equals(note) || "running".equals(note)) ? "soft" : "silent";
+    }
+
+    /** 状态 → 灯色。与 dsh-status-pub 的 LAMP_OF_STATE 是同一张表（tools/i18n-audit 对拍）。 */
+    private static String lampOf(String state) {
+        if ("running".equals(state)) return "green";
+        if ("frozen".equals(state)) return "yellow";
+        return "grey";   // soft（可唤醒）/ silent（真停）/ never（没见过它活着）
+    }
+
     private static int c(String lamp) {
-        if ("green".equals(lamp)) return Color.parseColor("#3FB950");
-        if ("yellow".equals(lamp)) return Color.parseColor("#D29922");
-        if ("red".equals(lamp)) return Color.parseColor("#F85149");
-        return Color.parseColor("#8B949E");
+        if ("green".equals(lamp)) return Palette.OK;
+        if ("yellow".equals(lamp)) return Palette.WARN;
+        if ("red".equals(lamp)) return Palette.BAD;
+        return Palette.DIM;
     }
 
     private Button mkBtn(String text, boolean danger, View.OnClickListener l) {
@@ -921,8 +1030,8 @@ public class MainActivity extends Activity {
         b.setMinHeight(dp(48));
         b.setPadding(dp(14), dp(10), dp(14), dp(10));
         // Text color differs by enabled/disabled state (a flat color made Lang.t("greying out") invisible — the v0.2 bug)
-        int on = onColor != 0 ? onColor : (danger ? 0xFFFFB4A9 : 0xFFE6EDF3);
-        int off = 0xFF4A5058;
+        int on = onColor != 0 ? onColor : (danger ? Palette.BAD : Palette.FG);
+        int off = Palette.DISABLED;
         b.setTextColor(new ColorStateList(
                 new int[][] { new int[] { android.R.attr.state_enabled }, new int[] {} },
                 new int[] { on, off }));
@@ -955,7 +1064,7 @@ public class MainActivity extends Activity {
         TextView h = new TextView(this);
         h.setText("▍" + text);
         h.setTextSize(13); h.setTypeface(Typeface.DEFAULT_BOLD);
-        h.setTextColor(Color.parseColor("#58A6FF"));
+        h.setTextColor(Palette.ACCENT);
         h.setPadding(0, dp(14), 0, dp(2));
         return h;
     }
@@ -964,7 +1073,7 @@ public class MainActivity extends Activity {
         TextView h = new TextView(this);
         h.setText(text);
         h.setTextSize(11.5f); h.setTypeface(Typeface.DEFAULT_BOLD);
-        h.setTextColor(Color.parseColor("#8B949E"));
+        h.setTextColor(Palette.DIM);
         h.setPadding(0, dp(9), 0, dp(3));
         return h;
     }
@@ -989,12 +1098,12 @@ public class MainActivity extends Activity {
             //   emergency = solid red on white text  -> the last resort
             //   everything else dangerous = white background, red text and a red border -> serious but not final
             if ("emergency".equals(ctrl.cat)) {
-                bt.setBackgroundColor(0xFFB3261E);
-                bt.setTextColor(0xFFFFFFFF);
+                bt.setBackgroundColor(Palette.DANGER);
+                bt.setTextColor(Palette.ON_DANGER);
             } else {
-                bt.setBackgroundColor(0xFFFFFFFF);
-                bt.setTextColor(0xFFB3261E);
-                bt.setBackground(rounded(0xFFFFFFFF, 0xFFB3261E));
+                bt.setBackgroundColor(Palette.DANGER_FILL);
+                bt.setTextColor(Palette.DANGER);
+                bt.setBackground(rounded(Palette.DANGER_FILL, Palette.DANGER));
             }
         }
         if ("project-page".equals(ctrl.id)) {
@@ -1049,11 +1158,11 @@ public class MainActivity extends Activity {
         box.addView(row);
         bridgeStateView = new TextView(this);
         bridgeStateView.setTextSize(12);
-        bridgeStateView.setTextColor(Color.parseColor("#8B949E"));
+        bridgeStateView.setTextColor(Palette.DIM);
         bridgeStateView.setPadding(0, dp(4), 0, 0);
         box.addView(bridgeStateView);
         TextView hint = new TextView(this);
-        hint.setTextSize(11); hint.setTextColor(Color.parseColor("#6E7681"));
+        hint.setTextSize(11); hint.setTextColor(Palette.MUTED);
         hint.setText(Lang.t(ctrl.hintEn));
         hint.setPadding(0, dp(3), 0, 0);
         hint.setOnLongClickListener(v -> { showHint(ctrl); return true; });
@@ -1064,7 +1173,8 @@ public class MainActivity extends Activity {
     /** No confirm dialog for a switch flip: the switch itself is the confirmation (and it can be flipped back). */
     private void fireProgrammatic(String id) {
         UiControls.C c = UiControls.get(id);
-        toast(Lang.t("Sent: ") + Lang.t(c != null ? c.labelEn : id));
+        if (c == null) return;
+        toast(Lang.t("Sent: ") + Lang.t(c.labelEn));
         sendTask(id);
     }
 
@@ -1074,29 +1184,27 @@ public class MainActivity extends Activity {
             // Rendered by render() from the status JSON; here we only need the placeholder.
             bridgeStateView = new TextView(this);
             bridgeStateView.setTextSize(12);
-            bridgeStateView.setTextColor(Color.parseColor("#8B949E"));
+            bridgeStateView.setTextColor(Palette.DIM);
             bridgeStateView.setPadding(dp(2), dp(4), dp(2), dp(8));
             bridgeStateView.setText(Lang.t("Reading status…"));
             return bridgeStateView;
         }
         TextView t = new TextView(this);
         t.setTextSize(11.5f);
-        t.setTextColor(Color.parseColor("#6E7681"));
+        t.setTextColor(Palette.MUTED);
         t.setPadding(dp(2), dp(4), dp(2), dp(8));
         t.setText((ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.hintEn));
         return t;
     }
 
-    /** The bridge's four states, decided by one ping plus the state note — never by a timer. */
-    private String bridgeStateText(JSONObject bj) {
-        if (bj == null) return "";
-        String st = bj.optString("state", "");
-        String ver = bj.optString("ver", "");
-        if ("running".equals(st)) return Lang.t("Bridge: running") + (ver.length() > 0 ? " · v" + ver : "");
-        if ("soft".equals(st)) return Lang.t("Bridge: just dropped (wakeable)");
-        if ("frozen".equals(st)) return Lang.t("Bridge: long silent (bound but not answering)");
-        if ("silent".equals(st)) return Lang.t("Bridge: long silent");
-        if ("never".equals(st)) return Lang.t("Bridge: not installed");
+    /** The bridge's states, rendered from the ONE key computed by {@link #bridgeStateKey}. */
+    private String bridgeStateText(String state, JSONObject bj) {
+        String ver = bj == null ? "" : bj.optString("ver", "");
+        if ("running".equals(state)) return Lang.t("Bridge: running") + (ver.length() > 0 ? " · v" + ver : "");
+        if ("soft".equals(state)) return Lang.t("Bridge: just dropped (wakeable)");
+        if ("frozen".equals(state)) return Lang.t("Bridge: long silent (bound but not answering)");
+        if ("silent".equals(state)) return Lang.t("Bridge: long silent");
+        if ("never".equals(state)) return Lang.t("Bridge: not installed");
         return Lang.t("Bridge: unknown");
     }
 

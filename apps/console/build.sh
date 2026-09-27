@@ -6,10 +6,16 @@ AJ="$HOME/.smoke/android.jar"
 OUT="$SRC/build"
 rm -rf "$OUT"; mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/gen"
 
-# 先把语言表重新生成一遍：Lang.java 是从 i18n/zh.json 生成的，忘了这一步就会拿旧表编译，
-# 表现为"代码里明明写了 Lang.t(新串)，装到手机上却是英文"（真踩过：控制台 1.12 的新串没进 dex）。
-if [ -x "$HOME/dsh-termux-kit/tools/i18n-table" ]; then
-  python3 "$HOME/dsh-termux-kit/tools/i18n-table" gen >/dev/null 2>&1 || true
+# ── 出包门禁（2026-09-27 加）──
+# 为什么：上一轮改完文案**没有重新生成/重新出包**，手机上跑的仍是旧表 —— 用户看到的是
+# "上一轮的要求根本没做到"（channels ×3、auto 打头、up to date 全是英文）。
+# 现在编译前强制：① 从 ui/controls.json + ui/theme.json 重新生成三个产物；
+# ② 跑 tools/i18n-audit（字面量调用 / 中文覆盖 / 主题一致 / 色板一致 / 状态口径）。
+# 任一项不过就直接中止，不许产出一个"看起来修好了"的包。
+if [ -x "$HOME/dsh-termux-kit/tools/ui-controls" ]; then
+  python3 "$HOME/dsh-termux-kit/tools/ui-controls" gen || exit 1
+  python3 "$HOME/dsh-termux-kit/tools/i18n-audit" --quiet || {
+    echo "✘ 文案/主题审计没过 —— 拒绝出包（跑 tools/i18n-audit 看细节）"; exit 1; }
 fi
 
 echo "① aapt2 compile (resources)"

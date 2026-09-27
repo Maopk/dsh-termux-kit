@@ -1,0 +1,389 @@
+#!/data/data/com.termux/files/usr/bin/python3
+r"""i18n-audit —— 交付前的静态审计：三处 UI 的文案/色板/主题/状态口径，一次全查。
+
+WHY（都是真踩过的）
+------------------
+用户 2026-09-27 在真机上抓到的四类问题，本质都不是"忘了翻译某个词"，而是**结构上没有门禁**：
+
+  ① 桥的分类标题全是英文（Channels (adb and bridge separate) / Maintenance / Emergency）
+     根因：section() 收到的是 "▸ " + 英文名，再拿**整串**去查翻译表 —— 永远查不到。
+     → 本工具第 2 条：Lang.t() 的参数必须是字面量；不是字面量直接报错。
+  ② 控制台「通道」里出现 3 次英文 channels
+     根因：生成器里 groupEn() 返回的是分类 id 而不是组名，而 id 没进翻译表。
+     → 本工具第 3 条：控件表里每个 label/hint/分类/组都必须有中文，且生成产物与数据源一致。
+  ③ 控制台深色、桥浅色
+     根因：桥的 Activity 压根没声明 android:theme，走系统默认浅色；颜色两边各写各的。
+     → 本工具第 4/5 条：两份 manifest 的主题必须相同且等于 ui/theme.json；两份 Palette.java 必须一致。
+  ④ 绿灯 + 「桥：未知」
+     根因：灯色在 dsh-status-pub 里按 port/ok 算，文字在 App 里按 bridge.state 算，而 producer 不写 state。
+     → 本工具第 6 条：state→灯色 的映射表在 python 与 java 两侧必须逐项相同。
+
+用法
+----
+  tools/i18n-audit            审计（有问题退出 1）
+  tools/i18n-audit screen     额外打印两个 App 的中文界面文字模型（人看的，不参与判定）
+  tools/i18n-audit --quiet    只打印结论行
+
+产物：无（只读）。两个 build.sh 都在编译前调用它，不过就不许出包。
+"""
+import io
+import json
+import os
+import re
+import sys
+
+HOME = os.path.expanduser('~')
+ROOT = os.path.join(HOME, 'dsh-termux-kit')
+CONTROLS = os.path.join(ROOT, 'ui', 'controls.json')
+THEME = os.path.join(ROOT, 'ui', 'theme.json')
+ZH = os.path.join(ROOT, 'i18n', 'zh.json')
+CONSOLE_SRC = os.path.join(HOME, 'dsh-console', 'src', 'io', 'dsh', 'console')
+BRIDGE_SRC = os.path.join(HOME, 'droid-bridge', 'src', 'io', 'dsh', 'bridge')
+CONSOLE_MANIFEST = os.path.join(HOME, 'dsh-console', 'AndroidManifest.xml')
+BRIDGE_MANIFEST = os.path.join(HOME, 'droid-bridge', 'AndroidManifest.xml')
+STATUS_PUB = os.path.join(ROOT, 'tools', 'dsh-status-pub')
+
+# 术语不翻译（用户 2026-09-27 明确）：这些词出现在中文里是**故意**的
+TERMS = {'adb', 'token', 'Token', 'GitHub', 'Wi-Fi', 'DSH', 'APK', 'SHA256', 'SHA', 'exit',
+         'HTTP', 'HTTPS', 'PWA', 'Clash', 'Termux', 'Android', 'RUN_COMMAND', 'mode', 'v',
+         'OK', 'WiFi', 'adb_wifi', 'VPN', 'DNS', 'IP', 'ID', 'AI', 'App', 'APP', 'SIGTERM',
+         'kill', 'dry-run', 'JSON', 'GitHub', 'URL', 'Web', 'web', 'hive', 'Clash', 'adb'}
+REPORT = []
+
+
+def ok(msg):
+    REPORT.append(('✔', msg))
+
+
+def bad(msg):
+    REPORT.append(('✘', msg))
+
+
+def load_json(p):
+    with io.open(p, encoding='utf-8') as f:
+        return json.load(f)
+
+
+# ── 1. 字面量调用：Lang.t() 的参数必须是字符串字面量 ─────────────────────────
+def canon(s):
+    """与 tools/i18n-table 同一套规范化：Java 源码里的 \\n 是转义，运行时是真换行。"""
+    return s.replace('\\n', '\n').replace('\\t', '\t')
+
+
+def strip_comments(src):
+    """去掉 // 与 /* */ 注释：注释里出现的 Lang.t("…") 不是调用（本工具的说明文字里就有）。"""
+    src = re.sub(r'/\*.*?\*/', lambda m: '\n' * m.group(0).count('\n'), src, flags=re.S)
+    return re.sub(r'//[^\n]*', '', src)
+
+
+# 允许的"非字面量"参数：全部来自生成的控件表（第 3 条已逐条核对中文）
+SAFE_DYNAMIC = re.compile(
+    r'^[A-Za-z_][\w.]*(?:\([^()]*\))?\.labelEn$'                        # 生成表里的控件文案
+    r'|^[A-Za-z_][\w.]*(?:\([^()]*\))?\.hintEn$'
+    r'|^UiControls\.(?:catEn|groupEn)\([^)]*\)$')                       # 生成表里的分类/组名
+
+
+def split_top(expr, sep):
+    """按不在字符串/括号里的 sep 切分（表达式里的中文字符串常带括号，不能用正则硬切）。"""
+    out, buf, depth, i, instr = [], '', 0, 0, False
+    while i < len(expr):
+        ch = expr[i]
+        if instr:
+            buf += ch
+            if ch == '\\':
+                buf += expr[i + 1:i + 2]; i += 2; continue
+            if ch == '"':
+                instr = False
+        else:
+            if ch == '"':
+                instr = True; buf += ch
+            elif ch in '([':
+                depth += 1; buf += ch
+            elif ch in ')]':
+                depth -= 1; buf += ch
+            elif ch == sep and depth == 0:
+                out.append(buf); buf = ''
+            else:
+                buf += ch
+        i += 1
+    out.append(buf)
+    return out
+
+
+def analyze_arg(expr):
+    """返回 (字面量列表, 动态原因或 None)。
+
+    规则：字面量 ✓；`cond ? A : B` 两个分支各自递归（条件里的 "port" 这类 JSON key 不算文案）；
+    .labelEn/.hintEn/catEn/groupEn 是生成表里的文案（第 3 条已核对）✓；其余动态参数一律 ✗。
+    """
+    expr = expr.strip()
+    if '?' in expr:
+        parts = split_top(expr, '?')
+        if len(parts) == 2:
+            rest = parts
+            lits, dyn = [], None
+            for br in split_top(rest[1], ':'):
+                l, d = analyze_arg(br)
+                lits += l
+                dyn = dyn or d
+            return lits, dyn
+    if SAFE_DYNAMIC.match(expr):
+        return [], None
+    if expr.startswith('"') and expr.endswith('"') and expr.count('"') == 2:
+        return [canon(expr[1:-1].replace('\\"', '"').replace('\\\\', '\\'))], None
+    return [], expr
+
+
+def java_calls(path):
+    """产出一张 (行号, Lang.t 的参数原文) 表，按括号配平切分（跳过字符串里的括号）；注释不算。"""
+    src = strip_comments(io.open(path, encoding='utf-8').read())
+    out = []
+    for m in re.finditer(r'Lang\.t\s*\(', src):
+        i = m.end()
+        depth, j, instr = 1, i, False
+        while j < len(src) and depth:
+            ch = src[j]
+            if instr:
+                if ch == '\\':
+                    j += 2; continue
+                if ch == '"':
+                    instr = False
+            elif ch == '"':
+                instr = True
+            elif ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+            j += 1
+        out.append((src[:m.start()].count('\n') + 1, src[i:j - 1].strip()))
+    return out
+
+
+def audit_literals():
+    dynamic = 0
+    for label, d in (('console', CONSOLE_SRC), ('bridge', BRIDGE_SRC)):
+        for name in sorted(os.listdir(d)):
+            if not name.endswith('.java') or name == 'Lang.java':
+                continue
+            for line, arg in java_calls(os.path.join(d, name)):
+                _, dyn = analyze_arg(arg)
+                if dyn is not None:
+                    bad('%s/%s:%d Lang.t() 的参数不是字面量：%s —— 这种查表永远查不到（桥的分类标题就是这么变英文的）'
+                        % (label, name, line, ' '.join(arg.split())[:70]))
+                    dynamic += 1
+    if dynamic == 0:
+        ok('Lang.t() 全部是字面量调用（没有"拼好的串再查表"这种必漏的写法）')
+
+
+# ── 2. 字面量覆盖：每个 Lang.t 的 key 都要有非空中文 ────────────────────────
+def audit_coverage(zh):
+    calls = []
+    for label, d in (('console', CONSOLE_SRC), ('bridge', BRIDGE_SRC)):
+        for name in sorted(os.listdir(d)):
+            if not name.endswith('.java') or name == 'Lang.java':
+                continue
+            for line, arg in java_calls(os.path.join(d, name)):
+                for lit in analyze_arg(arg)[0]:
+                    calls.append((label, name, line, lit))
+    miss = [(l, n, ln, s) for (l, n, ln, s) in calls if zh.get(s, '') == '']
+    for l, n, ln, s in miss:
+        bad('%s/%s:%d 没有中文：%r' % (l, n, ln, s[:70]))
+    if not miss:
+        ok('两个 App 的 %d 处 Lang.t 字面量都有中文（%d 个去重 key）'
+           % (len(calls), len(set(c[3] for c in calls))))
+    return miss
+
+
+# ── 3. 控件表：label/hint/分类/组 的中文必须齐 ───────────────────────────────
+def audit_controls(data, zh):
+    missing = 0
+    for c in data['controls']:
+        for field in ('label', 'hint'):
+            e, z = c[field]['en'], c[field]['zh']
+            if not z.strip():
+                bad('控件 %s 的 %s 没有中文' % (c['id'], field)); missing += 1
+            if zh.get(e, '') != z:
+                bad('控件 %s 的 %s 与 i18n/zh.json 不一致（表里是 %r）' % (c['id'], field, zh.get(e))) ; missing += 1
+    for c in data['cats']:
+        if zh.get(c['en'], '') != c['zh']:
+            bad('分类 %s 的中文与 zh.json 不一致' % c['id']); missing += 1
+    for g in data.get('groups', []):
+        if zh.get(g['en'], '') != g['zh']:
+            bad('分组 %s 的中文与 zh.json 不一致' % g['id']); missing += 1
+    if not missing:
+        ok('控件表 %d 条控件的 label/hint + %d 个分类 + %d 个分组，中文与翻译表逐条一致'
+           % (len(data['controls']), len(data['cats']), len(data.get('groups', []))))
+
+
+# ── 4. 主题：两份 manifest 必须声明同一个（且等于 ui/theme.json 的那个）─────
+def audit_theme(theme):
+    want = theme['androidTheme']
+    got = {}
+    for label, p in (('console', CONSOLE_MANIFEST), ('bridge', BRIDGE_MANIFEST)):
+        src = io.open(p, encoding='utf-8').read()
+        app = re.search(r'<application\b[^>]*>', src, re.S)
+        m = re.search(r'android:theme="([^"]+)"', app.group(0)) if app else None
+        got[label] = m.group(1) if m else None
+    if got['console'] != want or got['bridge'] != want:
+        bad('AndroidManifest 主题不一致：theme.json=%s console=%s bridge=%s —— 桥正是因为没写主题才变成浅色 App 的'
+            % (want, got['console'], got['bridge']))
+    else:
+        ok('两个 App 的 android:theme 相同：%s' % want)
+
+
+# ── 5. 色板：两份 Palette.java 必须同源 ─────────────────────────────────────
+def audit_palette():
+    p1 = os.path.join(CONSOLE_SRC, 'Palette.java')
+    p2 = os.path.join(BRIDGE_SRC, 'Palette.java')
+    if not (os.path.exists(p1) and os.path.exists(p2)):
+        bad('Palette.java 还没生成（跑 tools/ui-controls gen）'); return
+    a = [l for l in io.open(p1, encoding='utf-8') if l.startswith('    static final int')]
+    b = [l for l in io.open(p2, encoding='utf-8') if l.startswith('    static final int')]
+    if a != b:
+        bad('两份 Palette.java 的颜色不一致 —— 跑 tools/ui-controls gen'); return
+    # 源里不许再有裸色值（除透明）
+    stray = []
+    for d in (CONSOLE_SRC, BRIDGE_SRC):
+        for name in sorted(os.listdir(d)):
+            if not name.endswith('.java') or name in ('Lang.java', 'Palette.java'):
+                continue
+            src = io.open(os.path.join(d, name), encoding='utf-8').read()
+            for m in re.finditer(r'#[0-9A-Fa-f]{6}|0xFF[0-9A-Fa-f]{6}', src):
+                stray.append('%s/%s %s' % (os.path.basename(d), name, m.group(0)))
+    if stray:
+        bad('还有裸写的颜色值（必须走 Palette）：%s' % ', '.join(stray[:6]))
+    else:
+        ok('两份 Palette.java 完全一致（%d 个颜色），且源码里没有裸色值' % len(a))
+
+
+# ── 6. 桥状态口径：python 与 java 的 state→灯色 必须逐项相同 ────────────────
+def audit_bridge_state():
+    py = io.open(STATUS_PUB, encoding='utf-8').read()
+    m = re.search(r'LAMP_OF_STATE\s*=\s*\{(.*?)\}', py, re.S)
+    if not m:
+        bad('dsh-status-pub 里找不到 LAMP_OF_STATE'); return
+    pmap = dict(re.findall(r"'([a-z]+)':\s*'([a-z]+)'", m.group(1)))
+    js = io.open(os.path.join(CONSOLE_SRC, 'MainActivity.java'), encoding='utf-8').read()
+    k = re.search(r'private static String lampOf\(String state\)\s*\{(.*?)\n    \}', js, re.S)
+    if not k:
+        bad('控制台里找不到 lampOf()'); return
+    body = k.group(1)
+    jmap = {}
+    for st, col in re.findall(r'"([a-z]+)"\.equals\(state\)\) return "([a-z]+)"', body):
+        jmap[st] = col
+    defaults = re.findall(r'return "([a-z]+)";', body)
+    for st in pmap:
+        if st not in jmap:
+            jmap[st] = defaults[-1] if defaults else None
+    if pmap != jmap:
+        bad('桥的 state→灯色 两边不一致：dsh-status-pub=%s 控制台=%s' % (pmap, jmap))
+    else:
+        ok('桥的 state→灯色 两侧同表：%s' % pmap)
+
+
+# ── 7. 标题类文字不许残留英文（用户要的那条自检）───────────────────────────
+def english_left(text, allow=TERMS):
+    out = []
+    for w in re.findall(r'[A-Za-z][A-Za-z_.\-]{1,}', text):
+        if w in allow or w.rstrip('.').isdigit():
+            continue
+        out.append(w)
+    return out
+
+
+def audit_titles(zh, data):
+    rows = []   # (来源, 中文界面文字)
+    for c in data['cats']:
+        rows.append(('分类标题', c['zh']))
+    for g in data.get('groups', []):
+        rows.append(('分组标题', g['zh']))
+    for c in data['controls']:
+        rows.append(('控件标题 ' + c['id'], c['label']['zh']))
+    rows += [
+        ('桥状态行', zh["Bridge: running"]),
+        ('桥状态行', zh["Bridge: just dropped (wakeable)"]),
+        ('桥状态行', zh["Bridge: long silent (bound but not answering)"]),
+        ('桥状态行', zh["Bridge: not installed"]),
+        ('桥状态行', zh["Bridge: unknown"]),
+        ('状态行', zh["not connected"]),
+        ('状态行', zh[" (Wi-Fi off, or Wireless debugging not on)"]),
+        ('密码副标题', zh["Now: authorized (the AI can pass system identity checks for you)"]),
+        ('密码副标题', zh["Now: revoked"]),
+        ('密码副标题', zh["Now: unreadable (no reply from Termux; tap Refresh status to retry)"]),
+        ('版本行', zh["Version: "] + "v1.16" + zh[" · up to date"]),
+        ('版本行', zh["Version: "] + "v1.16" + zh[" → the repo has "] + "v1.17" + zh[" · tap this line to update"]),
+        ('版本行', zh["Version: "] + "v1.16" + zh[" · local is newer than the repo (the repo only has v"] + "1.15" + zh[")"]),
+        ('语言副标题', zh["auto follows the system language"] + " · " + zh["the widgets and the page panel follow this too"]),
+    ]
+    hits = []
+    for src, text in rows:
+        left = english_left(text)
+        if left:
+            hits.append('%s：%r 里还有英文 %s' % (src, text, left))
+    for h in hits:
+        bad('标题类文字残留英文 —— ' + h)
+    if not hits:
+        ok('分类/分组/控件标题、状态行、版本行、密码副标题共 %d 条中文文字，没有残留英文' % len(rows))
+    return rows
+
+
+# ── 8. 界面文字模型（人看的）───────────────────────────────────────────────
+def screen_model(zh, data):
+    L = []
+    L.append('【控制台】')
+    L.append('  DSH Console  v1.16           ● DSH　● 桥　● adb')
+    L.append('  %s' % ('运行：刷新状态　已等待 3s' if False else '（无任务时这一行不显示）'))
+    for cat in data['cats']:
+        ctrls = [c for c in data['controls'] if c['cat'] == cat['id'] and 'console' in c['surfaces']]
+        if not ctrls:
+            continue
+        L.append('  ▾ %s' % cat['zh'])
+        grp = ''
+        for c in ctrls:
+            if c.get('group') and c['group'] != grp:
+                grp = c['group']
+                L.append('     · %s' % next(g['zh'] for g in data['groups'] if g['id'] == grp))
+            L.append('     [%s] %s' % (c['kind'], c['label']['zh']))
+    L.append('  （底部结果条只在状态/日志里，见 P1-14）')
+    L.append('【桥】')
+    L.append('  DSH 桥  v2.22')
+    L.append('  无障碍：已开启 ✅ / 端口：正在监听 127.0.0.1:8788')
+    for cat in data['cats']:
+        ctrls = [c for c in data['controls'] if c['cat'] == cat['id'] and 'bridge' in c['surfaces']]
+        if not ctrls:
+            continue
+        L.append('  ▾ %s' % cat['zh'])
+        for c in ctrls:
+            L.append('     [%s] %s' % (c['kind'], c['label']['zh']))
+    L.append('  ▾ 关于本应用')
+    return L
+
+
+def main():
+    quiet = '--quiet' in sys.argv
+    data = load_json(CONTROLS)
+    theme = load_json(THEME)
+    zh = load_json(ZH)
+    zh = {k.replace('\\n', '\n'): v for k, v in zh.items()}
+
+    audit_literals()
+    audit_coverage(zh)
+    audit_controls(data, zh)
+    audit_theme(theme)
+    audit_palette()
+    audit_bridge_state()
+    audit_titles(zh, data)
+
+    if not quiet:
+        for mark, msg in REPORT:
+            print('   %s %s' % (mark, msg))
+    nbad = sum(1 for m, _ in REPORT if m == '✘')
+    if 'screen' in sys.argv:
+        print('\n'.join(screen_model(zh, data)))
+    print('\n%s' % ('✅ 文案/主题/色板/状态口径 全部通过' if nbad == 0
+                    else '❌ %d 项没通过 —— 修完再出包（build.sh 会因此中止）' % nbad))
+    return 0 if nbad == 0 else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

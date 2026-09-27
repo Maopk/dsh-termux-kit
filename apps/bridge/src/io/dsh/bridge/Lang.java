@@ -31,16 +31,18 @@ final class Lang {
         ZH.put("   Tap ③ Open this app's notification settings below to enable it.", "   点下面的 ③ 打开本应用的通知设置即可启用。");
         ZH.put("  (tap Copy token to copy it)", "  （点「复制 token」可取）");
         ZH.put("  v", "  v");
-        ZH.put(" (you have ", "（你的是 ");
         ZH.put(" min", " 分钟");
         ZH.put(" min idle", " 分钟自动停止");
         ZH.put(" · checking for a newer release…", " · 正在检查有没有新版本…");
         ZH.put(" · could not check for updates now (no network?)", " · 现在查不了更新（没网？）");
         ZH.put(" · hold volume +/- for 3s to stop", " · 音量+/- 同时按住 3 秒紧急停止");
+        ZH.put(" · local is newer than the repo (the repo only has v", " · 本地比仓库新（仓库只有 v");
+        ZH.put(" · tap the project page to update", " · 点项目主页更新");
+        ZH.put(" · up to date", " · 已是最新");
+        ZH.put(" → the repo has ", " → 仓库最新 ");
         ZH.put("(Also: this app does not autostart; it will not come up by itself after a phone restart)", "（另外：本应用不自动启动；手机重启后它不会自己起来）");
         ZH.put("(new in v1.5: turns wireless debugging on automatically when online, used by widget 8)", "（v1.5 新增：联网时自动打开无线调试，组件 8 会用到）");
         ZH.put(")", "）");
-        ZH.put(") · tap the project page to get it", "）· 点下面的项目地址去取");
         ZH.put("About this app", "关于本应用");
         ZH.put("Accessibility is unbound and the app exits. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.", "会让 App 退出并解绑无障碍。这台 vivo 上可能再也唤不回来 —— 只能你手动打开「DSH 桥」。");
         ZH.put("Accessibility: ", "无障碍：");
@@ -68,6 +70,7 @@ final class Lang {
         ZH.put("Failed to open settings: ", "打开设置失败：");
         ZH.put("For the first setup, or after the system unbound the service and it has to be re-enabled by hand.", "首次启用，或被系统解绑后需要手动重新打开时用。");
         ZH.put("Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).", "四态由**一次 ping 的结果 + 状态记录**判定（不看时间）：运行中 / 刚断（可唤醒，一条广播就能拉回）/ 长时间未响应（进程自己没了，或端口在听却不应答 —— 唤醒可能有效，无效就手动打开一次「DSH 桥」）/ 未安装（这台机器上从没见过它是活的）。");
+        ZH.put("Full stop from the app", "App 里的「真停」");
         ZH.put("Fully stop bridge", "真停桥");
         ZH.put("Fully stop the bridge?", "要真停桥吗？");
         ZH.put("Fully stopped; accessibility is off", "已真停；无障碍也关了");
@@ -108,6 +111,7 @@ final class Lang {
         ZH.put("Token copied; you can paste it to DSH", "token 已复制，可以粘贴发给 DSH");
         ZH.put("Turns accessibility off right now. The same button sits in the notification bar, which is why notifications must stay on.", "立刻关掉无障碍服务。通知栏里有一颗同样的按钮，所以别关通知。");
         ZH.put("Version", "版本");
+        ZH.put("Version ", "版本 ");
         ZH.put("accessibility turned off", "无障碍已关闭");
         ZH.put("adb", "adb");
         ZH.put("adb · wireless debugging, needs working Wi-Fi", "adb · 无线调试，需要可用 Wi-Fi");
@@ -121,7 +125,7 @@ final class Lang {
         ZH.put("service destroyed", "服务已销毁");
         ZH.put("sleep command received: fully stopped (no self-recovery)", "收到 sleep 指令：已彻底停止（不会自动恢复）");
         ZH.put("stop command received (remembered: no automatic recovery)", "收到 stop 指令（已记住：不会自动恢复）");
-        ZH.put("stopped", "停了");
+        ZH.put("stopped", "已停止");
         ZH.put("token: ", "token：");
         ZH.put("volume-key emergency stop", "音量键紧急停止");
         ZH.put("★ Emergency stop (any of the four):\n", "★ 紧急停止（四种方式任选）：\n");

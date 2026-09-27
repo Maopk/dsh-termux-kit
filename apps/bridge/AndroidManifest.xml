@@ -9,8 +9,8 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="io.dsh.bridge"
-    android:versionCode="31"
-    android:versionName="2.21">
+    android:versionCode="32"
+    android:versionName="2.22">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -46,10 +46,16 @@
         </intent>
     </queries>
 
+    <!-- Dark theme, the SAME one the console declares (ui/theme.json → androidTheme; tools/i18n-audit
+         checks that the two manifests agree). Why it matters: with no android:theme this app fell back
+         to the platform LIGHT theme, so it had a white window and a light ActionBar showing the app
+         label — which the user saw as "the console is dark, the bridge is a light app" plus a duplicate
+         title ("DSH Bridge" in the bar, "DSH 桥 v2.21" underneath), reported 2026-09-27. -->
     <application
         android:label="DSH Bridge"
         android:allowBackup="false"
-        android:debuggable="false">
+        android:debuggable="false"
+        android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
             android:name=".MainActivity"

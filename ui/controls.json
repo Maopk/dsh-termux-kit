@@ -9,9 +9,9 @@
     "术语不翻译：adb / token / GitHub / Wi-Fi / DSH / APK / SHA256 / exit 保持原样。"
   ],
   "appVersions": {
-    "bridge": "2.21",
-    "console": "1.15",
-    "panel": "0.7"
+    "bridge": "2.22",
+    "console": "1.16",
+    "panel": "0.8"
   },
   "cats": [
     {
@@ -162,6 +162,28 @@
         "console"
       ],
       "task": true
+    },
+    {
+      "id": "bridge_full_stop",
+      "kind": "button",
+      "cat": "channels",
+      "icon": "⏻",
+      "label": {
+        "en": "Fully stop bridge",
+        "zh": "真停桥"
+      },
+      "hint": {
+        "en": "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.",
+        "zh": "让 App 退出并解绑无障碍。这台 vivo 上可能唤不回来 —— 只能你手动打开「DSH 桥」。"
+      },
+      "danger": true,
+      "surfaces": [
+        "panel",
+        "console",
+        "bridge"
+      ],
+      "task": true,
+      "group": "bridge"
     },
     {
       "id": "1_start-dsh",
@@ -385,28 +407,6 @@
         "console"
       ],
       "task": true
-    },
-    {
-      "id": "bridge_full_stop",
-      "kind": "button",
-      "cat": "channels",
-      "icon": "⏻",
-      "label": {
-        "en": "Fully stop bridge",
-        "zh": "真停桥"
-      },
-      "hint": {
-        "en": "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.",
-        "zh": "让 App 退出并解绑无障碍。这台 vivo 上可能唤不回来 —— 只能你手动打开「DSH 桥」。"
-      },
-      "danger": true,
-      "surfaces": [
-        "panel",
-        "console",
-        "bridge"
-      ],
-      "task": true,
-      "group": "bridge"
     },
     {
       "id": "lang",

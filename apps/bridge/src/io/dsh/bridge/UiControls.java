@@ -12,7 +12,7 @@ import java.util.List;
  * still works; the Chinese side lives in i18n/zh.json, the kit's single translation source.
  */
 final class UiControls {
-    static final String VERSION = "2.21";
+    static final String VERSION = "2.22";
 
     static final class C {
         final String id, kind, cat, group, icon, labelEn, hintEn;
@@ -71,12 +71,12 @@ final class UiControls {
     }
 
     static String groupEn(String id) {
-        for (String[] g : GROUPS) if (g[0].equals(id)) return g[1];
+        for (String[] g : GROUPS) if (g[0].equals(id)) return g[2];
         return id;
     }
 
     static String groupZh(String id) {
-        for (String[] g : GROUPS) if (g[0].equals(id)) return g[2];
+        for (String[] g : GROUPS) if (g[0].equals(id)) return g[3];
         return id;
     }
 }

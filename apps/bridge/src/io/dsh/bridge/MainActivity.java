@@ -35,13 +35,13 @@ public class MainActivity extends Activity {
     private TextView bridgeState;
     private boolean runGuard, idleGuard;
     /** Console palette, so the two apps stop looking like two different products. */
-    static final int BG = 0xFF0D1117, FG = 0xFFE6EDF3, DIM = 0xFF8B949E, LINK = 0xFF58A6FF, DANGER = 0xFFB3261E;
+    static final int BG = Palette.BG, FG = Palette.FG, DIM = Palette.DIM, LINK = Palette.LINK, DANGER = Palette.DANGER;
     /** Views that carry a deliberate colour opt out of the dark pass. */
     private void keepColor(View v) { v.setTag("keepcolor"); }
     private void applyDark(View v) {
         if ("keepcolor".equals(v.getTag())) return;
         if (v instanceof android.widget.Button) {
-            v.setBackgroundColor(0xFF161B22);
+            v.setBackgroundColor(Palette.CARD);
             ((android.widget.Button) v).setTextColor(FG);
             ((android.widget.Button) v).setAllCaps(false);
             ((android.widget.Button) v).setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
@@ -158,7 +158,7 @@ public class MainActivity extends Activity {
         projBtn.setAllCaps(false);   // 主题默认全大写，会把网址显示成 GITHUB.COM/…
         projBtn.setText("github.com/Maopk/dsh-termux-kit");   // looks like a link, behaves like one
         projBtn.setBackgroundColor(0x00000000);
-        projBtn.setTextColor(0xFF58A6FF);
+        projBtn.setTextColor(Palette.LINK);
         projBtn.setPaintFlags(projBtn.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
         projBtn.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
         projBtn.setOnClickListener(new View.OnClickListener() {
@@ -174,22 +174,22 @@ public class MainActivity extends Activity {
         updateView = new TextView(this);
         updateView.setTextSize(13f);
         updateView.setPadding(0, (int) (6 * getResources().getDisplayMetrics().density), 0, 0);
-        updateView.setTextColor(0xFF8B949E);
+        updateView.setTextColor(Palette.DIM);
         updateView.setAllCaps(false);
         updateView.setText(Lang.t("Version ") + ver + Lang.t(" · checking for a newer release…"));
 
         Button panic = new Button(this);
         panic.setText(Lang.t(UiControls.get("bridge_panic").labelEn));
         panic.setTextSize(17f);
-        panic.setBackgroundColor(0xFFB3261E);
-        panic.setTextColor(0xFFFFFFFF);
+        panic.setBackgroundColor(Palette.DANGER);
+        panic.setTextColor(Palette.ON_DANGER);
         int h = (int) (18 * getResources().getDisplayMetrics().density);
         panic.setPadding(pad, h, pad, h);
         panic.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 BridgeService svc = BridgeService.INSTANCE;
                 if (svc != null) {
-                    svc.panic("In-app button");
+                    svc.panic(Lang.t("In-app button"));
                     toast(Lang.t("Emergency stop done; the accessibility service is off"));
                 } else {
                     toast(Lang.t("The service is not running right now; to shut it down completely, turn DSH Bridge off in the system accessibility settings"));
@@ -217,11 +217,11 @@ public class MainActivity extends Activity {
         });
         bridgeState = new TextView(this);
         bridgeState.setTextSize(12.5f);
-        bridgeState.setTextColor(0xFF8B949E);
+        bridgeState.setTextColor(Palette.DIM);
 
         warnView = new TextView(this);
         warnView.setTextSize(14f);
-        warnView.setTextColor(0xFFB3261E);
+        warnView.setTextColor(Palette.DANGER);
         warnView.setPadding(0, pad / 2, 0, 0);
 
         Button notif = new Button(this);
@@ -242,6 +242,13 @@ public class MainActivity extends Activity {
         stateView.setPadding(0, pad / 2, 0, pad / 2);
 
         ScrollView sv = new ScrollView(this);
+        // The dark page must cover the **whole window**, not just the height of the content: with the
+        // platform's default theme the area below short content stayed white, which is exactly what
+        // "the bridge is a light app" looked like on the phone (user report 2026-09-27). The manifest
+        // now declares the same dark theme as the console, and both the window (sv) and the content
+        // (root) are painted with the shared palette.
+        sv.setBackgroundColor(Palette.BG);
+        sv.setFillViewport(true);
         sv.addView(root, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         setContentView(sv);
@@ -326,21 +333,34 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    /** Equal means equal — "up to date" may only be claimed here. */
+    private static boolean sameVer(String a, String b) {
+        return !isNewer(a, b) && !isNewer(b, a);
+    }
+
     private void showUpdate(String latest, String err, String mine) {
         if (updateView == null) return;
         if (err != null || latest == null) {
             // 说不清就说说不清 —— 不能显示成"已是最新"
             updateView.setText(Lang.t("Version ") + mine + Lang.t(" · could not check for updates now (no network?)"));
-            updateView.setTextColor(0xFF8B949E);
+            updateView.setTextColor(Palette.DIM);
             return;
         }
         if (isNewer(latest, mine)) {
-            updateView.setText(Lang.t("Version ") + mine + " → " + Lang.t("latest in the repo ") + "v" + latest
-                    + Lang.t(" (you have ") + mine + Lang.t(") · tap the project page to get it"));
-            updateView.setTextColor(0xFFD29922);
-        } else {
+            updateView.setText(Lang.t("Version ") + mine + Lang.t(" → the repo has ") + "v" + latest
+                    + Lang.t(" · tap the project page to update"));
+            updateView.setTextColor(Palette.WARN);
+        } else if (sameVer(latest, mine)) {
             updateView.setText(Lang.t("Version ") + mine + Lang.t(" · up to date"));
-            updateView.setTextColor(0xFF3FB950);
+            updateView.setTextColor(Palette.OK);
+        } else {
+            // Local is NEWER than the release (a locally built version). This branch used to fall through
+            // to "已是最新" as well, so the line read "版本：v1.15 · 已是最新（仓库最新 v1.14）" while the
+            // installed build was ahead of the repo — the user caught that contradiction on 2026-09-27.
+            // Rule now: equal → 已是最新; ahead → say so; behind → point at the repo.
+            updateView.setText(Lang.t("Version ") + mine + Lang.t(" · local is newer than the repo (the repo only has v")
+                    + latest + Lang.t(")"));
+            updateView.setTextColor(Palette.DIM);
         }
     }
 
@@ -385,7 +405,11 @@ public class MainActivity extends Activity {
         java.util.Set<String> collapsed = new java.util.HashSet<String>(sp.getStringSet("collapsed", java.util.Collections.<String>emptySet()));
         if (!sp.contains("collapsed")) { collapsed.add("channels"); collapsed.add("maintenance"); collapsed.add("emergency"); }
         root.addView(title);
-        keepColor(title);
+        // ⚠ The title is NOT keepColor'd any more: on the platform's default (light) theme that kept
+        //   the default BLACK text, which is why "DSH Bridge" read as a second, foreign title above
+        //   the dark page (user report 2026-09-27). It is painted explicitly instead.
+        title.setTextColor(Palette.FG);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         root.addView(stateView);
         root.addView(warnView);
         keepColor(warnView);
@@ -436,8 +460,13 @@ public class MainActivity extends Activity {
     }
 
     private String CatLabel(String catId, boolean shut) {
-        if ("about".equals(catId)) return (shut ? "▸ " : "▾ ") + Lang.t("About this app");
-        return (shut ? "▸ " : "▾ ") + UiControls.catEn(catId);
+        // ⚠ Translate FIRST, then add the fold arrow. It used to be the other way round: section()
+        //   received "▸ Channels (adb and bridge separate)" and looked *that* up in the table, which
+        //   can never match a key — so all three category headers stayed English while everything
+        //   around them was Chinese (user report 2026-09-27). tools/i18n-audit now rejects any
+        //   Lang.t() whose argument is not a plain literal, so this cannot come back.
+        String name = "about".equals(catId) ? Lang.t("About this app") : Lang.t(UiControls.catEn(catId));
+        return (shut ? "▸ " : "▾ ") + name;
     }
 
     /** A small grey consequence line under a control — every control carries one (spec §四). */
@@ -445,7 +474,7 @@ public class MainActivity extends Activity {
         UiControls.C c = UiControls.get(id);
         TextView t = new TextView(this);
         t.setTextSize(11.5f);
-        t.setTextColor(0xFF6E7681);
+        t.setTextColor(Palette.MUTED);
         t.setText(c == null ? "" : ((c.danger ? "⚠ " : "") + Lang.t(c.hintEn)));
         return t;
     }
@@ -455,7 +484,7 @@ public class MainActivity extends Activity {
         t.setText(name);
         t.setTextSize(11.5f);
         t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        t.setTextColor(0xFF8B949E);
+        t.setTextColor(Palette.DIM);
         int p = (int) (4 * getResources().getDisplayMetrics().density);
         t.setPadding(0, p, 0, p);
         return t;
@@ -476,10 +505,10 @@ public class MainActivity extends Activity {
             b.setAllCaps(false);
             boolean on = mode.equals(id);
             b.setText(on ? ("✓ " + names[i]) : names[i]);
-            b.setTextColor(on ? 0xFF58A6FF : 0xFF8B949E);
+            b.setTextColor(on ? Palette.ACCENT : Palette.DIM);
             android.graphics.drawable.GradientDrawable gg = new android.graphics.drawable.GradientDrawable();
-            gg.setColor(0xFF161B22); gg.setCornerRadius(8 * getResources().getDisplayMetrics().density);
-            if (on) gg.setStroke((int) (2 * getResources().getDisplayMetrics().density), 0xFF58A6FF);
+            gg.setColor(Palette.CARD); gg.setCornerRadius(8 * getResources().getDisplayMetrics().density);
+            if (on) gg.setStroke((int) (2 * getResources().getDisplayMetrics().density), Palette.ACCENT);
             b.setBackground(gg);
             b.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) { Lang.setMode(MainActivity.this, id); recreate(); }
@@ -498,11 +527,11 @@ public class MainActivity extends Activity {
         Button b = new Button(this);
         b.setAllCaps(false);
         b.setText("⚠ " + Lang.t(c == null ? "Fully stop bridge" : c.labelEn));
-        b.setTextColor(0xFFB3261E);
+        b.setTextColor(Palette.DANGER);
         b.setTextSize(14f);
         android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
-        g.setColor(0xFFFFFFFF); g.setCornerRadius(10 * getResources().getDisplayMetrics().density);
-        g.setStroke((int) (2 * getResources().getDisplayMetrics().density), 0xFFB3261E);
+        g.setColor(Palette.DANGER_FILL); g.setCornerRadius(10 * getResources().getDisplayMetrics().density);
+        g.setStroke((int) (2 * getResources().getDisplayMetrics().density), Palette.DANGER);
         b.setBackground(g);
         b.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -513,7 +542,7 @@ public class MainActivity extends Activity {
                         .setPositiveButton(Lang.t("Stop it"), new android.content.DialogInterface.OnClickListener() {
                             @Override public void onClick(android.content.DialogInterface d, int w) {
                                 BridgeService svc = BridgeService.INSTANCE;
-                                if (svc != null) svc.panic("Full stop from the app");
+                                if (svc != null) svc.panic(Lang.t("Full stop from the app"));
                                 toast(Lang.t("Fully stopped; accessibility is off"));
                                 updateState();
                             }
@@ -524,12 +553,14 @@ public class MainActivity extends Activity {
         return b;
     }
 
+    /** Section header ("▍名字", blue). `label` must already be translated — see CatLabel. */
     private TextView section(String label) {
         TextView h = new TextView(this);
-        h.setText("▍" + Lang.t(label));
+        h.setText("▍" + label);
         h.setTextSize(13f);
         h.setTypeface(Typeface.DEFAULT_BOLD);
-        h.setTextColor(Color.parseColor("#58A6FF"));
+        h.setTextColor(Palette.ACCENT);
+        keepColor(h);   // the dark pass must not repaint the blue headers grey
         int p = (int) (14 * getResources().getDisplayMetrics().density);
         h.setPadding(0, p, 0, (int) (2 * getResources().getDisplayMetrics().density));
         return h;

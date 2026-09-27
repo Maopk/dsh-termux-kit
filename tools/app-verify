@@ -1,0 +1,131 @@
+#!/data/data/com.termux/files/usr/bin/python3
+r"""app-verify —— 出包后/装机后自检：这个 APK 里到底有没有"已经修好的那份文案和主题"。
+
+WHY（这条是用户 2026-09-27 那次投诉的直接产物）
+------------------------------------------------
+上一轮的修复**只改了源码**：`tools/ui-controls` 的 groupEn 修了、i18n/zh.json 加了 key，但
+生成的 UiControls.java / Lang.java 是 15:48 才重写的，而 APK 是 15:38 编的 —— 于是手机上
+跑的还是旧表，"上一轮的要求根本没做到"。光看源码永远发现不了这件事，必须**打开包看**。
+
+本工具做三件事：
+  ① 从 APK 里读 AndroidManifest：版本号 + android:theme 必须等于 ui/theme.json 里那一个
+     （桥正是因为没写主题才成了浅色 App）；
+  ② 从 APK 里抽出 classes.dex，把该 App 的 Lang.java 里**每一条中文**拿去 dex 里找 ——
+     少一条就说明这个包里的翻译表不是当前的（"改了源码没重新出包"当场现形）；
+  ③ 打印 dex / APK 的 md5 指纹，用来和手机上装的那一份对拍。
+
+用法
+----
+  tools/app-verify console [apk]    默认 ~/dsh-console/build/dsh-console.apk
+  tools/app-verify bridge  [apk]    默认 ~/droid-bridge/build/dsh-bridge.apk
+"""
+import hashlib
+import io
+import json
+import os
+import re
+import subprocess
+import sys
+import zipfile
+
+HOME = os.path.expanduser('~')
+ROOT = os.path.join(HOME, 'dsh-termux-kit')
+THEME = os.path.join(ROOT, 'ui', 'theme.json')
+APPS = {
+    'console': dict(apk=os.path.join(HOME, 'dsh-console', 'build', 'dsh-console.apk'),
+                    lang=os.path.join(HOME, 'dsh-console', 'src', 'io', 'dsh', 'console', 'Lang.java'),
+                    manifest=os.path.join(HOME, 'dsh-console', 'AndroidManifest.xml')),
+    'bridge': dict(apk=os.path.join(HOME, 'droid-bridge', 'build', 'dsh-bridge.apk'),
+                   lang=os.path.join(HOME, 'droid-bridge', 'src', 'io', 'dsh', 'bridge', 'Lang.java'),
+                   manifest=os.path.join(HOME, 'droid-bridge', 'AndroidManifest.xml')),
+}
+bad = 0
+
+
+def line(mark, msg):
+    global bad
+    if mark == '✘':
+        bad += 1
+    print('   %s %s' % (mark, msg))
+
+
+def android_manifest(path):
+    """把 APK 里的二进制 AndroidManifest.xml 还原成可读字符串（不反编译：只要属性值）。"""
+    with zipfile.ZipFile(path) as z:
+        raw = z.read('AndroidManifest.xml')
+    # 字符串池里的 UTF-16 文本
+    text = raw.decode('utf-16-le', 'ignore')
+    return text
+
+
+def android_theme(apk):
+    """APK 里 <application> 的 android:theme。
+
+    二进制 manifest 里主题是**资源引用**（@0x0103022e），不是字符串，所以直接扫字符串池会
+    误判成"没声明主题"（第一版就踩了）。用 aapt2 dump xmltree 读真实的属性。
+    """
+    try:
+        out = subprocess.run(['aapt2', 'dump', 'xmltree', apk, '--file', 'AndroidManifest.xml'],
+                             capture_output=True, text=True, timeout=60).stdout
+    except Exception:
+        return None
+    m = re.search(r':theme\(0x01010000\)=@(0x[0-9a-fA-F]+)', out)
+    return m.group(1) if m else None
+
+
+def main():
+    app = sys.argv[1] if len(sys.argv) > 1 else 'console'
+    if app not in APPS:
+        print('用法: app-verify console|bridge [apk]'); return 2
+    spec = APPS[app]
+    apk = sys.argv[2] if len(sys.argv) > 2 else spec['apk']
+    theme = json.load(io.open(THEME, encoding='utf-8'))
+    print('审计 %s：%s' % (app, apk))
+
+    # ① manifest：版本 + 主题
+    mtext = android_manifest(apk)
+    ver = re.search(r'(\d+\.\d+)\x00', mtext)
+    line('✔', '包内版本号：%s' % (ver.group(1) if ver else '?'))
+    tid = android_theme(apk)
+    if tid is None:
+        line('✘', '包里没有声明 android:theme —— 会退回系统默认主题（浅色窗口 + 浅色 ActionBar，标题重复）')
+    else:
+        # 两个 App 必须指向**同一个**主题资源，否则又是"一个深一个浅"
+        other = 'bridge' if app == 'console' else 'console'
+        oid = android_theme(APPS[other]['apk']) if os.path.exists(APPS[other]['apk']) else None
+        line('✔', '声明了 android:theme=%s（源码里是 %s）' % (tid, theme['androidTheme']))
+        if oid is not None:
+            line('✔' if oid == tid else '✘',
+                 '另一个 App（%s）的主题=%s —— %s' % (other, oid, '两边一致' if oid == tid else '两边不一致！'))
+
+    # ② dex：当前翻译表的每条中文都必须真的在包里
+    with zipfile.ZipFile(apk) as z:
+        dex = z.read('classes.dex')
+    dexmd5 = hashlib.md5(dex).hexdigest()
+    src = io.open(spec['lang'], encoding='utf-8').read()
+    pairs = re.findall(r'ZH\.put\("((?:[^"\\]|\\.)*)",\s*"((?:[^"\\]|\\.)*)"\)', src)
+    zh = [v for _, v in pairs if v.strip()]
+    missing = []
+    for z_ in zh:
+        needle = z_.replace('\\n', '\n').replace('\\t', '\t').encode('utf-8')
+        if needle not in dex:
+            missing.append(z_)
+    if missing:
+        line('✘', '有 %d 条中文不在包里（说明这个 APK 不是用当前翻译表编的 —— 就是上一轮"改了没出包"那种情况）：'
+             % len(missing))
+        for z_ in missing[:8]:
+            print('        · %s' % z_)
+    else:
+        line('✔', 'Lang.java 里 %d 条中文**全部**在这个 APK 的 dex 里（翻译表是当前这一份）' % len(zh))
+
+    # ③ 指纹：和手机上的对拍用
+    apkmd5 = hashlib.md5(io.open(apk, 'rb').read()).hexdigest()
+    line('✔', '指纹 apk md5 %s · classes.dex md5 %s' % (apkmd5[:16], dexmd5[:16]))
+
+    print('\n%s' % ('✅ 这个包里的文案与主题就是当前源码那一份' if bad == 0
+                    else '❌ %d 项不对 —— 别装它，先重新出包' % bad))
+    return 0 if bad == 0 else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

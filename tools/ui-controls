@@ -16,6 +16,8 @@ WHY
   plugins/dsh-mobile-local/client.js                        ← 夹在 generated:controls 标记之间的块
   ~/dsh-console/src/io/dsh/console/UiControls.java          ← 整文件（真源码；sync-apps.sh 再镜像进仓库）
   ~/droid-bridge/src/io/dsh/bridge/UiControls.java          ← 整文件
+  ~/dsh-console/src/io/dsh/console/Palette.java             ← 色板（源：ui/theme.json）
+  ~/droid-bridge/src/io/dsh/bridge/Palette.java             ← 色板（同一份源 → 两处不可能再一个深一个浅）
   i18n/zh.json                                               ← 中英对照**合并**进去（缺哪条补哪条），再跑 i18n-table gen
     为什么也写 i18n：Java 侧沿用既有的 Lang.t() 渲染时翻译，翻译表只有 zh.json 一份，
     不然就会出现"控件一套翻译、别处又一套"。
@@ -38,9 +40,12 @@ import sys
 HOME = os.path.expanduser('~')
 ROOT = os.path.join(HOME, 'dsh-termux-kit')
 SRC = os.path.join(ROOT, 'ui', 'controls.json')
+THEME = os.path.join(ROOT, 'ui', 'theme.json')
 PANEL = os.path.join(ROOT, 'plugins', 'dsh-mobile-local', 'client.js')
 CONSOLE_JAVA = os.path.join(HOME, 'dsh-console', 'src', 'io', 'dsh', 'console', 'UiControls.java')
 BRIDGE_JAVA = os.path.join(HOME, 'droid-bridge', 'src', 'io', 'dsh', 'bridge', 'UiControls.java')
+CONSOLE_PALETTE = os.path.join(HOME, 'dsh-console', 'src', 'io', 'dsh', 'console', 'Palette.java')
+BRIDGE_PALETTE = os.path.join(HOME, 'droid-bridge', 'src', 'io', 'dsh', 'bridge', 'Palette.java')
 ZH = os.path.join(ROOT, 'i18n', 'zh.json')
 BEGIN = '      // ── generated:controls (ui/controls.json) — do not edit by hand; run tools/ui-controls gen ──'
 END = '      // ── /generated:controls ──'
@@ -149,12 +154,12 @@ def java_file(pkg, cls, data, app):
     L.append('    }')
     L.append('')
     L.append('    static String groupEn(String id) {')
-    L.append('        for (String[] g : GROUPS) if (g[0].equals(id)) return g[1];')
+    L.append('        for (String[] g : GROUPS) if (g[0].equals(id)) return g[2];')
     L.append('        return id;')
     L.append('    }')
     L.append('')
     L.append('    static String groupZh(String id) {')
-    L.append('        for (String[] g : GROUPS) if (g[0].equals(id)) return g[2];')
+    L.append('        for (String[] g : GROUPS) if (g[0].equals(id)) return g[3];')
     L.append('        return id;')
     L.append('    }')
     L.append('}')
@@ -190,8 +195,44 @@ def merge_zh(data, apply):
     return added, changed
 
 
+def load_theme():
+    with io.open(THEME, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def palette_file(pkg, theme):
+    """Emit Palette.java for one app from the single colour source (ui/theme.json).
+
+    Why this exists: the console shipped dark while the bridge fell back to the platform **light**
+    theme (its Activity declared no android:theme at all) and both files kept their own colour
+    literals — measured on the device 2026-09-27, the two apps looked like two products. Every
+    colour in both apps now comes from here; tools/i18n-audit additionally checks that the two
+    AndroidManifest.xml files declare the same android:theme.
+    """
+    L = []
+    L.append('package io.dsh.%s;' % pkg)
+    L.append('')
+    L.append('/**')
+    L.append(' * GENERATED FILE — do not edit. Source: ui/theme.json, generator: tools/ui-controls.')
+    L.append(' *')
+    L.append(' * Why generated: the console was dark while the bridge fell back to the platform LIGHT theme')
+    L.append(' * (its Activity declared no theme at all), so one product looked like two (user report')
+    L.append(' * 2026-09-27). Both apps now take every colour from this one file, and tools/i18n-audit')
+    L.append(' * checks that both manifests declare the same android:theme.')
+    L.append(' */')
+    L.append('final class Palette {')
+    for name in sorted(theme['dark']):
+        L.append('    static final int %s = 0xFF%s;' % (name, theme['dark'][name].lstrip('#').upper()))
+    L.append('')
+    L.append('    private Palette() {}')
+    L.append('}')
+    L.append('')
+    return '\n'.join(L)
+
+
 def targets(data):
     """Every generated artifact: path → (expected content, label)."""
+    theme = load_theme()
     panel = io.open(PANEL, encoding='utf-8').read()
     block = js_block(data)
     if BEGIN in panel and END in panel:
@@ -204,6 +245,8 @@ def targets(data):
         (PANEL, new_panel, 'panel  client.js'),
         (CONSOLE_JAVA, java_file('console', 'UiControls', data, 'console'), 'console UiControls.java'),
         (BRIDGE_JAVA, java_file('bridge', 'UiControls', data, 'bridge'), 'bridge  UiControls.java'),
+        (CONSOLE_PALETTE, palette_file('console', theme), 'console Palette.java'),
+        (BRIDGE_PALETTE, palette_file('bridge', theme), 'bridge  Palette.java'),
     ]
 
 

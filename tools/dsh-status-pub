@@ -33,6 +33,39 @@ TASK_DIR = os.path.join(HOME, '.shortcuts', 'tasks')
 LOG_DIR = os.path.join(HOME, '.smoke')
 DANGEROUS = {'2_shutdown-dsh', '4_soft-restart-dsh', '6_hard-restart-dsh', '0_emergency-stop'}
 
+# ── 桥的状态：**只在这里判定一次**（2026-09-27）──
+# 为什么：这个文件同时喂三个消费者（控制台 App / 页面面板 / 小组件）。以前灯色由这里按
+# port+ok 算，而"桥：运行中/刚断/未响应/未安装"那行文字由 App 自己拿 bridge.state 算 ——
+# 可这里从来不写 state，于是 App 永远显示"桥：未知"，而灯是绿的。屏幕上就成了
+# 「绿灯 + 桥：未知」（用户 2026-09-27 实测抓到）。现在：state 在这里算一次，
+# lamps.bridge 由 state 推出来，谁都不许再自己算第二遍。
+BRIDGE_NOTE = os.path.join(HOME, '.dsh-bridge-state')   # dsh-bridge 写的状态记录：soft/full/running + 时间戳
+LAMP_OF_STATE = {
+    'running': 'green',    # 在听且真应答
+    'frozen':  'yellow',   # 端口在听却不应答（多半被系统冻住）
+    'soft':    'grey',     # 软停：进程还在，一条广播就能拉回
+    'silent':  'grey',     # 真停
+    'never':   'grey',     # 这台机器上从没见过它是活的
+}
+
+
+def bridge_note():
+    """dsh-bridge 的状态记录（只是记录，不是真相）：'soft' / 'full' / 'running' / 'none'。"""
+    try:
+        with open(BRIDGE_NOTE, encoding='utf-8') as f:
+            return (f.read().split() or ['none'])[0]
+    except Exception:
+        return 'none'
+
+
+def bridge_state(port, ok, note):
+    """桥的五态，唯一判定处（不看计时器，只看一次 ping + 状态记录）。"""
+    if port:
+        return 'running' if ok else 'frozen'
+    if note in (None, '', 'none'):
+        return 'never'
+    return 'soft' if note in ('soft', 'running') else 'silent'
+
 
 # ── global time budget (added 2026-09-27)──
 # Why: the console APK refresh-status waits only 25 seconds, while every step here carries its own timeout
@@ -137,6 +170,8 @@ def collect():
         br['ver'] = m.group(1) if m else None
         m2 = re.search(r'"paused":\s*(true|false)', pong)
         br['paused'] = (m2.group(1) == 'true') if m2 else None
+    br['note'] = bridge_note()
+    br['state'] = bridge_state(br['port'], br['ok'], br['note'])
     st['bridge'] = br
     # adb
     devs = []
@@ -150,10 +185,12 @@ def collect():
         'boot': os.path.exists(dsh_common.boot_lock()),
         'credentials': os.path.exists(os.path.join(HOME, '.dsh', '.credentials.yaml.lock')),
     }
-    # lamps (three-color summary the UI can use directly)
+    # lamps (three-colour summary the UI can use directly)
+    # DSH / adb 的灯由各自的事实推；桥的灯**必须**由上面那个 state 推 —— 灯和文字同源，
+    # 这是「绿灯 + 桥：未知」那次矛盾的根治办法。
     st['lamps'] = {
         'dsh': 'green' if st['dsh']['ok'] else ('yellow' if st['dsh']['port'] else 'red'),
-        'bridge': 'green' if st['bridge']['ok'] else ('yellow' if st['bridge']['port'] else 'red'),
+        'bridge': LAMP_OF_STATE[st['bridge']['state']],
         'adb': 'green' if st['adb']['ok'] else 'red',
     }
     st['tasks'] = tasks_state()
@@ -167,7 +204,7 @@ def text_of(st):
     L.append('─' * 34)
     L.append('DSH Web : %s  (port %s, HTTP %s)' % ('up' if st['dsh']['ok'] else 'down',
                                                    'open' if st['dsh']['port'] else 'closed', st['dsh']['http']))
-    L.append('DSH brg : %s  %s' % ('up' if st['bridge']['ok'] else ('port open, no answer' if st['bridge']['port'] else 'none'),
+    L.append('DSH brg : %s  %s' % (st['bridge']['state'],
                                    ('v' + st['bridge']['ver']) if st['bridge']['ver'] else ''))
     L.append('adb     : %s' % (st['adb']['devices'][0] if st['adb']['devices'] else 'not connected'))
     if st['locks']['boot'] or st['locks']['credentials']:
