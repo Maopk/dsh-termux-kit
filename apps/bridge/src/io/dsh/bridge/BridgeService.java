@@ -7,6 +7,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -589,12 +590,47 @@ public class BridgeService extends AccessibilityService {
         }
 
         if (a.equals("start")) {
-            String pkg = req.optString("value", "");
-            Intent it = getPackageManager().getLaunchIntentForPackage(pkg);
-            if (it == null) throw new Exception("App not found: " + pkg);
+            String v = req.optString("value", "").trim();
+            if (v.isEmpty()) throw new Exception("start needs value=<pkg> or value=<pkg>/<activity>");
+            int slash = v.indexOf('/');
+            String pkg = slash > 0 ? v.substring(0, slash) : v;
+            String before = currentPkg();
+            Intent it;
+            if (slash > 0) {
+                // Explicit component. Some apps only come up through their **activity-alias**: for
+                // Clash Meta a plain MAIN/LAUNCHER intent resolves and startActivity() reports no
+                // error, yet no window ever appears, while the alias brings the same task to the
+                // front (measured 2026-09-27 on V2463A: `start com.github.metacubex.clash.meta` did
+                // nothing, `am start -n <pkg>/com.github.kr328.clash.MainActivityAlias` worked).
+                String c = v.substring(slash + 1);
+                if (c.startsWith(".")) c = pkg + c;
+                it = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                        .setComponent(new ComponentName(pkg, c));
+            } else {
+                it = getPackageManager().getLaunchIntentForPackage(pkg);
+                if (it == null) {
+                    // Fallback for anything whose launcher entry is not a plain MAIN/LAUNCHER intent
+                    // (a WebAPK/PWA, or an app the <queries> block still hides).
+                    it = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(pkg);
+                    if (getPackageManager().resolveActivity(it, 0) == null)
+                        throw new Exception("App not found: " + pkg
+                                + " (no launchable activity; if it is an activity-alias, pass value=<pkg>/<activity>)");
+                }
+            }
             it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(it);
-            d.put("launched", pkg);
+            d.put("launched", v);
+            // Telling whether the window actually came up matters: a start can be accepted and still
+            // produce nothing visible, and a bare "launched" would then be a lie (that is exactly how
+            // this action looked "fixed" while doing nothing). Poll the foreground for up to ~1.2s.
+            String after = before;
+            for (int i = 0; i < 12 && !after.equals(pkg); i++) {
+                try { Thread.sleep(100); } catch (InterruptedException ie) { break; }
+                after = currentPkg();
+            }
+            d.put("foreground_before", before);
+            d.put("foreground", after);
+            d.put("on_top", after.equals(pkg));
             return d;
         }
 

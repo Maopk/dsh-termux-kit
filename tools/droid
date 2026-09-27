@@ -148,12 +148,24 @@ for n in root.iter('node'):
         m = re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', n.get('bounds') or '')
         if m:
             x1, y1, x2, y2 = map(int, m.groups())
-            print(f"{(x1+x2)//2} {(y1+y2)//2} {n.get('text','')[:30]}"); break
+            # The node height is printed as its own field: a node may report a full-width box with
+            # zero height, and its "center" is then a y that has nothing to do with where the text
+            # is. The DSH page is full of those (bounds [217,120][1338,120]), so tapping the center
+            # hits y=120 at the top of the screen. `--tap` refuses such a node instead of mistapping.
+            print(f"{(x1+x2)//2} {(y1+y2)//2} {y2-y1} {n.get('text','')[:30]}"); break
 PY
 )
     if [ -z "$COORD" ]; then echo "no element containing $KW"; exit 1; fi
-    echo "found: $COORD"
-    if [ -n "$TAP" ]; then set -- $COORD; adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input tap "$1" "$2" && echo "tapped ($1,$2)"; fi ;;
+    set -- $COORD; FX=$1; FY=$2; FH=$3; shift 3; FTXT="$*"
+    echo "found: $FX $FY (height $FH) $FTXT"
+    if [ -n "$TAP" ]; then
+      if [ "$FH" = 0 ]; then
+        echo "⚠ that node has zero height — its bounds box is empty, so tapping y=$FY would hit whatever is at the top of the screen, not this text" >&2
+        echo "  → then run:  droid ui $KW   and pick a node that is really on screen (the DSH page reports many zero-height nodes)" >&2
+        exit 1
+      fi
+      adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell input tap "$FX" "$FY" && echo "tapped ($FX,$FY)"
+    fi ;;
   apps)
     need_device || exit 1
     adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell pm list packages -3 | sed 's/package://' | { [ -n "${2:-}" ] && grep -i "$2" || cat; } ;;
@@ -163,10 +175,24 @@ PY
     adb ${DROID_SERIAL:+-s $DROID_SERIAL} install -r -d "$APK" 2>&1 | tail -4 ;;
   start)
     need_device || exit 1
-    T="${2:?package}"
+    T="${2:?package|package/Activity}"
     case "$T" in
-      */*) adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell am start -n "$T" 2>&1 | tail -3 ;;
-      *)   adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell monkey -p "$T" -c android.intent.category.LAUNCHER 1 2>&1 | tail -3 ;;
+      */*) adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell am start -n "$T" >/dev/null 2>&1 ;;
+      # No component given → let monkey resolve the launcher entry itself. That is what makes
+      # alias-only apps work (Clash Meta's launcher is an activity-alias, and a bare
+      # `-p <pkg>` MAIN/LAUNCHER intent is not always enough for it).
+      *)   adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell monkey -p "$T" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 ;;
+    esac
+    # Report whether the window really came up: "the command returned" is not "the app is in front".
+    # The bridge's own `start` looks successful while vivo silently drops it for any app that already
+    # has a task (measured 2026-09-27), whereas this adb path raises those same apps fine.
+    sleep 1.5
+    WANT="${T%%/*}"
+    NOW=$(adb ${DROID_SERIAL:+-s $DROID_SERIAL} shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus)
+    case "$NOW" in
+      *"$WANT"*) echo "✅ $WANT is in the foreground (via adb)" ;;
+      *) echo "⚠ asked for $WANT but the foreground is $(printf '%s' "$NOW" | sed 's/.*u0 //;s/ .*//')" >&2
+         echo "  (try an explicit component: droid start $WANT/<Activity>)" >&2; exit 1 ;;
     esac ;;
   cur)
     need_device || exit 1

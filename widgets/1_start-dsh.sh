@@ -36,10 +36,27 @@ restore_channels() {
 if [ "$DRY" = 1 ]; then printf '   · [dry] start the task executor dsh-tasksd (for the web buttons)\n'; ok "(dry-run)"
 elif tasksd_ensure; then okf "Task executor on 127.0.0.1:%s (the web buttons at the bottom right now work)" "$TASKSD_PORT"
 else warn "Task executor did not start (the web buttons will report that no token can be read)"; fi
-  if [ -x "$HOME_DIR/.local/bin/droid" ]; then
+  # adb: `droid conn` only dials the port recorded last time, which is exactly what fails after a
+  # Wi-Fi drop (Android clears the Wireless-debugging switch → no adbd to dial). droid-ensure does
+  # the whole ladder — read Wi-Fi state, borrow the **bridge** to flip that one system setting, find
+  # the port, connect, verify — and says precisely which rung failed. It sits here, and not in a step
+  # of its own, because this function runs on **both** paths ("already running" exits before the
+  # cold-start steps would ever reach it).
+  if [ -x "$HOME_DIR/.local/bin/droid-ensure" ]; then
+    if [ "$DRY" = 1 ]; then printf "$(dsh_msg '   · [dry] droid-ensure (make adb usable, or say exactly why not)\n')"; ok "(dry-run)"
+    elif AOUT=$(timeout 180 "$HOME_DIR/.local/bin/droid-ensure" 2>&1); then
+      printf '   ✔ %s\n' "$(printf '%s' "$AOUT" | tail -1)"
+    else
+      warn "adb is not usable right now (the bridge channel is unaffected):"
+      printf '%s\n' "$AOUT" | tail -3 | sed 's/^/     /'
+      warn "when Wi-Fi is back, tap the 8_ widget once (or run droid-ensure) to bring adb back"
+    fi
+  elif [ -x "$HOME_DIR/.local/bin/droid" ]; then
     if [ "$DRY" = 1 ]; then printf '   · [dry] droid conn\n'; ok "(dry-run)"
     elif timeout 25 "$HOME_DIR/.local/bin/droid" conn >/dev/null 2>&1; then ok "adb connected"
     else warn "adb not connected (Wi-Fi was off or the phone rebooted → turn on \"Wireless debugging\" first)"; fi
+  else
+    warn "droid-ensure is not installed — skipping the adb check"
   fi
   if [ "$DRY" = 1 ]; then printf '   · [dry] wake the bridge (with token) and ping it\n'; ok "(dry-run)"
   elif bridge_alive; then ok "DSH bridge is listening"

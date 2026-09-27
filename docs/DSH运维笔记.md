@@ -2158,3 +2158,85 @@ new Notification.Action.Builder(..., "Emergency stop", ...)
 
 **结论**：配方成立、工具按配方实现了、每步都有复核；但它**没法在你正用手机时完成** ——
 这不是 bug，是它不肯撒谎。要跑就给我 30 秒不碰手机。
+
+---
+
+## 十四、桥 2.19 + adb 通道收尾（2026-09-27 晚，都是真机实测）
+
+### 14.1 桥的 `start` 原来一直在骗人（三层问题，逐个查清）
+
+| 现象 | 真因 | 证据 |
+|---|---|---|
+| `droid-sock start com.android.chrome` → `❌ App not found` | 清单缺 `<queries>`，Android 11+ **包可见性**让 `getLaunchIntentForPackage()` 对一切返回 null | 补上 `<queries>`（MAIN/LAUNCHER，**不是** QUERY_ALL_PACKAGES）后不再报错 |
+| Clash 光给包名起不来 | 它的启动项是 **activity-alias**（`com.github.kr328.clash.MainActivityAlias`） | `am start -n <包>/<alias>` 能起 → `start` 现在支持 `value=<包>/<Activity>` |
+| 报 `launched` 但窗口没起来 | 桥没**复核**：`startActivity()` 被接受 ≠ 窗口出现 | `start` 现在轮询前台最多 1.2s，返回 `on_top` / `foreground`；`droid-sock` 据此给出 ✅ 或 ⚠ + 退出码 1 |
+
+**加 `REORDER_TASKS` 没用（实测否掉）**：2.19 装上后仍然拉不起 Chrome/Clash。
+决定性对照（同一时刻、同一 App）：
+
+```
+桥 start com.android.settings        （它当时没有后台任务）→ 窗口起来了 ✅
+桥 start com.android.chrome / clash  （都已有后台活任务）  → 接受、无窗口 ⚠
+am start（shell 身份）同样的包                              → 两个都起来 ✅
+dumpsys activity activities：目标 task 前后都是 visible=false，行数不变 → 系统静默丢弃
+```
+→ **结论（写进工具行为，不写成"也许"）：桥的 `start` 只能拉起"当前没在运行"的 App；
+已有后台任务的 App 必须走 adb。** 两条通道各自独立、各自说实话，不合并。
+
+### 14.2 adb 通道：从"记得住"改成"每次都确认"
+
+新增 `droid-ensure`（`# install: runtime` 标记，install-tools 会自动装到 `~/.local/bin`）：
+① 已可用就秒回（幂等，实测 0.17s）→ ② 桥没起来就唤醒 → ③ 读 `wifi_on/online/adb_wifi`
+→ ④ Wi-Fi 关着就**如实退出 3**（Android 10+ 不许 App 开 Wi-Fi）→ ⑤ 借桥写 `adb_wifi_enabled`
+→ ⑥ 端口：5555 → mDNS → 扫 30000-60999 → ⑦ `adb connect` + **用 `adb shell echo ok` 真复核**
+（`adb devices` 里有 device 不等于活的，僵尸条目也会列在那儿）→ ⑧ 顺手 `adb tcpip 5555` 固定端口。
+
+**自恢复演练（真做，不是写在文档里）**：桥把 `adb_wifi` 写 0 → disconnect → `droid-ensure`
+**1.6 秒**自己救回来（重新打开开关 + 重连 5555 + 真命令复核通过）。
+
+**修正一条旧记录**：组件 8 里写"写 `adb_wifi_enabled=1` 会被系统清回 0"——
+实测被清回的前提是 **`wifi_on=1` 但 `online=false`**（连着 Wi-Fi 却没有真网络）；
+只要真能上网，写进去是**保持**的（连读 3 次都是 1）。
+
+**`adb install` 在这台 vivo 上不是静默的**：`adb install -r` → `INSTALL_FAILED_ABORTED: User rejected permissions`
+（vivo 的「USB 安装」开关关着）。→ 装包仍必须走「超级守护」页 + 6 位密码那条路，
+`dsh-install-apk` 仍是唯一可用通道；不要承诺"adb 能静默装"。
+
+### 14.3 `dsh-install-apk` 的假失败（工具说谎，比装不上更坏）
+
+装桥 2.17 时：工具在 ⑤ 报 `「锁屏密码验证」 not found` 并 exit 1，
+而 `dumpsys package io.dsh.bridge` 读回来 **versionName 真的已经是 2.17** —— 装成功了，工具说失败。
+真因：**这一次系统自己就把身份验证过了**（刚验证过的会话），弹窗关掉、安装直接继续，
+于是既没有标题也没有键盘。修法：找不到标题时**先看屏幕上到底是什么**
+（已完成/正在安装 → 继续；键盘换了标题 → 直接输数字；键盘中途消失 → 同样按"已过验证"处理），
+只有"什么都没有"才判失败，并把屏幕文字打出来当证据。
+
+### 14.4 工具会悄悄漂移（已装检测 + 新工具标记）
+
+`~/.local/bin` 里的工具是手工 cp 的副本，2026-09-27 逐个 cmp 发现 5 个不一致、其中 4 个是安装位过期：
+`dsh-restart`（还跑着 i18n 改造前的 `warn "$VAR"`）、`dsh-tasksd`（白名单少 `11_update-apps`）、
+`i18n-build-table`（双引号旧生成器）、`dsh-screen-ui`（缺前台守卫）。
+→ `tools/install-tools`：默认同步（**原子替换**，不打断在跑的进程），`--check` 只报告不改（有差异退出 1），
+`# install: runtime` 标记让**新**工具也能被自动装上；已接进 `tests/selftest.sh`（并做过反向测试：
+故意制造漂移 → 判 FAIL；还原 → 判 PASS）。
+唯一有意跳过的是 `droid`：仓库那份英文、本机那份中文，**只有提示文字不同**（231 行一致）——
+正确解法是让它吃语言开关，而不是互相覆盖。
+
+### 14.5 另外两个坑
+
+- **`droid find --tap` 的零高度节点**：无障碍树里会出现"整行宽、高 0"的节点（DSH 页面 `[217,120][1338,120]`），
+  它的中心 y 与文字根本不在一个位置，照它点会点到**屏幕顶上 y=120**。→ 现在高 0 就**拒点**并说明原因。
+- **双引号里的裸反引号 = 命令替换**：我给提示文字去掉转义反斜杠，结果那行 `echo "… `droid ui $KW` …"`
+  当场把 `droid ui` 执行了一遍、把输出拼进了提示里。→ 提示文字里不要用反引号，直接写命令名。
+
+### 14.6 组件 1 的"点开就能用"
+
+组件 1 有两条路径，**"已在运行"那条在第 86 行就 `exit 0`**，所以 adb 自检放在独立的第⑧步里
+只会在冷启动时跑（我第一次就是这么放错的）。→ 放进两条路都会走的 `restore_channels()`，
+把原来的 `droid conn`（只拨上次记的端口，正是 Wi-Fi 掉线后必然失败的那种做法）换成 `droid-ensure`；
+失败**不算 DSH 故障**，并明说"桥通道不受影响"。
+
+### 14.7 本版产物
+
+桥 **2.19**（`<queries>` + 显式组件 + `on_top` 复核 + `REORDER_TASKS`）· 控制台 1.12 ·
+发行版 **v1.9** · SHA256SUMS 已随发行版发布。

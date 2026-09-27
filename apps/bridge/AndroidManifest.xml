@@ -9,8 +9,8 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="io.dsh.bridge"
-    android:versionCode="26"
-    android:versionName="2.16">
+    android:versionCode="29"
+    android:versionName="2.19">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -20,7 +20,31 @@
     <!-- Foreground service: keeps the bridge process from being frozen by system/vendor battery savers (once frozen it cannot even receive the wake broadcast) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Normal-level, granted at install, no user prompt, no new data access: without it a background
+         app may start an app that is not running, but **cannot bring an app that already has a task
+         to the front**. Measured 2026-09-27 on V2463A with 2.18:
+           · bridge start com.android.settings (no live task) → came to the front ✅
+           · bridge start com.android.chrome / clash.meta (live background task) → accepted, no window ⚠
+           · am start (shell identity) for those very same packages → both came to the front ✅
+         That split is exactly the task-reorder restriction. This permission does not widen what the
+         bridge can read; it only lets the `start` action actually raise the window it asked for. -->
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+
+    <!-- Package visibility (Android 11+). Without this block **every** getLaunchIntentForPackage()
+         returns null, so the `start` action answered "App not found" for every app — including Chrome
+         and Clash, which obviously have launcher icons. Measured 2026-09-27:
+           · bridge  `droid-sock start com.android.chrome`            → ❌ App not found
+           · adb      am start -a MAIN -c LAUNCHER -p com.android.chrome → works (shell identity is
+             not subject to package visibility)
+         This block makes exactly the launcher-visible apps visible — deliberately NOT the broad
+         QUERY_ALL_PACKAGES permission, which would expose the whole installed-app list. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:label="DSH Bridge"

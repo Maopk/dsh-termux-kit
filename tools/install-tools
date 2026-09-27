@@ -32,6 +32,19 @@ for f in "$SRC"/*; do
   case "$b" in __pycache__|*.bak-*|*.pyc) continue ;; esac
   [ -f "$f" ] || continue
   if [ ! -f "$DST/$b" ]; then
+    # A brand-new runtime tool cannot be detected by "it is already installed" — nothing is. Tools
+    # that must reach ~/.local/bin carry a `# install: runtime` marker in their header instead
+    # (without it, a new tool would silently stay in the repo and every call would miss it).
+    if grep -q '^# install: runtime' "$f" 2>/dev/null; then
+      if [ "$CHECK" = 1 ]; then
+        printf '   ⚠ %-20s 新工具，安装位还没有\n' "$b"; changed=$((changed+1))
+      elif cp "$f" "$DST/.$b.new" && chmod 755 "$DST/.$b.new" && mv -f "$DST/.$b.new" "$DST/$b"; then
+        printf '   + %-20s 新装\n' "$b"; changed=$((changed+1))
+      else
+        printf '   ✘ %-20s 安装失败\n' "$b" >&2; rm -f "$DST/.$b.new"
+      fi
+      continue
+    fi
     printf '   · %-20s 仓库有、本机未装（开发类工具就在仓库里跑）\n' "$b"; absent=$((absent+1)); continue
   fi
   if cmp -s "$f" "$DST/$b"; then same=$((same+1)); continue; fi

@@ -123,6 +123,19 @@ else
   rec FAIL "task ids agree" "$(printf '%s' "$IDCHK" | grep -E 'sends ids' | head -1)"
 fi
 
+# The tools live in the repo but are **copied** into ~/.local/bin, so the installed copy drifts from
+# the file under review and then a tool behaves differently from what the code says. Hit for real on
+# 2026-09-27: 4 of 5 compared tools were stale — dsh-tasksd was missing 11_update-apps (that panel
+# button would have been refused), i18n-build-table still had the double-quote generator, and
+# dsh-screen-ui had no "refuse to tap when Settings is not foreground" guard.
+# tools/install-tools --check is the contract here: exit 0 = every installed copy matches the repo
+# (a tool that is not installed at all does not count as drift — a fresh clone passes).
+if DRIFT=$("$HOME_DIR/dsh-termux-kit/tools/install-tools" --check 2>&1); then
+  rec PASS "installed tools match the repo" "$(printf '%s' "$DRIFT" | tail -1 | tr -d ' ')"
+else
+  rec FAIL "installed tools match the repo" "drifted: $(printf '%s' "$DRIFT" | sed -n 's/^   ⚠ \([^ ]*\).*/\1/p' | tr '\n' ' ')→ run tools/install-tools"
+fi
+
 # ── L2: --dry-run ──
 line "[L2] --dry-run full-flow rehearsal"
 for f in "$T"/*.sh; do

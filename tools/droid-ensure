@@ -1,0 +1,152 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# install: runtime
+# droid-ensure —— 把 adb 弄到「能用」，或者明确告诉你为什么不能（adb 通道自己的工具，与桥分开）
+#
+# 为什么要有它：adb 是**会自己坏**的通道，而且坏法不止一种，用户只看到"点开没用"：
+#   · Wi-Fi 一掉，Android 会把「无线调试」清回 0 → adbd 根本不在监听（即使 Wi-Fi 又回来了）
+#   · 端口每次可能变（重启后不再固定在 5555）→ 用记下的端口连必然失败
+#   · 闲置、切网、系统回收都会掉连接，`adb devices` 里留一条 offline 的僵尸条目
+# 所以「点开就能用」不能靠记忆，得有一条命令每次都重新确认并修好。
+#
+# ⚠ 通道边界（用户要求严格分开，不许含糊）：本工具属于 **adb 通道**。
+#   它只在「打开无线调试开关」这一步借用桥（因为这个开关是 Settings.Global，需要
+#   WRITE_SECURE_SETTINGS，只有桥有），并会明说"这一步是桥做的"。桥没起来也能跑，
+#   只是那一步做不了 —— 那时它会告诉你去哪手动打开。
+#
+# Usage: droid-ensure [--quiet] [--no-pin]
+#   退出码: 0 可用 · 3 Wi-Fi 没开（只有你能开）· 4 无线调试开关写不进去 · 1 找不到 adbd 端口
+set -u
+SOCK="$HOME/.local/bin/droid-sock"
+QUIET=0; PIN=1
+for a in "$@"; do case "$a" in --quiet) QUIET=1 ;; --no-pin) PIN=0 ;; esac; done
+T0=$(date +%s)
+
+log()  { [ "$QUIET" = 1 ] || printf '%s\n' "$*"; }
+ok()   { printf '✔ %s\n' "$*"; }
+warn() { printf '⚠ %s\n' "$*"; }
+bad()  { printf '✘ %s\n' "$*" >&2; }
+
+adb_() { adb ${DROID_SERIAL:+-s $DROID_SERIAL} "$@"; }
+
+# 真连上了吗：**不能只看 `adb devices` 里有 device** —— 僵尸/半死条目也在那儿列着。
+# 判据是"能跑一条 shell 并拿到回话"。
+adb_usable() {
+  local s out
+  s=$(adb devices 2>/dev/null | awk 'NR>1 && $2=="device"{print $1; exit}')
+  [ -n "$s" ] || return 1
+  export DROID_SERIAL="$s"
+  out=$(timeout 15 adb -s "$s" shell echo ok 2>/dev/null | tr -d '\r')
+  [ "$out" = "ok" ]
+}
+
+if adb_usable; then
+  ok "adb 已经可用（$DROID_SERIAL，$(timeout 15 adb -s "$DROID_SERIAL" shell getprop ro.product.model 2>/dev/null | tr -d '\r')）"
+  exit 0
+fi
+
+# ── 桥：只为了按「无线调试」那个开关 ──
+bridge_up() { timeout 12 "$SOCK" ping --fast >/dev/null 2>&1; }
+if ! bridge_up; then
+  log "· 桥没在听，发一次唤醒（带 token 的广播；不带 token 的广播在服务停止后会被忽略）"
+  timeout 25 am start -n io.dsh.bridge/.MainActivity >/dev/null 2>&1
+  for _ in $(seq 1 20); do bridge_up && break; sleep 1; done
+fi
+
+NET=""; WIFI=""; ONLINE=""; ADBW=""
+if bridge_up; then
+  NET=$(timeout 12 "$SOCK" netstate 2>/dev/null || true)
+  WIFI=$(printf '%s' "$NET"   | grep -oE '"wifi_on": *-?[0-9]+'   | grep -oE '\-?[0-9]+$')
+  ONLINE=$(printf '%s' "$NET" | grep -oE '"online": *(true|false)'| grep -oE '(true|false)$')
+  ADBW=$(printf '%s' "$NET"   | grep -oE '"adb_wifi": *-?[0-9]+'  | grep -oE '\-?[0-9]+$')
+  log "· 网络（桥读的）: wifi_on=${WIFI:-?} online=${ONLINE:-?} adb_wifi=${ADBW:-?}"
+else
+  warn "桥没起来 —— 「打开无线调试」那一步做不了（那一步只能由桥写系统设置）"
+fi
+
+if [ "${WIFI:-}" = "0" ]; then
+  bad "Wi-Fi 是关的：无线调试依赖可用 Wi-Fi，Android 10+ 也不允许 App 替你开 Wi-Fi"
+  printf '   → 你自己打开 Wi-Fi（连上一个热点，不只是拨开关），然后再跑一次 droid-ensure\n' >&2
+  exit 3
+fi
+
+if [ "${ADBW:-}" != "1" ]; then
+  if bridge_up; then
+    log "· 借桥把「无线调试」开关打开（这一步是桥做的，不是 adb）"
+    timeout 12 "$SOCK" adbwifi 1 >/dev/null 2>&1
+    for _ in 1 2 3; do
+      sleep 1
+      ADBW=$(timeout 12 "$SOCK" netstate 2>/dev/null | grep -oE '"adb_wifi": *-?[0-9]+' | grep -oE '\-?[0-9]+$')
+      [ "$ADBW" = "1" ] && break
+    done
+  fi
+  if [ "${ADBW:-}" != "1" ]; then
+    bad "「无线调试」开关写不进去（读回还是 ${ADBW:-?}）"
+    # 实测（2026-09-27）：Wi-Fi 真的能上网时写进去**会保持**；被系统清回 0 的是
+    # "wifi_on=1 但 online=false"（连着 Wi-Fi 却没有真实网络）这种情形。
+    if [ "${ONLINE:-}" = "true" ]; then
+      printf '   → 网络是通的，所以不是网络问题：这个 ROM 只认「开发者选项 → 无线调试」里手动的那个开关\n' >&2
+      printf '     去设置里打开一次（约 20 秒），之后 droid-ensure 就能自动维持了\n' >&2
+    else
+      printf '   → 网不通（online=%s）：无线调试要的是"可用 Wi-Fi 网络"，请先连上一个热点\n' "${ONLINE:-?}" >&2
+    fi
+    exit 4
+  fi
+  ok "「无线调试」已打开（借桥写的）"
+fi
+
+# ── 找 adbd 端口：固定 5555 优先（`adb tcpip 5555` 之后 adbd 就在那儿，且不在扫描区间里）──
+port_open() { (exec 3<>/dev/tcp/127.0.0.1/"$1") 2>/dev/null; }
+CANDS=""
+port_open 5555 && CANDS="5555"
+if [ -z "$CANDS" ]; then
+  P=$(timeout 20 "$HOME/.local/bin/droid" discover 2>/dev/null | grep -oE 'port=[0-9]+' | head -1 | cut -d= -f2)
+  [ -n "$P" ] && { CANDS="$P"; log "· mDNS 发现端口 $P"; }
+fi
+if [ -z "$CANDS" ]; then
+  log "· mDNS 没结果，本地扫 30000-60999（adbd 常在回环上监听）"
+  CANDS=$(python3 - <<'PY' 2>/dev/null
+import socket, concurrent.futures
+def probe(x):
+    s = socket.socket(); s.settimeout(0.12)
+    try:
+        s.connect(('127.0.0.1', x)); s.close(); return x
+    except Exception:
+        return None
+found = []
+with concurrent.futures.ThreadPoolExecutor(max_workers=500) as ex:
+    for r in ex.map(probe, range(30000, 61000), chunksize=128):
+        if r: found.append(r)
+print(' '.join(str(x) for x in found))
+PY
+)
+fi
+
+CONNECTED=0
+for p in $CANDS 5555; do
+  timeout 15 adb connect "127.0.0.1:$p" >/dev/null 2>&1
+  if adb_usable; then ok "adb 已连上 127.0.0.1:$p"; CONNECTED=1; PORT_USED="$p"; break; fi
+  adb disconnect "127.0.0.1:$p" >/dev/null 2>&1   # 不是 adbd 的端口会留一条 offline 僵尸条目
+done
+if [ "$CONNECTED" != 1 ]; then
+  bad "找到了候选端口 [${CANDS:-无}] 但都连不上 —— adbd 没真正起来（开关是 1 也没用）"
+  printf '   → 开发者选项 → 无线调试 → 关掉再打开一次，然后重跑 droid-ensure\n' >&2
+  exit 1
+fi
+
+# ── 把端口固定到 5555：下次连不用再扫、也不怕重启后端口变 ──
+# 代价是 adbd 会重启一次（连接会断），所以固定完必须重新连一次并复核。
+if [ "$PIN" = 1 ] && [ "${PORT_USED:-}" != "5555" ]; then
+  log "· 把 adbd 固定到 5555（会断一下，随后自动重连）"
+  timeout 20 adb -s "$DROID_SERIAL" tcpip 5555 >/dev/null 2>&1
+  for _ in $(seq 1 10); do sleep 1; port_open 5555 && break; done
+  if port_open 5555; then
+    timeout 15 adb connect 127.0.0.1:5555 >/dev/null 2>&1
+    if adb_usable; then ok "已固定到 5555 并重连成功"; else warn "5555 上不去，仍用 $PORT_USED"; fi
+  else
+    warn "5555 没起来，仍用 $PORT_USED（不影响当前使用）"
+  fi
+fi
+
+MODEL=$(timeout 15 adb -s "$DROID_SERIAL" shell getprop ro.product.model 2>/dev/null | tr -d '\r')
+ok "adb 就绪：$DROID_SERIAL · $MODEL（耗时 $(( $(date +%s) - T0 ))s）"
+exit 0
