@@ -566,6 +566,10 @@ public class MainActivity extends Activity {
             choices.addView(cb, cbp);
         }
         box.addView(row);
+        // ⚠ 这一行以前漏了：`choices` 容器连三个按钮建好之后**从来没被 addView 到任何地方**，
+        // 于是「语言」只剩标题和副标题，选项凭空消失（用户 2026-09-28 截图报的正是这个）。
+        // 单独占一行而不是塞进 row 右边：三个按钮 + 一长串副标题挤在一行会被压没。
+        box.addView(choices);
         return box;
     }
 

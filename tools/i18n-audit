@@ -450,6 +450,37 @@ def audit_panel_i18n():
         bad('面板里又出现了内联的中文字面量（lang === \'zh\' ? \'中文\' / {zh:…}）—— 文案必须进 i18n 表')
 
 
+def audit_orphan_views():
+    """建好却从没挂到界面上的 View —— 表现是"控件凭空消失"。
+
+    2026-09-28 真踩：控制台「语言」那一行建了 `choices` 容器、把三个按钮塞进去，**却忘了 addView**，
+    界面上就只剩标题和副标题（用户截图："只有语言没有选项"）。语法检查、文案审计、APK 自检全过 ——
+    只有"这个东西到底有没有交出去"才查得出来。
+
+    判定（够窄，误报为零）：只认 View 类型；声明之后，这个名字必须**作为参数/返回值/数组元素**出现过
+    一次（`addView(x)`、`setView(x)`、`layoutAll(root, …)`、`return x;`、`new View[]{x}` 都算），
+    如果之后它只以 `x.方法()` 的形式出现（自己配置自己，却没人拿它），就是漏挂了。
+    """
+    ty = (r'(?:LinearLayout|FrameLayout|RelativeLayout|ScrollView|HorizontalScrollView|TextView|'
+          r'Button|Switch|ProgressBar|EditText|ImageView|Space|View)')
+    found = []
+    for label, d in (('console', CONSOLE_SRC), ('bridge', BRIDGE_SRC)):
+        for name in sorted(os.listdir(d)):
+            if not name.endswith('.java') or name in ('Lang.java', 'UiControls.java', 'Palette.java'):
+                continue
+            src = strip_comments(io.open(os.path.join(d, name), encoding='utf-8').read())
+            for m in re.finditer(r'(?:^|[;{(]\s*)(?:final\s+)?(?:[\w.]+\.)?(%s)\s+(\w+)\s*=\s*new\s+' % ty, src):
+                var = m.group(2)
+                after = src[m.end():]
+                if re.search(r'(?<![\w.])%s(?![\w.])' % re.escape(var), after):
+                    continue          # 作为参数/返回值交出去了 ✓
+                found.append('%s/%s:%d %s' % (label, name, src[:m.start()].count(chr(10)) + 1, var))
+    if found:
+        bad('这些 View 建好却没挂到任何地方（界面上会凭空少东西）：%s' % ', '.join(found[:6]))
+    else:
+        ok('两个 App 里没有"建好却没挂上去"的 View（每个容器都真的交进了布局）')
+
+
 def audit_titles(zh, data):
     rows = []   # (来源, 中文界面文字)
     for c in data['cats']:
@@ -591,6 +622,7 @@ def main():
     audit_state_maps()
     audit_counts(data)
     audit_panel_i18n()
+    audit_orphan_views()
     audit_titles(zh, data)
 
     if not quiet:
