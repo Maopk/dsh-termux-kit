@@ -25,7 +25,7 @@ if [ "$DRY" != 1 ]; then
     trap 'boot_lock_release' EXIT
   else
     bad "Another start/restart is already in progress (lock held by pid $(boot_lock_owner))"
-    printf '   Wait for it to finish before tapping again; if you are sure nothing is running, delete %s\n' "$BOOT_LOCK_DIR"
+    printf "$(dsh_msg '   Wait for it to finish before tapping again; if you are sure nothing is running, delete %s\n')" "$BOOT_LOCK_DIR"
     die "A startup is already running (double-tap protection)"
   fi
 fi
@@ -83,7 +83,7 @@ if [ "$CLOSE_BROWSER" = 1 ]; then
   #   Termux am has no force-stop subcommand, and pkill can only kill processes of its own UID, so it cannot touch a window owned by Chrome.
   #   Now it is all delegated to dsh-close-window (adb first, and without adb it sends keys through the accessibility bridge).
   if [ "$DRY" = 1 ]; then
-    printf '   · [dry] dsh-close-window\n'; ok "(dry-run)"
+    printf "$(dsh_msg '   · [dry] dsh-close-window\n')"; ok "(dry-run)"
   elif [ -x "$HOME_DIR/.local/bin/dsh-close-window" ] && "$HOME_DIR/.local/bin/dsh-close-window"; then
     ok "Browser / PWA window closed"
   else
@@ -103,10 +103,10 @@ fi
 
 step "⑧ Readiness check (wait for the token line + 200 after redirects, no longer port-only)"
 if [ "$DRY" = 1 ]; then
-  printf '   · [dry] wait for the token line + curl returning 200 after redirects (up to 120s)\n'; ok "(dry-run)"
+  printf "$(dsh_msg '   · [dry] wait for the token line + curl returning 200 after redirects (up to 120s)\n')"; ok "(dry-run)"
 elif dsh_start_and_wait "$LOG" 120; then
   ok "Startup complete"
-  printf '   · Just refresh the browser page (the login cookie survives a restart)\n'
+  printf "$(dsh_msg '   · Just refresh the browser page (the login cookie survives a restart)\n')"
 else
   rc=$?
   [ "$rc" = 3 ] && die "Another startup is already in progress (not a failure, just double-tap protection) — wait for it to finish"

@@ -77,7 +77,11 @@ def port_open(p, timeout=1.2):
 def tasks_state():
     out = {}
     try:
-        names = sorted(n[:-3] for n in os.listdir(TASK_DIR) if n.endswith('.sh'))
+        # Only canonical task names (e.g. 5_cleanup-dsh). The Chinese-named forwarder scripts that
+        # keep old home-screen shortcuts alive are NOT tasks, and used to double every list to 21 entries.
+        _CANON = re.compile(r'^[0-9]{1,2}_[a-z0-9-]+$')
+        names = sorted(n[:-3] for n in os.listdir(TASK_DIR)
+                       if n.endswith('.sh') and _CANON.match(n[:-3]))
     except Exception:
         names = []
     brief = '--brief' in sys.argv     # for the console APK: skip the per-task tail (those 12 lines are most of the payload)
@@ -90,8 +94,8 @@ def tasks_state():
                 with open(p, 'rb') as f:
                     f.seek(max(0, os.path.getsize(p) - 4000))
                     tail = f.read().decode('utf-8', 'replace')
-                res = _TERM = re.compile(r'(?:\[(?P<n1>[^\]]{1,60})\]\s*(?P<s1>done|failed|skipped)\b|【(?P<n2>[^】]{1,60})】\s*(?P<s2>完成|失败|未执行))')
-                _NORM = {'完成': 'done', '失败': 'failed', '未执行': 'skipped'}
+                res = _TERM = re.compile(r'(?:\[(?P<n1>[^\]]{1,60})\]\s*(?P<s1>done|failed|skipped|not executed)\b|【(?P<n2>[^】]{1,60})】\s*(?P<s2>完成|失败|未执行))')
+                _NORM = {'完成': 'done', '失败': 'failed', '未执行': 'skipped', 'not executed': 'skipped'}
                 res = [_NORM.get(m.group('s2') or m.group('s1'), m.group('s1')) for m in _TERM.finditer(tail)]
                 stamps = re.findall(r'^===== ([\d\-]+ [\d:]+)', tail, re.M)
                 item['last'] = res[-1] if res else None

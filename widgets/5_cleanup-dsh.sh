@@ -70,7 +70,7 @@ OTHER=$((TOTAL-MINE))
 if [ "$MINE" -gt 0 ]; then
   OLD=$(printf '%s\n' "$MINE_LIST" | while read -r f; do [ -n "$f" ] && [ -n "$(find "$f" -maxdepth 0 -mtime +7 2>/dev/null)" ] && printf '%s\n' "$f"; done | grep -c . || true)
   if [ "$OLD" -gt 0 ]; then
-    printf '%s\n' "$MINE_LIST" | while read -r f; do
+    printf "$(dsh_msg '%s\n')" "$MINE_LIST" | while read -r f; do
       [ -n "$f" ] && [ -n "$(find "$f" -maxdepth 0 -mtime +7 2>/dev/null)" ] && run "rm -f \"$f\""
     done
     ok "Deleted $OLD of them by the 7-day rule"
@@ -78,7 +78,7 @@ if [ "$MINE" -gt 0 ]; then
   LEFT_LIST="$(mine_list)"
   LEFT=$(printf '%s\n' "$LEFT_LIST" | grep -c . || true)
   if [ "$LEFT" -gt "$KEEP_IMG" ]; then
-    printf '%s\n' "$LEFT_LIST" | while read -r f; do
+    printf "$(dsh_msg '%s\n')" "$LEFT_LIST" | while read -r f; do
       [ -n "$f" ] && stat -c '%Y %n' "$f" 2>/dev/null
     done | sort -rn | tail -n +$((KEEP_IMG+1)) | cut -d' ' -f2- | while read -r f; do
       run "rm -f \"$f\""
@@ -161,8 +161,8 @@ else ok "Skipping the pnpm cache prune (keeping it makes the next plugin install
 step "⑦ Result"
 AFTER=$(du -sm "$DSH_DIR" 2>/dev/null | cut -f1 || echo 0)
 SMOKE_AFTER=$(du -sm "$LOGS" 2>/dev/null | cut -f1 || echo 0)
-printf '   Download/dsh: %sMB → %sMB (freed %sMB)\n' "$BEFORE" "$AFTER" "$((BEFORE-AFTER))"
-printf '   ~/.smoke    : %sMB → %sMB (freed %sMB)\n' "$SMOKE_BEFORE" "$SMOKE_AFTER" "$((SMOKE_BEFORE-SMOKE_AFTER))"
+printf "$(dsh_msg '   Download/dsh: %sMB → %sMB (freed %sMB)\n')" "$BEFORE" "$AFTER" "$((BEFORE-AFTER))"
+printf "$(dsh_msg '   ~/.smoke    : %sMB → %sMB (freed %sMB)\n')" "$SMOKE_BEFORE" "$SMOKE_AFTER" "$((SMOKE_BEFORE-SMOKE_AFTER))"
 # 2026-09-27 added: spell out "what the backup directory actually holds" — it used to report only "N backups",
 # and seeing 1.2G refuse to shrink made you think cleanup was broken, when in fact the full snapshot kept for phone migration was holding it.
 STATE_N=$(ls -1 "$BAKDIR"/dsh-state-*.tar.gz 2>/dev/null | wc -l)
@@ -172,7 +172,7 @@ BAK_H=$(du -sh "$BAKDIR" 2>/dev/null | cut -f1)
 MINE_LEFT=$(mine_list | grep -c . || true)
 ALL_LEFT=$(find "$IMGDIR" -maxdepth 1 -type f ! -name '.*' 2>/dev/null | wc -l)
 OTHER_LEFT=$((ALL_LEFT-MINE_LEFT))
-printf '   Backup dir %s: state bundles %s (max 5) + full snapshots %s (%s)\n' "${BAK_H:-?}" "$STATE_N" "$FS_N" "${FS_H:-none}"
-printf '     ↳ a full snapshot is the whole-device archive for migrating or reinstalling (备份/系统备份/dsh-full-*.tar.zst); delete it if it takes too much room, or add --keep-full 0\n'
-printf '   My screenshots %s (cap %s) / your own images %s (untouched)\n' "$MINE_LEFT" "$KEEP_IMG" "$OTHER_LEFT"
+printf "$(dsh_msg '   Backup dir %s: state bundles %s (max 5) + full snapshots %s (%s)\n')" "${BAK_H:-?}" "$STATE_N" "$FS_N" "${FS_H:-none}"
+printf "$(dsh_msg '     ↳ a full snapshot is the whole-device archive for migrating or reinstalling (备份/系统备份/dsh-full-*.tar.zst); delete it if it takes too much room, or add --keep-full 0\n')"
+printf "$(dsh_msg '   My screenshots %s (cap %s) / your own images %s (untouched)\n')" "$MINE_LEFT" "$KEEP_IMG" "$OTHER_LEFT"
 done_

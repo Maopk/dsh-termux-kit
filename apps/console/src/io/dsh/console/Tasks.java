@@ -67,6 +67,9 @@ final class Tasks {
         // Note: "password access" (whether the AI may use the user's lock-screen password to pass
         // identity checks) is **a switch, not a button**, drawn under the maintenance section (see
         // MainActivity.buildAuthRow) — it governs more than package installs.
+        // One-tap network first aid (the recurring "foreign sites dead" failure on this phone).
+        new T("10_net-fix", LINK, "Network first aid", "Decides whether the Clash core is stopped or the generated config went bad, then repairs it (clash-doctor --fix)", false, null, 240),
+
         new T("3_backup-dsh", CARE, "Backup", "Packs and verifies the archive (zstd -t + entry count)", false, null, 420),
         new T("5_cleanup-dsh", CARE, "Cleanup", "Deletes only my own artifacts; never touches config or notes", false, null, 420),
 

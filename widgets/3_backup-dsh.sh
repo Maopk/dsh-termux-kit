@@ -39,7 +39,7 @@ if [ "$TOT" -gt 200 ]; then
 fi
 
 step "④ Report"
-printf '   Newest: %s\n' "$NEW"
-printf '   Directory: %s\n' "$BAKDIR"
-printf '   %s archives, using %s\n' "$(ls -1 "$BAKDIR"/dsh-state-*.tar.gz 2>/dev/null | wc -l)" "$(du -sh "$BAKDIR" 2>/dev/null | cut -f1)"
+printf "$(dsh_msg '   Newest: %s\n')" "$NEW"
+printf "$(dsh_msg '   Directory: %s\n')" "$BAKDIR"
+printf "$(dsh_msg '   %s archives, using %s\n')" "$(ls -1 "$BAKDIR"/dsh-state-*.tar.gz 2>/dev/null | wc -l)" "$(du -sh "$BAKDIR" 2>/dev/null | cut -f1)"
 done_

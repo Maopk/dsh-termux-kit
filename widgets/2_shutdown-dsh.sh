@@ -28,7 +28,7 @@ if [ "$DRY" != 1 ]; then
     trap 'boot_lock_release' EXIT
   else
     bad "Another start/restart is already in progress (lock held by pid $(boot_lock_owner))"
-    printf '   Wait for it to finish before tapping again; if you are sure nothing is running, delete %s\n' "$BOOT_LOCK_DIR"
+    printf "$(dsh_msg '   Wait for it to finish before tapping again; if you are sure nothing is running, delete %s\n')" "$BOOT_LOCK_DIR"
     die "A startup is already running (double-tap protection)"
   fi
 fi
@@ -70,7 +70,7 @@ step "⑥ Close the DSH window (**must come before stopping the bridge**: withou
 #   Now: with adb it uses adb force-stop; without adb it goes through the bridge (bring the window to the front + press Back until it disappears).
 if [ "$KEEP_BROWSER" = 0 ]; then
   if [ "$DRY" = 1 ]; then
-    printf '   · [dry] dsh-close-window (adb first, otherwise key events through the bridge)\n'; ok "(dry-run)"
+    printf "$(dsh_msg '   · [dry] dsh-close-window (adb first, otherwise key events through the bridge)\n')"; ok "(dry-run)"
   elif [ -x "$HOME_DIR/.local/bin/dsh-close-window" ] && "$HOME_DIR/.local/bin/dsh-close-window"; then
     ok "Browser / PWA window closed"
   else
@@ -92,7 +92,7 @@ step "⑦ Shut down the AI control channel (DSH bridge)"
 #     So it is no longer the default; use it only when you explicitly want it "pulled out completely".
 if [ "$KEEP_BRIDGE" = 0 ]; then
   if [ "$DRY" = 1 ]; then
-    printf '   · [dry] droid-sock %s\n' "$([ "$FULL_STOP" = 1 ] && echo 'sleep (real stop)' || echo 'stop (soft stop, no self-recovery since v1.8)')"
+    printf "$(dsh_msg '   · [dry] droid-sock %s\n')" "$([ "$FULL_STOP" = 1 ] && echo 'sleep (real stop)' || echo 'stop (soft stop, no self-recovery since v1.8)')"
     ok "(dry-run)"
   else
     CAPS=$(timeout 12 "$HOME_DIR/.local/bin/droid-sock" caps 2>/dev/null || true)
@@ -141,7 +141,7 @@ if need termux-wake-unlock; then
   else termux-wake-unlock 2>/dev/null && ok "Wakelock released (no point staying resident once DSH is off)" || warn "Failed to release the wakelock (it may never have been taken)"; fi
 fi
 if [ "$KEEP_TERMUX" = 0 ]; then
-  printf '   · Closing Termux in 3 seconds… (--close-termux)\n'; [ "$DRY" = 1 ] || sleep 3
+  printf "$(dsh_msg '   · Closing Termux in 3 seconds… (--close-termux)\n')"; [ "$DRY" = 1 ] || sleep 3
   if [ "$DRY" = 1 ]; then printf '   · [dry] kill the Termux app process (cmdline=com.termux)\n'
   else
     TPID=$(for p in /proc/[0-9]*; do c=$(tr -d '\0' < "$p/cmdline" 2>/dev/null); [ "$c" = "com.termux" ] && basename "$p"; done | head -1)
@@ -149,6 +149,6 @@ if [ "$KEEP_TERMUX" = 0 ]; then
   fi
 else
   ok "Termux kept (default): the Console app stays available; DSH/bridge/task executor are all stopped, so it barely uses power"
-  printf '     (to close Termux too: add --close-termux)\n'
+  printf "$(dsh_msg '     (to close Termux too: add --close-termux)\n')"
 fi
 done_

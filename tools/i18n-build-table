@@ -109,7 +109,22 @@ def main():
     if '--write' not in a:
         print(block); print(f'# {len(allpairs)} entries', file=sys.stderr); return 0
     src = open(TARGET, encoding='utf-8').read()
-    src = re.sub(r'declare -A DSH_ZH=\(.*?\n\)\n', block, src, count=1, flags=re.S)
+    # MERGE with what is already there: entries added by hand (or for messages the diff cannot pair)
+    # must survive a regeneration.
+    import re as _re
+    cur = {}
+    for _m in _re.finditer(r"^\\s*\\[((?:'(?:[^']|'\\\\'')*')|(?:\"(?:[^\"]|\\\\.)*\"))\\]=((?:'(?:[^']|'\\\\'')*')|(?:\"(?:[^\"]|\\\\.)*\"))\\s*$", src, _re.M):
+        def _unq(t):
+            t = t.strip()
+            return t[1:-1].replace("'\\\\''", "'") if t.startswith("'") else t[1:-1].replace('\\\\"', '"').replace('\\\\\\\\', '\\\\')
+        cur[_unq(_m.group(1))] = _unq(_m.group(2))
+    for _k, _v in allpairs.items():
+        cur.setdefault(_k, _v)
+    def _sq(x): return "'" + x.replace("'", "'\\\\''") + "'"
+    block = 'declare -A DSH_ZH=(\\n' + '\\n'.join('  [%s]=%s' % (_sq(k), _sq(v)) for k, v in sorted(cur.items())) + '\\n)\\n'
+    # lambda replacement: re.sub would interpret the \n escapes inside `block` and turn them
+    # back into real newlines — that single line silently broke every multi-line entry.
+    src = re.sub(r'declare -A DSH_ZH=\(.*?\n\)\n', lambda m: block, src, count=1, flags=re.S)
     open(TARGET, 'w', encoding='utf-8').write(src)
     chk = subprocess.run(['bash', '-n', TARGET], capture_output=True, text=True)
     if chk.returncode != 0:

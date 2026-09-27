@@ -55,7 +55,7 @@ else warn "No termux-wake-lock command"; fi
 step "② Check whether something already serves $DSH_PORT"
 if port_open "$DSH_PORT"; then
   ok "A service is already on $DSH_PORT"
-  printf '   · If the page says "cannot read": pull to refresh first (the browser login cookie survives a reboot, no need for a new URL)\n'
+  printf "$(dsh_msg '   · If the page says "cannot read": pull to refresh first (the browser login cookie survives a reboot, no need for a new URL)\n')"
 
   step "③ Get a **truly usable** auth URL (a stale token gives 401, a half-start gives 404, neither can be opened directly)"
   U=""
@@ -84,13 +84,13 @@ fi
 
 step "③ Boot mutex (keeps a double tap from starting two instances that fight over the lock)"
 if [ "$DRY" = 1 ]; then
-  printf '   · [dry] mkdir %s\n' "$BOOT_LOCK_DIR"; ok "(dry-run)"
+  printf "$(dsh_msg '   · [dry] mkdir %s\n')" "$BOOT_LOCK_DIR"; ok "(dry-run)"
 elif boot_lock_acquire; then
   ok "Boot lock acquired ($BOOT_LOCK_DIR)"
   trap 'boot_lock_release' EXIT
 else
   bad "Another startup is already in progress (lock held by pid $(boot_lock_owner))"
-  printf '   Wait for it to finish before tapping this widget again; if you are sure nothing is starting, delete %s\n' "$BOOT_LOCK_DIR"
+  printf "$(dsh_msg '   Wait for it to finish before tapping this widget again; if you are sure nothing is starting, delete %s\n')" "$BOOT_LOCK_DIR"
   die "A startup is already running"
 fi
 
@@ -110,8 +110,8 @@ ok "Boot log reset"
 
 step "⑥ Start dsh web in the background (detached from the widget session) and wait for **true readiness**"
 if [ "$DRY" = 1 ]; then
-  printf '   · [dry] setsid nohup dsh web --port %s >> %s 2>&1 &\n' "$DSH_PORT" "$LOG"
-  printf '   · [dry] wait for the token line + curl returning 200 after redirects (up to 120s)\n'
+  printf "$(dsh_msg '   · [dry] setsid nohup dsh web --port %s >> %s 2>&1 &\n')" "$DSH_PORT" "$LOG"
+  printf "$(dsh_msg '   · [dry] wait for the token line + curl returning 200 after redirects (up to 120s)\n')"
   ok "(dry-run)"
 elif dsh_start_and_wait "$LOG" 120; then
   ok "Startup complete"

@@ -56,7 +56,7 @@ import java.util.List;
  *   · The log is never blank: with no entries it says exactly where to tap.
  */
 public class MainActivity extends Activity {
-    private static final String VER = "v1.6";
+    private static final String VER = "v1.8";
     private static final int TIMEOUT_S = 45;
     private static final int MAX_HISTORY = 60;
 
@@ -102,7 +102,7 @@ public class MainActivity extends Activity {
         @Override public void run() {
             if (!pending) return;
             int s = (int) ((System.currentTimeMillis() - pendingSince) / 1000);
-            busyText.setText(Lang.t("Running: ") + pendingLabel + "　waited " + s + "s (usually ≤" + pendingWaitS + "s)");
+            busyText.setText(Lang.t("Running: ") + pendingLabel + Lang.t("　waited ") + s + Lang.t("s (usually ≤") + pendingWaitS + Lang.t("s)"));
             if (s >= pendingWaitS) {
                 // A query (refresh status / auth query) timed out: resend once automatically first — a phone
                 // Lang.t("being briefly busy") is common. Measured: during a big backup the load hit 7 and the app's
@@ -170,18 +170,18 @@ public class MainActivity extends Activity {
                     //   2026-09-27 00:17). Auto refresh stays silent so the log is not flooded.
                     if (!silent) {
                         pushHistory("[" + now() + "] " + (code == 0 ? "✅ " : "⚠ ") + statusLabel
-                                + " completed (exit=" + code + (ms > 0 ? ", took " + (ms / 1000.0) + "s" : "")
+                                + Lang.t(" completed (exit=") + code + (ms > 0 ? Lang.t(", took ") + (ms / 1000.0) + "s" : "")
                                 + ") — the lamps above and the summary line below are updated");
                     }
                 }
                 render();
                 return;
             }
-            String head = "[" + now() + "] " + label + " completed (exit=" + code
-                    + (ms > 0 ? ", took " + (ms / 1000.0) + "s" : "") + ")";
+            String head = "[" + now() + "] " + label + Lang.t(" completed (exit=") + code
+                    + (ms > 0 ? Lang.t(", took ") + (ms / 1000.0) + "s" : "") + ")";
             String body = i.getStringExtra("output");
             if (pending) finishPending(null);
-            pushHistory(head + (body == null || body.trim().isEmpty() ? "\n(no output this time)" : "\n" + body.trim()));
+            pushHistory(head + (body == null || body.trim().isEmpty() ? "\n" + Lang.t("(no output this time)") : "\n" + body.trim()));
             setLast(label, code, ms, code == 0);
             render();
             // After revoking / writing authorization, put the switch back to the real state
@@ -365,7 +365,7 @@ public class MainActivity extends Activity {
     private String logText() {
         StringBuilder sb = new StringBuilder();
         sb.append("DSH Console ").append(VER)
-          .append("　").append(history.size()).append(" entries (keeps up to ").append(MAX_HISTORY).append(")\n");
+          .append("　").append(history.size()).append(Lang.t(" entries (keeps up to ")).append(MAX_HISTORY).append(")\n");
         sb.append("──────────────────────────\n");
         if (history.isEmpty()) {
             sb.append("(no entries yet)\n\n")
@@ -611,7 +611,7 @@ public class MainActivity extends Activity {
     private void run(String cmdId, String label, String command, boolean isStatus, boolean quiet,
                      boolean silentLog, int waitS, boolean isQuery) {
         if (!TermuxRunner.installed(this)) {
-            pushHistory("[" + now() + "] ⚠ Termux (com.termux) not found; please install Termux first.");
+            pushHistory("[" + now() + "] " + Lang.t("⚠ Termux (com.termux) not found; please install Termux first."));
             render(); return;
         }
         if (!TermuxRunner.hasPermission(this)) {
@@ -631,7 +631,7 @@ public class MainActivity extends Activity {
         boolean ok = TermuxRunner.run(this, cmdId, label, command, isStatus);
         if (!ok) { if (!quiet) finishPending(Lang.t("⚠ Failed to start the Termux command.") ); return; }
         if (!quiet && !silentLog) {
-            pushHistory("[" + now() + "] Sent: " + label + ", waiting for Termux to reply…");
+            pushHistory("[" + now() + "] " + Lang.t("Sent: ") + label + Lang.t(", waiting for Termux to reply…"));
             render();
         }
     }

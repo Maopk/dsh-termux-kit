@@ -20,7 +20,7 @@ if [ "$DRY" != 1 ]; then
     trap 'boot_lock_release' EXIT
   else
     bad "Another start/restart is already in progress (lock held by pid $(boot_lock_owner))"
-    printf '   Wait for it to finish before tapping again; if you are sure nothing is running, delete %s\n' "$BOOT_LOCK_DIR"
+    printf "$(dsh_msg '   Wait for it to finish before tapping again; if you are sure nothing is running, delete %s\n')" "$BOOT_LOCK_DIR"
     die "A startup is already running (double-tap protection)"
   fi
 fi
@@ -32,8 +32,8 @@ else
   T=$(date +%s)
   kill_wait "bin.js web" 15 TERM && ok "Exited gracefully ($(( $(date +%s) - T ))s)" || {
     bad "Still alive after 15s — **soft restart abandoned**, no forced kill was performed"
-    printf '   Use the widget "6_hard-restart-dsh" instead (it force-kills with -9)\n'
-    printf '   Current processes: %s\n' "$(pids_of 'bin.js web')"
+    printf "$(dsh_msg '   Use the widget "6_hard-restart-dsh" instead (it force-kills with -9)\n')"
+    printf "$(dsh_msg '   Current processes: %s\n')" "$(pids_of 'bin.js web')"
     exit 2
   }
 fi
@@ -54,12 +54,12 @@ step "⑤ Start again (detached, in the background) and wait for **true readines
 # The port alone misleads: the port opens first and routes mount later, so a half-started service answers 404 to everything.
 # True readiness = the token line appears in the log + that URL returns 200 after redirects.
 if [ "$DRY" = 1 ]; then
-  printf '   · [dry] setsid nohup dsh web --port %s >> %s 2>&1 &\n' "$DSH_PORT" "$LOG"
-  printf '   · [dry] wait for the token line + curl returning 200 after redirects (up to 120s)\n'
+  printf "$(dsh_msg '   · [dry] setsid nohup dsh web --port %s >> %s 2>&1 &\n')" "$DSH_PORT" "$LOG"
+  printf "$(dsh_msg '   · [dry] wait for the token line + curl returning 200 after redirects (up to 120s)\n')"
   ok "(dry-run)"
 elif dsh_start_and_wait "$LOG" 120; then
   ok "Startup complete"
-  printf '   · Just refresh the browser page (the login cookie survives a restart)\n'
+  printf "$(dsh_msg '   · Just refresh the browser page (the login cookie survives a restart)\n')"
 else
   rc=$?
   [ "$rc" = 3 ] && die "Another startup is already in progress (not a failure, just double-tap protection) — wait for it to finish"

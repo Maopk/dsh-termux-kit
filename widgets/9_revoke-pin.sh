@@ -34,6 +34,6 @@ else
   ok "Deleted and confirmed: $PASSFILE does not exist → the AI can never use that PIN to pass any verification again"
 fi
 
-printf '\n   To restore: hand over the 6 digits again (or flip the switch under "Maintenance" in the Console back on); if you would rather not, use your fingerprint.\n'
-printf '   It only governs "whether the AI can use your lock-screen PIN"; the bridge / adb / DSH are unaffected (each has its own revoke path).\n'
+printf "$(dsh_msg '\n   To restore: hand over the 6 digits again (or flip the switch under "Maintenance" in the Console back on); if you would rather not, use your fingerprint.\n')"
+printf "$(dsh_msg '   It only governs "whether the AI can use your lock-screen PIN"; the bridge / adb / DSH are unaffected (each has its own revoke path).\n')"
 done_

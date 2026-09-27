@@ -61,5 +61,5 @@ step "Self-check"
 sleep 1
 port_open 8788 && bad "8788 is still listening (unexpected)" || ok "8788 is closed"
 adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q . && warn "An adb device is still connected (a reboot always clears it)" || ok "No adb devices connected"
-printf '\nIf the phone is still acting on its own, do this in order: hold Volume +/- for 3s → emergency stop in the notification shade → reboot the phone → safe mode\nRescue card: %s/dsh/文档/手机失控自救卡.md\n' "$DL"
+printf "$(dsh_msg '\nIf the phone is still acting on its own, do this in order: hold Volume +/- for 3s → emergency stop in the notification shade → reboot the phone → safe mode\nRescue card: %s/dsh/文档/手机失控自救卡.md\n')" "$DL"
 done_

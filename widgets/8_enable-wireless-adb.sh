@@ -29,7 +29,7 @@ fi
 
 step "② Network state (the bridge really dials 1.1.1.1:443)"
 NET=$($SOCK netstate 2>/dev/null || true)
-echo "$NET" | sed 's/^/   /'
+echo "$(dsh_msg '$NET')" | sed 's/^/   /'
 WIFI_ON=$(echo "$NET" | grep -oE '"wifi_on": *-?[0-9]+' | grep -oE '\-?[0-9]+$')
 ONLINE=$(echo "$NET" | grep -oE '"online": *(true|false)' | grep -oE '(true|false)$')
 ADB_WIFI=$(echo "$NET" | grep -oE '"adb_wifi": *-?[0-9]+' | grep -oE '\-?[0-9]+$')
@@ -47,7 +47,7 @@ if [ "$WIFI_ON" = "0" ] && [ "$FORCE" = 0 ]; then
   if [ "$NO_UI" = 1 ]; then
     step "③ Prerequisites not met (--no-ui: no screen interaction at all)"
     bad "Wi-Fi is off → the adb TCP listener will not appear"
-    printf '   Turn Wi-Fi on yourself and re-run this widget, or tap "7_reconnect-ai"\n'
+    printf "$(dsh_msg '   Turn Wi-Fi on yourself and re-run this widget, or tap "7_reconnect-ai"\n')"
     printf '\n[%s] not executed: waiting for Wi-Fi (%ss elapsed)\n' "$SELF" "$(( $(date +%s) - T0 ))"
     exit 3
   fi
@@ -57,7 +57,7 @@ if [ "$WIFI_ON" = "0" ] && [ "$FORCE" = 0 ]; then
   else
     am start -a android.settings.WIFI_SETTINGS >/dev/null 2>&1 && ok "Wi-Fi settings page opened" || warn "Could not open the settings page (the quick-settings tile works too)"
   fi
-  printf '   · Once you turn Wi-Fi on this widget **continues by itself**, no need to tap me again\n'
+  printf "$(dsh_msg '   · Once you turn Wi-Fi on this widget **continues by itself**, no need to tap me again\n')"
   W=0
   for i in $(seq 1 90); do
     [ "$DRY" = 1 ] && break
@@ -100,13 +100,13 @@ if [ "$DRY" != 1 ]; then
     step "③·check: the switch did not stick (adb_wifi=${A4:-?})"
     bad "The setting was cleared back to 0 after being written — writing Settings.Global alone is not enough to start adbd"
     if [ "$O4" = "true" ]; then
-      printf '   The network works (online=true) → **not a network problem**: this OS build only honors the manual switch-on under Developer options → Wireless debugging\n'
-      printf '   What to do: Settings → Developer options → Wireless debugging → turn it on once (about 20s; only then can this widget keep it up automatically)\n'
+      printf "$(dsh_msg '   The network works (online=true) → **not a network problem**: this OS build only honors the manual switch-on under Developer options → Wireless debugging\n')"
+      printf "$(dsh_msg '   What to do: Settings → Developer options → Wireless debugging → turn it on once (about 20s; only then can this widget keep it up automatically)\n')"
     else
-      printf '   And the network is down too (online=%s) → Wireless debugging depends on "a usable Wi-Fi network", so connect to an AP first\n' "${O4:-?}"
-      printf '   What to do: connect to a Wi-Fi network (not just flip the switch), then re-run this widget\n'
+      printf "$(dsh_msg '   And the network is down too (online=%s) → Wireless debugging depends on "a usable Wi-Fi network", so connect to an AP first\n')" "${O4:-?}"
+      printf "$(dsh_msg '   What to do: connect to a Wi-Fi network (not just flip the switch), then re-run this widget\n')"
     fi
-    printf '\n[%s] incomplete: the Wireless debugging switch did not stick (%ss elapsed)\n' "$SELF" "$(( $(date +%s) - T0 ))"
+    printf "$(dsh_msg '\n[%s] incomplete: the Wireless debugging switch did not stick (%ss elapsed)\n')" "$SELF" "$(( $(date +%s) - T0 ))"
     exit 3
   fi
   ok "Read back adb_wifi=1 (carrying on to find the port)"
@@ -168,18 +168,18 @@ else
     W3=$(printf '%s' "$N3" | grep -oE '"wifi_on": *-?[0-9]+' | grep -oE '\-?[0-9]+$')
     O3=$(printf '%s' "$N3" | grep -oE '"online": *(true|false)' | grep -oE '(true|false)$')
     A3=$(printf '%s' "$N3" | grep -oE '"adb_wifi": *-?[0-9]+' | grep -oE '\-?[0-9]+$')
-    printf '   Now: wifi_on=%s online=%s adb_wifi=%s\n' "$W3" "$O3" "$A3"
+    printf "$(dsh_msg '   Now: wifi_on=%s online=%s adb_wifi=%s\n')" "$W3" "$O3" "$A3"
     if [ "$W3" = "1" ] && [ "$A3" = "0" ] && [ "$O3" != "true" ]; then
       bad "The Wi-Fi switch is on, but there is **no real network connection** → the system cleared \"Wireless debugging\" back to 0"
-      printf '   (Wireless debugging depends on "a usable Wi-Fi network", not just the switch; dialing 1.1.1.1:443 failed too)\n'
-      printf '   What to do: connect to a Wi-Fi network (an AP) — not just flip the switch; re-run this widget once connected\n'
+      printf "$(dsh_msg '   (Wireless debugging depends on "a usable Wi-Fi network", not just the switch; dialing 1.1.1.1:443 failed too)\n')"
+      printf "$(dsh_msg '   What to do: connect to a Wi-Fi network (an AP) — not just flip the switch; re-run this widget once connected\n')"
     elif [ "$W3" = "1" ] && [ "$A3" = "0" ]; then
       bad "The network works (online=true), but the system cleared the switch back to 0 — not a network problem"
-      printf '   This OS build only honors the manual switch-on under Developer options → Wireless debugging\n'
-      printf '   What to do: Settings → Developer options → Wireless debugging → turn it on once, then re-run this widget\n'
+      printf "$(dsh_msg '   This OS build only honors the manual switch-on under Developer options → Wireless debugging\n')"
+      printf "$(dsh_msg '   What to do: Settings → Developer options → Wireless debugging → turn it on once, then re-run this widget\n')"
     elif [ "$W3" = "1" ] && [ "$A3" = "1" ]; then
       bad "The switch is 1, but nothing is listening for adbd → the framework was not really started"
-      printf '   What to do: Developer options → Wireless debugging → turn it on by hand once (after that this widget can keep it up automatically)\n'
+      printf "$(dsh_msg '   What to do: Developer options → Wireless debugging → turn it on by hand once (after that this widget can keep it up automatically)\n')"
     else
       bad "Prerequisites still unmet (wifi_on=$W3 online=$O3 adb_wifi=$A3)"
     fi
@@ -192,5 +192,5 @@ if [ "$DRY" != 1 ]; then
   echo -n "   shell: "; timeout 20 adb shell echo "adb-ok $(getprop ro.product.model 2>/dev/null)" 2>&1 | tail -1
   echo -n "   fixed port status: "; adb devices | awk 'NR>1{printf "%s(%s) ", $1, $2}'; echo
 fi
-printf '\n  Tip: to keep adb available long term → leave both Wi-Fi and "Wireless debugging" on; to take it back → just turn "Wireless debugging" off\n'
+printf "$(dsh_msg '\n  Tip: to keep adb available long term → leave both Wi-Fi and "Wireless debugging" on; to take it back → just turn "Wireless debugging" off\n')"
 done_

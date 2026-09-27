@@ -1,5 +1,7 @@
 package io.dsh.bridge;
 
+import android.graphics.Color;
+import android.graphics.Typeface;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
@@ -49,10 +51,9 @@ public class MainActivity extends Activity {
         } catch (Throwable t) { /* ignore */ }
         title.setText(Lang.t("DSH Bridge") + "  v" + ver);
         title.setTextSize(22f);
-        root.addView(title);
 
         TextView desc = new TextView(this);
-        desc.setText(Lang.t("v1.6 key change: switched to a **foreground service** to stay resident, so system/vendor battery savers cannot freeze it and lose contact.") + "\n"
+        desc.setText(Lang.t("Runs as a foreground service so system/vendor battery savers cannot freeze it and lose contact.") + "\n"
                 + Lang.t("(new in v1.5: turns wireless debugging on automatically when online, used by widget 8)") + "\n"
                 + Lang.t("Lets the DSH inside Termux operate the phone for you (read screen / tap / swipe / type).\n")
                 + Lang.t("The only permissions are accessibility and the local loopback port 127.0.0.1:8788; nothing is uploaded.") + "\n\n"
@@ -64,12 +65,10 @@ public class MainActivity extends Activity {
                 + Lang.t("(Also: this app does not autostart; it will not come up by itself after a phone restart)"));
         desc.setTextSize(13f);
         desc.setPadding(0, pad / 2, 0, pad / 2);
-        root.addView(desc);
 
         tokenView = new TextView(this);
         tokenView.setTextSize(17f);
         tokenView.setPadding(0, pad / 2, 0, pad / 2);
-        root.addView(tokenView);
 
         Button copy = new Button(this);
         copy.setText(Lang.t("Copy token"));
@@ -81,7 +80,6 @@ public class MainActivity extends Activity {
                 toast(Lang.t("Token copied; you can paste it to DSH"));
             }
         });
-        root.addView(copy);
 
         Button open = new Button(this);
         open.setText(Lang.t("① Open accessibility settings"));
@@ -93,7 +91,6 @@ public class MainActivity extends Activity {
                 } catch (Throwable t) { toast(Lang.t("Failed to open settings: ") + t.getMessage()); }
             }
         });
-        root.addView(open);
 
         Button refresh = new Button(this);
         refresh.setText(Lang.t("② Refresh state / resume listening"));
@@ -104,13 +101,11 @@ public class MainActivity extends Activity {
                 updateState();
             }
         });
-        root.addView(refresh);
 
         idleBtn = new Button(this);
         idleBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { cycleIdle(); }
         });
-        root.addView(idleBtn);
 
         langBtn = new Button(this);
         langBtn.setOnClickListener(new View.OnClickListener() {
@@ -121,7 +116,6 @@ public class MainActivity extends Activity {
                 recreate();   // redraw with the new language; the choice is persisted
             }
         });
-        root.addView(langBtn);
 
         Button panic = new Button(this);
         panic.setText(Lang.t("Emergency stop (turn accessibility off now)"));
@@ -142,13 +136,11 @@ public class MainActivity extends Activity {
                 updateState();
             }
         });
-        root.addView(panic);
 
         warnView = new TextView(this);
         warnView.setTextSize(14f);
         warnView.setTextColor(0xFFB3261E);
         warnView.setPadding(0, pad / 2, 0, 0);
-        root.addView(warnView);
 
         Button notif = new Button(this);
         notif.setText(Lang.t("③ Open this app's notification settings (so notification-bar emergency stop works)"));
@@ -162,12 +154,10 @@ public class MainActivity extends Activity {
                 } catch (Throwable t) { toast(Lang.t("Cannot open notification settings: ") + t.getMessage()); }
             }
         });
-        root.addView(notif);
 
         stateView = new TextView(this);
         stateView.setTextSize(14f);
         stateView.setPadding(0, pad / 2, 0, pad / 2);
-        root.addView(stateView);
 
         ScrollView sv = new ScrollView(this);
         sv.addView(root, new ViewGroup.LayoutParams(
@@ -178,6 +168,7 @@ public class MainActivity extends Activity {
         requestNotifPermission();
         updateIdleBtn();
         updateState();
+        layoutAll(root, title, desc, tokenView, copy, open, refresh, notif, panic);
     }
 
     @Override
@@ -195,7 +186,7 @@ public class MainActivity extends Activity {
         String listen = (svc != null && svc.isListening()) ? Lang.t("Listening on 127.0.0.1:") + BridgeService.PORT : Lang.t("Not listening");
         stateView.setText(Lang.t("Accessibility: ") + (on ? Lang.t("on ✅") : Lang.t("off ❌"))
                 + "\n" + Lang.t("Port: ") + listen
-                + (on ? "" : Lang.t("\nTap ① Open accessibility settings and switch DSH Bridge on in the list")));
+                + (on ? "" : "\n" + Lang.t("Tap ① Open accessibility settings and switch DSH Bridge on in the list")));
         boolean notifOk = true;
         try {
             android.app.NotificationManager nm =
@@ -208,6 +199,45 @@ public class MainActivity extends Activity {
                       + Lang.t("   Tap ③ Open this app's notification settings below to enable it.") + "\n"
                       + "   (The volume-key gesture, the in-app red button and the Termux widget are unaffected)");
         }
+    }
+
+    /** Section header, same convention as the Console app: "▍Name" in blue. */
+    /** Final layout order. Views are created above; this decides what the user actually sees.
+     *  Requested by the user 2026-09-27: ③ used to sit at the very bottom (after the emergency button),
+     *  so ①②③ were not together, and the buttons had no grouping at all. Status first (it is what you
+     *  look for), then setup ①②③, then behaviour, then emergency last but most prominent. */
+    private void layoutAll(LinearLayout root, TextView title, TextView desc, TextView tokenView,
+                           Button copy, Button open, Button refresh, Button notif, Button panic) {
+        root.addView(title);
+        root.addView(stateView);                 // live status first: it is the thing you check
+        root.addView(desc);
+        root.addView(tokenView);
+        root.addView(copy);
+
+        root.addView(section("Setup"));
+        root.addView(open);
+        root.addView(refresh);
+        root.addView(notif);                     // ③ right after ②
+
+        root.addView(section("Behaviour"));
+        root.addView(idleBtn);
+        root.addView(langBtn);
+
+        root.addView(warnView);
+
+        root.addView(section("Emergency"));
+        root.addView(panic);
+    }
+
+    private TextView section(String label) {
+        TextView h = new TextView(this);
+        h.setText("▍" + Lang.t(label));
+        h.setTextSize(13f);
+        h.setTypeface(Typeface.DEFAULT_BOLD);
+        h.setTextColor(Color.parseColor("#58A6FF"));
+        int p = (int) (14 * getResources().getDisplayMetrics().density);
+        h.setPadding(0, p, 0, (int) (2 * getResources().getDisplayMetrics().density));
+        return h;
     }
 
     private void updateIdleBtn() {

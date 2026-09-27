@@ -45,6 +45,10 @@ final class Lang {
         ZH.put("Auto-stop after ", "空闲 ");
         ZH.put(" min idle", " 分钟自动停止");
         ZH.put("Language: ", "语言：");
+        ZH.put("Runs as a foreground service so system/vendor battery savers cannot freeze it and lose contact.", "以前台服务方式常驻，系统/厂商省电策略无法冻结它、导致失联。");
+        ZH.put("Emergency", "紧急");
+        ZH.put("Behaviour", "行为");
+        ZH.put("Setup", "设置");
         ZH.put("★ Emergency stop (any of the four):\\n", "★ 紧急停止（四种方式任选）：\n");
         ZH.put("Lets the DSH inside Termux operate the phone for you (read screen / tap / swipe / type).\\n", "让 Termux 里的 DSH 替你操作这台手机（读屏 / 点击 / 滑动 / 输入）。\n");
         ZH.put("   3. Emergency stop inside the DSH Bridge is running notification\\n", "   3. 「DSH 桥正在运行」通知里的紧急停止\n");

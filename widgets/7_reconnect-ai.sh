@@ -45,8 +45,8 @@ else
 fi
 
 step "③ Status overview"
-printf '   DSH Web : %s\n' "$(port_open "$DSH_PORT" && echo "running (HTTP $(http_code "$DSH_PORT"))" || echo 'not running')"
-printf '   adb     : %s\n' "$(adb devices 2>/dev/null | awk 'NR>1 && $2=="device"{print $1; exit}' || echo 'not connected')"
-printf '   Bridge  : %s\n' "$(port_open 8788 && echo 'listening' || echo 'not listening')"
-printf '   Tip     : you must switch "Wireless debugging" on once after each of these: a phone reboot / a Wi-Fi drop (Android turns it off automatically when Wi-Fi drops)\n'
+printf "$(dsh_msg '   DSH Web : %s\n')" "$(port_open "$DSH_PORT" && echo "running (HTTP $(http_code "$DSH_PORT"))" || echo 'not running')"
+printf "$(dsh_msg '   adb     : %s\n')" "$(adb devices 2>/dev/null | awk 'NR>1 && $2=="device"{print $1; exit}' || echo 'not connected')"
+printf "$(dsh_msg '   Bridge  : %s\n')" "$(port_open 8788 && echo 'listening' || echo 'not listening')"
+printf "$(dsh_msg '   Tip     : you must switch "Wireless debugging" on once after each of these: a phone reboot / a Wi-Fi drop (Android turns it off automatically when Wi-Fi drops)\n')"
 done_

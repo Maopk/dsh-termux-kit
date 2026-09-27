@@ -95,7 +95,9 @@ public class BridgeService extends AccessibilityService {
                 int idleMin = getSharedPreferences(PREFS, MODE_PRIVATE).getInt("idleMin", 30);
                 if (idleMin > 0 && running
                         && System.currentTimeMillis() - lastRequestAt > idleMin * 60000L) {
-                    stopListening("idle for " + idleMin + " min with no commands; listening stopped automatically");
+                    // Silent on purpose (user, 2026-09-27): an idle stop is the app deciding to save power, not an
+                    // event the user needs to be told about — it just waits to be started again.
+                    stopListening(null);
                 }
             } catch (Throwable t) { /* ignore */ }
             handler.postDelayed(this, 60000);
