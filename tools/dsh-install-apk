@@ -78,15 +78,15 @@ tap_any() { tap_txt "$1" || tap_dsc "$1"; }
 step "① precondition check"
 DIGITS=""
 if [ "$DRY" != 1 ]; then
-  DIGITS=$("$HELPER" digits 2>/dev/null) || { badf "not authorized: %s" "$("$HELPER" status 2>&1)"; exit 3; }
-  case "$DIGITS" in [0-9][0-9][0-9][0-9][0-9][0-9]) okf "got the authorized password (6 digits, from %s" "$("$HELPER" path))" ;;
+  DIGITS=$("$HELPER" digits 2>/dev/null) || { bad "not authorized: $("$HELPER" status 2>&1)"; exit 3; }
+  case "$DIGITS" in [0-9][0-9][0-9][0-9][0-9][0-9]) ok "got the authorized password (6 digits, from $("$HELPER" path))" ;;
     *) bad "bad password format (not 6 digits)"; exit 3 ;; esac
 else
   # A dry run must tell the truth: with no authorization, say so — a real run will always stop here (otherwise "dry run passed" is a lie)
   if "$HELPER" status >/dev/null 2>&1; then
     ok "(dry-run) authorized: a real run can read the password"
   else
-    badf "(dry-run) not authorized: %s" "$("$HELPER" status 2>&1 | head -1)"
+    bad "(dry-run) not authorized: $("$HELPER" status 2>&1 | head -1)"
     printf '   → a real run will stop here with exit code 3 and never touch the screen\n'
     exit 3
   fi
@@ -113,7 +113,7 @@ else
     sleep 1
     if "$SOCK" cur 2>/dev/null | grep -qE 'packageinstaller|permissioncontroller|vivo.*install'; then UP=$i; break; fi
   done
-  [ "$UP" != 0 ] && okf "installer is in front (took %ss)" "${UP}" || { bad "the installer never came to the front within 20s"; exit 4; }
+  [ "$UP" != 0 ] && ok "installer is in front (took ${UP}s)" || { bad "the installer never came to the front within 20s"; exit 4; }
 fi
 
 # ── one-time install permission ──
@@ -136,7 +136,7 @@ else
   if [ -n "$BAND" ]; then
     Y1=$((BAND-170)); Y2=$((BAND+230)); [ "$Y1" -lt 0 ] && Y1=0
     P=$(timeout 45 "$HOME_DIR/.local/bin/dsh-find-blue" "$Y1" "$Y2" 2>/dev/null) && CANDS="$P"
-    if [ -n "$CANDS" ]; then okf "blue text located: %s (paragraph y=%s, search band %s..%s)" "$CANDS" "$BAND" "$Y1" "$Y2"
+    if [ -n "$CANDS" ]; then ok "blue text located: $CANDS (paragraph y=$BAND, search band $Y1..$Y2)"
     else warn "color location found nothing; falling back to fixed coordinates"; fi
   else
     warn "no paragraph containing 「本次安装」 in the tree; falling back to fixed coordinates"
@@ -177,7 +177,7 @@ PYX
       if [ -n "$CANDS" ]; then
         BAND=$(printf '%s\n' "$CANDS" | tail -1)
         CANDS="${CANDS%%$BAND} $BAND"
-        okf "blue candidates: %s (band scan included)" "$CANDS"
+        ok "blue candidates: $CANDS (band scan included)"
       fi
     fi
   fi
@@ -195,8 +195,8 @@ PYX
       [ "$(cur_pkg)" = "com.android.systemui" ] && { GOT=1; break; }
     done
     [ "$GOT" != 1 ] && ui | grep -q "安全验证" && GOT=1
-    [ "$GOT" = 1 ] && { okf "the verification dialog appeared (tapped %s, after %ss)" "$pt" "${W}"; break; }
-    warnf "no reaction at %s after %ss; trying the next one" "$pt" "${W}"
+    [ "$GOT" = 1 ] && { ok "the verification dialog appeared (tapped $pt, after ${W}s)"; break; }
+    warn "no reaction at $pt after ${W}s; trying the next one"
   done
   if [ "$GOT" != 1 ] && ui | grep -q "已安装相同版本"; then
     # Not a failure: this page means the APK is already installed, which is exactly the goal.
@@ -218,10 +218,10 @@ else
   for (( n=0; n<${#DIGITS}; n++ )); do
     d="${DIGITS:$n:1}"
     xy=$(xy_of "$d" text)
-    [ -n "$xy" ] || { badf "digit %s not found on the keypad" "$d"; exit 1; }
+    [ -n "$xy" ] || { bad "digit $d not found on the keypad"; exit 1; }
     tap_xy "$xy"; i=$((i+1)); sleep 0.7
   done
-  okf "entered %s digits" "$i"
+  ok "entered $i digits"
 fi
 
 # A "same version already installed" page means what we came to install is already on the device:
@@ -251,7 +251,7 @@ else
   if [ "$DONE" = 1 ]; then
     VER=$(ui | grep -oE "版本：[0-9.]+" | head -1)
     tap_dsc "完成"; sleep 3
-    okf "install complete (%s)" "$VER"
+    ok "install complete ($VER)"
   elif [ "$DONE" = 2 ]; then
     ok "wizard closed (the installer exited) → leaving the verdict to the verification step"
   else
@@ -268,7 +268,7 @@ if [ "$VERIFY" = 1 ] && [ "$DRY" != 1 ]; then
     -t application/vnd.android.package-archive >/dev/null 2>&1; sleep 4
   tap_dsc "本次允许使用权限" >/dev/null 2>&1; sleep 7
   if ui | grep -q "已安装相同版本"; then
-    okf "installer confirms: %s" "$(ui | grep -oE '已安装相同版本[^ ]*' | head -1)"
+    ok "installer confirms: $(ui | grep -oE '已安装相同版本[^ ]*' | head -1)"
     tap_dsc "取消" >/dev/null 2>&1
   else
     bad "the installer did not say 「已安装相同版本」 — cannot be sure it is really installed"

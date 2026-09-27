@@ -53,9 +53,9 @@ dsh_url() {
 adb_ready() { adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q .; }
 
 PWA=$(pwa_pkg); FG=$(fg_pkg)
-sayf "PWA pkg    : %s" "${PWA:-not found, dsh-browser-open has not written a cache yet}"
-sayf "foreground : %s" "${FG:-bridge did not answer}"
-sayf "adb        : %s" "$(adb_ready && echo connected || echo not connected)"
+say "PWA pkg    : ${PWA:-not found, dsh-browser-open has not written a cache yet}"
+say "foreground : ${FG:-bridge did not answer}"
+say "adb        : $(adb_ready && echo connected || echo not connected)"
 if [ "$PROBE" = 1 ]; then
   if [ "$FG" = "com.android.chrome" ]; then say "verdict     : the DSH window **is** in front (hosted by Chrome)"
   else say "verdict     : the foreground is not Chrome → the DSH window is not in front right now"; fi
@@ -94,11 +94,11 @@ close_via_bridge() {
     [ -z "$prev" ] && return 0
     case "$prev" in com.termux|com.bbk.launcher*|*launcher*) return 0 ;; esac
     timeout 12 am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "$prev" >/dev/null 2>&1 \
-      && sayf "   · brought %s back to the front" "$prev"
+      && say "   · brought $prev back to the front"
   }
   for i in 1 2 3 4 5 6; do
     if [ "$(fg_pkg)" != "com.android.chrome" ]; then
-      sayf "   ✔ window closed (pressed Back %s times)" "$((i-1))"
+      say "   ✔ window closed (pressed Back $((i-1)) times)"
       restore_prev
       return 0
     fi
@@ -111,7 +111,7 @@ close_via_bridge() {
 }
 
 if [ "$DRY" = 1 ]; then
-  sayf "· [dry] %s" "$(adb_ready && echo 'adb shell am force-stop com.android.chrome' || echo 'via bridge: bring to front + press Back repeatedly')"
+  say "· [dry] $(adb_ready && echo 'adb shell am force-stop com.android.chrome' || echo 'via bridge: bring to front + press Back repeatedly')"
   exit 0
 fi
 
