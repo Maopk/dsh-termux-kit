@@ -44,10 +44,34 @@ def tasksd_ids():
     return allowed, virtual
 
 
+def ui_controls():
+    """The single source for every UI control (ui/controls.json) — see tools/ui-controls."""
+    with open(os.path.join(ROOT, 'ui', 'controls.json'), encoding='utf-8') as f:
+        return json.load(f)
+
+
 def panel_ids():
-    p = os.path.join(ROOT, 'plugins', 'dsh-mobile-local', 'client.js')
-    src = open(p, encoding='utf-8').read()
-    return {i for i in re.findall(r"id: '([^']+)'", src) if i != 'dsh-mobile-local'}
+    """Task ids the page panel can actually fire.
+
+    Not scraped out of client.js any more: the panel's control list is **generated** from
+    ui/controls.json (double-quoted JSON, so the old `id: '...'` regex silently matched nothing —
+    a check that stops matching is worse than no check). A control counts as a task when the data
+    says so: `task` for a plain button, or `on_task`/`off_task` for a switch's two directions.
+    """
+    return control_task_ids('panel')
+
+
+def control_task_ids(surface):
+    ids = set()
+    for c in ui_controls()['controls']:
+        if surface not in c['surfaces']:
+            continue
+        if c.get('task'):
+            ids.add(c['id'])
+        for k in ('on_task', 'off_task'):
+            if c.get(k):
+                ids.add(c[k])
+    return ids
 
 
 def console_ids():
@@ -97,6 +121,32 @@ def main():
             print(f'     \u00b7  no entry for {i}' + (f' \u2014 {why}' if why else ' (by design)'))
     if bad:
         print('\n\u274c a list disagrees with the allowlist \u2014 a button will fail when pressed')
+        return 1
+
+    # ── cross-check the single source (ui/controls.json) against the surfaces it drives ──
+    # A control marked as a task for a surface that never lists it is a button that silently does
+    # nothing; a widget action that no control declares is a button nobody documented.
+    tsrc = open(os.path.join(ROOT, 'apps', 'console', 'src', 'io', 'dsh', 'console', 'Tasks.java'),
+                encoding='utf-8').read()
+    m = re.search(r'WIDGET_SAFE\s*=\s*\{([^}]*)\}', tsrc)
+    widget_safe = set(re.findall(r'"([^"]+)"', m.group(1))) if m else set()
+    ui_console = control_task_ids('console')
+    ui_widget = {c['id'] for c in ui_controls()['controls'] if 'widget' in c['surfaces']}
+    pairs = [
+        ('console lists every task control of ui/controls.json', ui_console, console_ids()),
+        ('widget-safe ids are declared in ui/controls.json', widget_safe, ui_widget),
+        ('ui/controls.json widget controls are all on the widget', ui_widget, widget_safe),
+    ]
+    print()
+    for label, want, have in pairs:
+        miss = sorted(want - have)
+        if miss:
+            print(f'\u274c {label}: missing {miss}')
+            bad += 1
+        else:
+            print(f'\u2705 {label}: {len(want)} ids')
+    if bad:
+        print('\n\u274c the UI control source and the surfaces disagree')
         return 1
     print('\n\u2705 every list only sends ids the allowlist accepts')
     return 0

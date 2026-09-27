@@ -1,0 +1,246 @@
+#!/data/data/com.termux/files/usr/bin/python3
+r"""ui-controls — 三处 UI 的唯一生成器：ui/controls.json → 面板块 + 两个 UiControls.java。
+
+WHY
+---
+同一套控件（分类、名字、说明、危险标记、类型）要在**三个地方**长得一样：
+  · 页面插件 dsh-mobile-local（JS）
+  · 控制台 APK（Java）
+  · 桥 APK（Java）
+手抄三份就是三个会各自漂移的真相。2026-09-27 用户明确要求：
+「ui-controls.json 必须是生成源，生成产物进自检（三处 md5 对得上）」。
+所以本工具是**唯一**往这三处写控件文案的东西；其它任何地方都不许手改这些字符串。
+
+产物
+----
+  plugins/dsh-mobile-local/client.js                        ← 夹在 generated:controls 标记之间的块
+  ~/dsh-console/src/io/dsh/console/UiControls.java          ← 整文件（真源码；sync-apps.sh 再镜像进仓库）
+  ~/droid-bridge/src/io/dsh/bridge/UiControls.java          ← 整文件
+  i18n/zh.json                                               ← 中英对照**合并**进去（缺哪条补哪条），再跑 i18n-table gen
+    为什么也写 i18n：Java 侧沿用既有的 Lang.t() 渲染时翻译，翻译表只有 zh.json 一份，
+    不然就会出现"控件一套翻译、别处又一套"。
+
+术语不翻译：adb / token / GitHub / Wi-Fi / DSH / APK / SHA256 / exit 原样保留。
+
+Usage
+-----
+  ui-controls gen      重新生成全部产物
+  ui-controls check     只比对，一个字节都不改（有差异退出 1，并打印各自的 md5）
+"""
+import hashlib
+import io
+import json
+import os
+import re
+import subprocess
+import sys
+
+HOME = os.path.expanduser('~')
+ROOT = os.path.join(HOME, 'dsh-termux-kit')
+SRC = os.path.join(ROOT, 'ui', 'controls.json')
+PANEL = os.path.join(ROOT, 'plugins', 'dsh-mobile-local', 'client.js')
+CONSOLE_JAVA = os.path.join(HOME, 'dsh-console', 'src', 'io', 'dsh', 'console', 'UiControls.java')
+BRIDGE_JAVA = os.path.join(HOME, 'droid-bridge', 'src', 'io', 'dsh', 'bridge', 'UiControls.java')
+ZH = os.path.join(ROOT, 'i18n', 'zh.json')
+BEGIN = '      // ── generated:controls (ui/controls.json) — do not edit by hand; run tools/ui-controls gen ──'
+END = '      // ── /generated:controls ──'
+
+
+def load():
+    with io.open(SRC, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def md5(text):
+    return hashlib.md5(text.encode('utf-8')).hexdigest()
+
+
+def js_block(data):
+    # Compact but readable: one line per control keeps diffs honest.
+    out = [BEGIN]
+    out.append('      const UI_VERSION = %s;' % json.dumps(data['appVersions'], ensure_ascii=False))
+    out.append('      const UI_CATS = %s;' % json.dumps(
+        [{'id': c['id'], 'en': c['en'], 'zh': c['zh']} for c in data['cats']], ensure_ascii=False))
+    out.append('      const UI_GROUPS = %s;' % json.dumps(
+        [{'id': g['id'], 'cat': g['cat'], 'en': g['en'], 'zh': g['zh']} for g in data.get('groups', [])],
+        ensure_ascii=False))
+    rows = []
+    for c in data['controls']:
+        rows.append('        ' + json.dumps({
+            'id': c['id'], 'kind': c['kind'], 'cat': c['cat'], 'group': c.get('group', ''),
+            'icon': c.get('icon', ''), 'danger': bool(c.get('danger')),
+            'label': c['label'], 'hint': c['hint'], 'surfaces': c['surfaces'],
+        }, ensure_ascii=False))
+    out.append('      const UI_CONTROLS = [\n' + ',\n'.join(rows) + ',\n      ];')
+    out.append(END)
+    return '\n'.join(out) + '\n'
+
+
+def java_file(pkg, cls, data, app):
+    """Emit the whole UiControls.java for one app: only the controls that app shows."""
+    mine = [c for c in data['controls'] if app in c['surfaces']]
+    L = []
+    L.append('package io.dsh.%s;' % pkg)
+    L.append('')
+    L.append('import java.util.ArrayList;')
+    L.append('import java.util.List;')
+    L.append('')
+    L.append('/**')
+    L.append(' * GENERATED FILE — do not edit. Source: ui/controls.json, generator: tools/ui-controls.')
+    L.append(' *')
+    L.append(' * Why generated: the same controls must read identically in the bridge app, the console app and')
+    L.append(' * the page panel, and three hand-kept copies drift apart (that is exactly what happened before).')
+    L.append(' * Label/hint are **English keys**: render them with Lang.t() so the runtime language switch')
+    L.append(' * still works; the Chinese side lives in i18n/zh.json, the kit\'s single translation source.')
+    L.append(' */')
+    L.append('final class UiControls {')
+    L.append('    static final String VERSION = "%s";' % data['appVersions'][app])
+    L.append('')
+    L.append('    static final class C {')
+    L.append('        final String id, kind, cat, group, icon, labelEn, hintEn;')
+    L.append('        final boolean danger;')
+    L.append('        C(String id, String kind, String cat, String group, String icon, String labelEn, String hintEn, boolean danger) {')
+    L.append('            this.id = id; this.kind = kind; this.cat = cat; this.group = group;')
+    L.append('            this.icon = icon; this.labelEn = labelEn; this.hintEn = hintEn; this.danger = danger;')
+    L.append('        }')
+    L.append('    }')
+    L.append('')
+    L.append('    /** Category order on screen, and the two column names (id, en, zh). */')
+    rows = ', '.join('{"%s", "%s", "%s"}' % (c['id'], c['en'].replace('"', '\\"'), c['zh']) for c in data['cats'])
+    L.append('    static final String[][] CATS = { %s };' % rows)
+    gr = ', '.join('{"%s", "%s", "%s", "%s"}' % (g['id'], g['cat'], g['en'].replace('"', '\\"'), g['zh'])
+                   for g in data.get('groups', []))
+    L.append('    static final String[][] GROUPS = { %s };' % gr)
+    L.append('')
+    L.append('    static final C[] ALL = {')
+    for c in mine:
+        L.append('        new C("%s", "%s", "%s", "%s", "%s", "%s", "%s", %s),' % (
+            c['id'], c['kind'], c['cat'], c.get('group', ''), c.get('icon', ''),
+            c['label']['en'].replace('"', '\\"'), c['hint']['en'].replace('"', '\\"'),
+            'true' if c.get('danger') else 'false'))
+    L.append('    };')
+    L.append('')
+    L.append('    static C get(String id) {')
+    L.append('        for (C c : ALL) if (c.id.equals(id)) return c;')
+    L.append('        return null;')
+    L.append('    }')
+    L.append('')
+    L.append('    static List<C> ofCat(String cat) {')
+    L.append('        List<C> out = new ArrayList<C>();')
+    L.append('        for (C c : ALL) if (c.cat.equals(cat)) out.add(c);')
+    L.append('        return out;')
+    L.append('    }')
+    L.append('')
+    L.append('    static List<C> ofGroup(String group) {')
+    L.append('        List<C> out = new ArrayList<C>();')
+    L.append('        for (C c : ALL) if (c.group.equals(group)) out.add(c);')
+    L.append('        return out;')
+    L.append('    }')
+    L.append('')
+    L.append('    /** zh name of a category id (falls back to the id). */')
+    L.append('    static String catZh(String id) {')
+    L.append('        for (String[] c : CATS) if (c[0].equals(id)) return c[2];')
+    L.append('        return id;')
+    L.append('    }')
+    L.append('')
+    L.append('    static String groupZh(String id) {')
+    L.append('        for (String[] g : GROUPS) if (g[0].equals(id)) return g[2];')
+    L.append('        return id;')
+    L.append('    }')
+    L.append('}')
+    L.append('')
+    return '\n'.join(L)
+
+
+def merge_zh(data, apply):
+    """Merge label/hint pairs into i18n/zh.json (single translation source). Returns (added, changed)."""
+    with io.open(ZH, encoding='utf-8') as f:
+        zh = json.load(f)
+    pairs = {}
+    for c in data['controls']:
+        pairs[c['label']['en']] = c['label']['zh']
+        pairs[c['hint']['en']] = c['hint']['zh']
+    for cat in data['cats']:
+        pairs[cat['en']] = cat['zh']
+    for g in data.get('groups', []):
+        pairs[g['en']] = g['zh']
+    added = changed = 0
+    for en, z in pairs.items():
+        if en not in zh:
+            zh[en] = z
+            added += 1
+        elif zh[en] != z:
+            zh[en] = z
+            changed += 1
+    if apply and (added or changed):
+        with io.open(ZH, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(zh, ensure_ascii=False, indent=2) + '\n')
+        subprocess.run(['python3', os.path.join(ROOT, 'tools', 'i18n-table'), 'gen'],
+                       capture_output=True, text=True, cwd=ROOT)
+    return added, changed
+
+
+def targets(data):
+    """Every generated artifact: path → (expected content, label)."""
+    panel = io.open(PANEL, encoding='utf-8').read()
+    block = js_block(data)
+    if BEGIN in panel and END in panel:
+        start = panel.index(BEGIN)
+        stop = panel.index(END) + len(END) + 1
+        new_panel = panel[:start] + block + panel[stop:]
+    else:
+        raise SystemExit('✘ client.js 里找不到 generated:controls 标记（先手工加一次标记再 gen）')
+    return [
+        (PANEL, new_panel, 'panel  client.js'),
+        (CONSOLE_JAVA, java_file('console', 'UiControls', data, 'console'), 'console UiControls.java'),
+        (BRIDGE_JAVA, java_file('bridge', 'UiControls', data, 'bridge'), 'bridge  UiControls.java'),
+    ]
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else 'check'
+    data = load()
+    try:
+        items = targets(data)
+    except SystemExit as e:
+        print(e)
+        return 2
+    if cmd == 'gen':
+        for path, content, label in items:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with io.open(path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print('   ✔ %-26s md5 %s' % (label, md5(content[:0] + content)[:12]))
+        added, changed = merge_zh(data, True)
+        print('   ✔ i18n/zh.json             +%d 新条目 / ~%d 更新（再跑 i18n-table gen）' % (added, changed))
+        return 0
+    if cmd != 'check':
+        print(__doc__)
+        return 2
+    bad = 0
+    print('按 ui/controls.json 比对三个生成产物：')
+    for path, content, label in items:
+        want = md5(content)
+        try:
+            have = md5(io.open(path, encoding='utf-8').read())
+        except IOError:
+            print('   ✘ %-26s 还没生成（want %s）' % (label, want[:12]))
+            bad += 1
+            continue
+        if want == have:
+            print('   ✔ %-26s md5 %s' % (label, want[:12]))
+        else:
+            print('   ✘ %-26s 不一致：磁盘 %s / 应为 %s' % (label, have[:12], want[:12]))
+            bad += 1
+    added, changed = merge_zh(data, False)
+    if added or changed:
+        print('   ✘ i18n/zh.json             缺 %d 条 / 过期 %d 条' % (added, changed))
+        bad += 1
+    else:
+        print('   ✔ i18n/zh.json              %d 条控件文案齐全' % (len(data['controls']) * 2))
+    print('\n✅ 三处 UI 与数据源一致' if bad == 0 else '\n❌ %d 处不一致 —— 跑 tools/ui-controls gen' % bad)
+    return 0 if bad == 0 else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

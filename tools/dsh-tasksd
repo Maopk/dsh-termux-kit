@@ -75,6 +75,15 @@ VIRTUAL = {
     # reboot, so "connect" alone is not enough to keep it usable. droid-ensure does the whole ladder
     # and names the rung that failed (Wi-Fi off / switch will not stick / no adbd port / connect).
     'adb_ensure':    [os.path.join(HOME, '.local/bin/droid-ensure')],
+    # The bridge's run switch needs both directions to be real tasks, so the panel and the console can
+    # offer the same switch without either of them inventing its own command.
+    'bridge_stop':   [os.path.join(HOME, '.local/bin/dsh-bridge'), 'stop'],
+    # Full stop is a one-way door on this ROM (accessibility is unbound and a broadcast cannot bring it
+    # back) -> it lives under Maintenance, is marked dangerous, and the UI must confirm before firing.
+    'bridge_full_stop': [os.path.join(HOME, '.local/bin/dsh-bridge'), 'off'],
+    # Read-only status refresh: same command the console uses, so "refresh" means the same thing in
+    # every surface (and never wakes a channel).
+    'status_refresh': [os.path.join(HOME, '.local/bin/dsh-status-pub'), '--json', '--brief'],
 }
 AUTH_HELPER = os.path.join(HOME, '.local/bin/dsh-auth-pass')
 # These change the running state (they drop the current session), so the frontend must confirm first

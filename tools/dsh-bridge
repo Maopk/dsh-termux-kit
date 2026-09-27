@@ -17,6 +17,13 @@ HOME_DIR="/data/data/com.termux/files/home"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 SOCK="$HOME_DIR/.local/bin/droid-sock"
 
+# 状态记录：端口关着时"软停"和"真停"从 Termux 侧看不出区别，这里记一笔给 UI 用。
+# 它只是**记录**不是真相：进程被系统回收时这条会过期 —— 所以 UI 会连"最后心跳"一起显示。
+
+# 状态记录：端口关着时"软停"和"真停"从 Termux 侧看不出区别，这里记一笔给 UI 用。
+# 它只是**记录**不是真相：进程被系统回收时这条会过期 —— 所以 UI 会连"最后心跳"一起显示。
+note() { printf '%s %s\n' "$1" "$(date +%s)" > "$HOME_DIR/.dsh-bridge-state" 2>/dev/null; }
+
 case "${1:-status}" in
   status)
     if ! port_open 8788; then
@@ -46,13 +53,18 @@ case "${1:-status}" in
     bad "the bridge did not come up: token revoked or accessibility off (设置 → 无障碍 → DSH 桥)"
     exit 1
     ;;
+  # ── state note ──
+  # Why: with the port closed, soft-stop and full-stop look identical from Termux, so the UIs could not
+  # tell the bridge's four states apart (running / soft-stopped / fully stopped / not installed). This
+  # file records which one the tools put it in. It is a *note*, not the truth: if the system reclaimed
+  # the process, the note goes stale — which is exactly why the UI shows it together with a heartbeat.
   stop)
     if ! port_open 8788; then ok "the bridge was not listening anyway"; exit 0; fi
-    timeout 15 "$SOCK" stop >/dev/null 2>&1 && { sleep 1; port_open 8788 && warn "still listening" || ok "soft-stopped (the process stays; wake restores it in a second)"; } \
+    timeout 15 "$SOCK" stop >/dev/null 2>&1 && { sleep 1; port_open 8788 && warn "still listening" || { ok "soft-stopped (the process stays; wake restores it in a second)"; note soft; }; } \
       || bad "the stop command did not succeed"
     ;;
   off)
-    timeout 20 "$SOCK" sleep >/dev/null 2>&1 && { sleep 1; port_open 8788 && warn "still listening" || ok "hard-stopped (accessibility is off too)"; } \
+    timeout 20 "$SOCK" sleep >/dev/null 2>&1 && { sleep 1; port_open 8788 && warn "still listening" || { ok "hard-stopped (accessibility is off too)"; note full; }; } \
       || bad "the sleep command did not succeed"
     ;;
   *) sed -n '2,20p' "$0"; exit 2 ;;
