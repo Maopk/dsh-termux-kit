@@ -394,6 +394,30 @@ public class BridgeService extends AccessibilityService {
                 //   还原时就会把屏幕永久设成最大值（实测踩过：手动 keep 一次 + 装包工具又 keep 一次，
                 //   原值 60000 被覆盖成 2147483647）。原值只认第一次。
                 boolean alreadyKept = sp.getBoolean("screen_off_kept", false) || sp.getBoolean("stay_on_kept", false);
+                // **先试「充电时屏幕不休眠」**（Settings.Global.STAY_ON_WHILE_PLUGGED_IN）：
+                // 它需要的是本 App 真有的 WRITE_SECURE_SETTINGS，而且**完全不碰用户在设置里看得见的
+                // 「自动锁屏」**——之前动不动去改那一项，用户看到它 1 分钟 ↔ 30 分钟来回跳，自然觉得"又有问题"。
+                // 手机在装包时基本都在充电（实测这台就是），所以这条足够用；没充电才退回去改超时。
+                boolean charging = false;
+                try {
+                    android.content.Intent bt = registerReceiver(null,
+                            new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+                    int st = bt == null ? -1 : bt.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1);
+                    charging = st == android.os.BatteryManager.BATTERY_STATUS_CHARGING
+                            || st == android.os.BatteryManager.BATTERY_STATUS_FULL;
+                } catch (Throwable t) { /* 判断不了就当没充电 */ }
+                if (charging) {
+                    try {
+                        int cur = android.provider.Settings.Global.getInt(cr, android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN, 0);
+                        if (!alreadyKept) sp.edit().putInt("stay_on_saved", cur).putBoolean("stay_on_kept", true).apply();
+                        android.provider.Settings.Global.putInt(cr, android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN, 7);
+                        d.put("method", "stay_on_while_plugged_in");
+                        d.put("was", cur);
+                        d.put("kept", true);
+                        d.put("note", "charging: kept awake via stay-on-while-plugged-in; SCREEN_OFF_TIMEOUT (自动锁屏) untouched");
+                        return d;
+                    } catch (Throwable t) { /* 退回去改超时 */ }
+                }
                 try {
                     int cur = android.provider.Settings.System.getInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT);
                     if (!alreadyKept) sp.edit().putInt("screen_off_saved", cur).putBoolean("screen_off_kept", true).apply();

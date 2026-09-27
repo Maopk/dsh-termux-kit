@@ -24,16 +24,18 @@ case "${1:-status}" in
     if printf '%s' "$r" | grep -q '"kept": true'; then
       m=$(printf '%s' "$r" | sed -n 's/.*"method": "\([^"]*\)".*/\1/p')
       if [ "$m" = "screen_off_timeout" ]; then
-        printf '✔ 已设为「不息屏」（改的是系统的息屏时间，原值已记下）\n'
+        # 改的就是「设置 → 显示 → 自动锁屏」那一项本身 —— 程序写和手动点改的是同一个值。
+        # 之前用户看它一直是 1 分钟就以为没生效，其实是我用完又还原了，所以这里直接说明去哪儿看。
+        printf '✔ 屏幕不会自己灭了（已把「设置 → 显示 → 自动锁屏」临时改成 30 分钟；用完 restore 还原）\n'
       else
-        printf '✔ 已保持常亮（改的是「充电时屏幕不休眠」——息屏时间这项需要 WRITE_SETTINGS，桥没有，所以退到这个等效办法）\n'
+        printf '✔ 屏幕不会自己灭了（用的是「充电时屏幕不休眠」，**没有动你的「自动锁屏」**）\n'
       fi
     else
       printf '✘ 没能保持常亮：%s\n' "$r" >&2; exit 1
     fi ;;
   restore)
     if printf '%s' "$r" | grep -q '"restored_ok": true'; then
-      printf '✔ 已还原成原来的设置\n'
+      printf '✔ 已还原成你原来的设置（「自动锁屏」回到原值 / 充电常亮已关掉）\n'
     elif printf '%s' "$r" | grep -q '"restored_ok": false'; then
       printf '· 没有需要还原的（之前没 keep 过）\n'
     else
