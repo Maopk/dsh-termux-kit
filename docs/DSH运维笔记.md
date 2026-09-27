@@ -2240,3 +2240,41 @@ dumpsys activity activities：目标 task 前后都是 visible=false，行数不
 
 桥 **2.19**（`<queries>` + 显式组件 + `on_top` 复核 + `REORDER_TASKS`）· 控制台 1.12 ·
 发行版 **v1.9** · SHA256SUMS 已随发行版发布。
+
+### 14.8 「修复 adb 通道」按钮（2026-09-27 晚，三个面都验过）
+
+任务 id `adb_ensure`，命令是本机绝对路径 `~/.local/bin/droid-ensure`（虚拟任务，和 `bridge_wake`/`bridge_status` 同类）。
+**必须同时改四处**，少一处就有一个面点不动（`tools/check-task-ids` 会逐面比对）：
+
+| 面 | 改哪 | 验收方式 |
+|---|---|---|
+| tasksd | `VIRTUAL` 字典 | `/tasks` 返回 **15 项、含 adb_ensure** |
+| 页面面板 | `plugins/dsh-mobile-local/client.js` 的 `TASKS` | 面板里看到「🔌 Repair adb channel」（截图/树实证） |
+| 控制台 App | `Tasks.java`（真源码在 `~/dsh-console`） | 冷启动后界面显示 v1.13 +「修复 adb 通道」 |
+| 小组件 | 无（虚拟任务没有脚本） | — |
+
+**真按下按钮的实录**（Wi-Fi 当时是关的）：
+
+```
+[17:49:21] 已发送: 修复 adb 通道，等待 Termux 回传
+[17:49:22] ✔ 修复 adb 通道 已完成 (exit=3，用时 0.421s)
+网络（桥读的）: wifi_on=0 online=true adb_wifi=0
+✘ Wi-Fi 是关的：无线调试依赖可用 Wi-Fi，Android 10+ 也不允许 App 替你开 Wi-Fi
+```
+—— 按钮没瞎报成功，把"只有你能开 Wi-Fi"写清楚了。
+
+**顺手堵掉两个真实的坑**：
+
+1. **安装工具会"假成功"**：装控制台 1.13 时第一次报 `完成`、退出码 0，而实际上**没装上**
+   （第⑥步看到的是"向导自己关了"，那既可能是装完了、也可能是啥也没发生，工具分不出来）。
+   → 现在**默认开启第⑦步校验**（再打开同一个 APK，等它说「已安装相同版本」才算数），
+   想省事用 `--no-verify`，而 `--dry-run` 会把"这次会不会校验"打出来。
+   实测证据：改完重跑 → `install complete (版本：1.13)` + `✔ 已安装相同版本` 才是真的。
+2. **「更新两个App」会把新版本降级**：它是从**发行版**下 APK 的，当时发行版里还是 console 1.12，
+   而我刚在本机编了 1.13 → 一点就回落。**改了 App 就必须同时发新发行版**（已发 v1.10：console 1.13 + 桥 2.19），
+   之后用更新通道复核：`--current 1.13` → 已是最新；`--current 1.12` → 提示升到 1.13。
+
+**两个当场踩到的坑（记下来免得再犯）**：
+- **App 的真源码在 `~/dsh-console` 和 `~/droid-bridge`**，仓库里的 `apps/` 是 `sync-apps.sh` 镜像出来的副本。
+  我改了仓库那份、然后重启服务——当然没生效（tasksd 也一样：改仓库、跑安装位）。**改代码要改真源码，装要装安装位。**
+- **Termux 自带的 `am` 没有 `force-stop`**（报 unknown command）；要"冷启动"用 `am start -S -n <包>/<Activity>`（`-S` = 启动前先强停）。

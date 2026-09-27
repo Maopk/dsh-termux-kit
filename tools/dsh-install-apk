@@ -7,8 +7,14 @@
 # The manual step is replaced by the 6 digits in ~/.dsh-auth-pass (600, meaning "the AI may use your lockscreen password").
 # **To revoke**: the 『撤销安装密码授权』 entry under 「紧急」 in the Console App / widget 9 / or rm that file.
 #
-# Usage: dsh-install-apk <apk path> [--verify] [--dry-run]
-#   --verify after installing, open the same APK again and confirm the installer says 「已安装相同版本」 (the hardest evidence, costs ~15s more)
+# Usage: dsh-install-apk <apk path> [--no-verify] [--dry-run]
+#   Verification is ON by default: after installing, open the same APK again and confirm the installer
+#   says 「已安装相同版本」 — the hardest evidence, and it costs only ~15s more.
+#   WHY it is the default (measured 2026-09-27): the install really failed once (the wizard closed by
+#   itself after the digits), the tool still printed 「完成」 and exited 0, and the app stayed at the old
+#   version. Step ⑥ cannot always tell "the wizard closed because it finished" from "it closed because
+#   nothing happened", so a run that cannot prove the result must not report success.
+#   --no-verify skips that step when you are in a hurry and will check yourself.
 # Exit: 0 success; 1 failure; 3 not authorized (run dsh-auth-pass set first); 4 preconditions unmet
 set -u
 HOME_DIR="/data/data/com.termux/files/home"
@@ -21,11 +27,12 @@ HELPER="$HOME_DIR/.local/bin/dsh-auth-pass"
 #   ② 不能所有 APK 共用一个固定名：安装器界面会被复用，第二次 `am start` 打开新包时
 #      屏幕上仍是**上一个包**的页面（实测装完控制台再装桥，页面还写着「DSH Console（1.9）」，
 #      于是桥被误判成"已安装相同版本"）。
-DRY=0; VERIFY=0; APK=""
+DRY=0; VERIFY=1; APK=""   # verification ON by default: an unproven install must not report success
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1 ;;
     --verify) VERIFY=1 ;;
+    --no-verify) VERIFY=0 ;;
     -*) printf 'unknown argument %s\n' "$1" >&2; exit 2 ;;
     *) APK="$1" ;;
   esac
@@ -244,7 +251,14 @@ else
   fi
 fi
 
-# ── verification (optional)──
+# ── verification (default ON: this is the only step that proves the install really happened) ──
+if [ "$DRY" = 1 ]; then
+  if [ "$VERIFY" = 1 ]; then
+    printf '   · [dry] verify: open the same APK again and expect 「已安装相同版本」 (a real run ends with this verdict)\n'
+  else
+    printf '   · [dry] --no-verify: a real run would stop after the wizard and report success WITHOUT proof\n'
+  fi
+fi
 if [ "$VERIFY" = 1 ] && [ "$DRY" != 1 ]; then
   step "⑦ verification (**this is the real verdict**): open the same APK again; it should say 「已安装相同版本」"
   # Note: after installing, this installer deletes the source APK (measured: "package does not exist") → copy it again before verifying
