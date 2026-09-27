@@ -19,7 +19,11 @@ cd "$SHARED" 2>/dev/null || cd "$HOME_DIR"
 
 LOG="$(dsh_log)"
 OPENER="$HOME_DIR/.local/bin/dsh-browser-open"
-URLFILE="$HOME_DIR/.dsh-url"
+# ⚠ .dsh-url is the file the USER follows. The selftest runs this very widget against a
+#   throwaway instance, and if that run is interrupted its detached DSH finishes later and
+#   overwrites .dsh-url with the sandbox URL — the user then follows it into the sandbox
+#   (seen for real 2026-09-27). DSH_URL_FILE lets such a caller redirect it.
+URLFILE="${DSH_URL_FILE:-$HOME_DIR/.dsh-url}"
 
 open_browser() {   # $1=url
   [ "$OPEN" = 1 ] || { warn "Not opening the browser, as requested"; return 0; }

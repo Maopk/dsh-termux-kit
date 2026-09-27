@@ -7,7 +7,7 @@ and requires a token on each request (the token lives in a 600 file that the pag
 
 Security boundary (stated honestly):
   · binds 127.0.0.1 only — the LAN and the outside cannot reach it;
-  · CORS allows only the DSH origin (http://127.0.0.1:8080);
+  · CORS allows any loopback origin (the DSH port is chosen at startup, so it is never pinned);
   · a correct token is required — another App on the phone may reach loopback, but without the token it cannot execute anything;
   · only whitelisted script names can run, **no arbitrary commands and no arguments** (only an added --dry-run);
   · no credentials are stored; the token is generated outside.
@@ -116,13 +116,18 @@ def port_open(p, host='127.0.0.1', timeout=1.5):
             pass
 
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dsh_common  # noqa: E402   (never guess the DSH port — see tools/dsh_common.py)
+
+
 def status():
     st = {}
     # DSH Web
-    st['dsh'] = {'port': port_open(8080)}
+    _dsh_port = dsh_common.dsh_port()
+    st['dsh'] = {'port': port_open(_dsh_port)}
     try:
         out = subprocess.run(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}',
-                              '--max-time', '4', 'http://127.0.0.1:8080/'],
+                              '--max-time', '4', 'http://127.0.0.1:%d/' % _dsh_port],
                              capture_output=True, text=True, timeout=8).stdout.strip()
         st['dsh']['http'] = out
     except Exception:

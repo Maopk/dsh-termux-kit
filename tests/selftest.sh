@@ -556,7 +556,12 @@ cp -f "$HOME_DIR/.dsh-url" "$HOME_DIR/.smoke/dsh-url.save" 2>/dev/null   # the s
 SAVED=1   # from here on, cleanup (including when interrupted) may restore these two files
 # The sandbox instance must pass --patch to disable filetransfer: the main instance already holds 3199, so a second one cannot take the port
 # and dies with EADDRINUSE while loading the plugin tree (seen for real). Note: --patch must come before --port.
-DSH_PORT=8099 DSH_WEB_EXTRA="--patch $HOME_DIR/.smoke/patch.yml" \
+# DSH_URL_FILE: the sandbox must not write the user's .dsh-url. Saving/restoring it around the
+#   run was not enough — an interrupted run leaves a detached DSH that finishes later and
+#   overwrites it again, after the restore (this is how the user ended up inside the sandbox
+#   on 2026-09-27). Redirecting the file removes the race instead of racing it.
+DSH_PORT=8099 DSH_URL_FILE="$HOME_DIR/.smoke/dsh-url.sandbox" \
+  DSH_WEB_EXTRA="--patch $HOME_DIR/.smoke/patch.yml" \
   timeout 200 bash "$T/1_start-dsh.sh" --no-open > "$TMPLOG" 2>&1 &
 WPID=$!
 SAMPLES=""

@@ -165,7 +165,7 @@ dsh_start_and_wait() {   # $1=log $2=timeout seconds
   ok "Process started (pid $pid)"
   U=$(wait_dsh_ready "$t" "$f" "$pid"); rc=$?
   case "$rc" in
-    0) printf '%s\n' "$U" > "$HOME_DIR/.dsh-url"
+    0) printf '%s\n' "$U" > "${DSH_URL_FILE:-$HOME_DIR/.dsh-url}"
        ok "Readiness check passed: the auth URL returns 200 after redirects"
        printf '   · %s\n' "$U"; return 0 ;;
     2) bad "The process exited during startup (most likely the plugin tree failed to load)"

@@ -108,15 +108,22 @@ def tasks_state():
     return out
 
 
+# Where is DSH? Never guess the port: ~/.dsh-url records it (see tools/dsh_common.py for why
+# hard-coding 8080 made both detectors report "not running" while DSH ran on 8099).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dsh_common  # noqa: E402
+
+
 def collect():
     global DEADLINE
     DEADLINE = time.time() + BUDGET_S
     st = {'ts': time.strftime('%F %T'), 'epoch': int(time.time()), 'budget_s': BUDGET_S}
     # DSH Web
-    dsh = {'port': port_open(8080)}
+    _dsh_port = dsh_common.dsh_port()
+    dsh = {'port': port_open(_dsh_port)}
     mt = int(max(1, budget(4)))
     code = sh(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', str(mt),
-               'http://127.0.0.1:8080/'], timeout=budget(6))
+               'http://127.0.0.1:%d/' % _dsh_port], timeout=budget(6))
     dsh['http'] = code or '?'
     dsh['ok'] = dsh['port'] and code not in ('', '000', '404')
     st['dsh'] = dsh
@@ -140,7 +147,7 @@ def collect():
     st['adb'] = {'devices': devs, 'ok': bool(devs)}
     # leftovers
     st['locks'] = {
-        'boot': os.path.exists(os.path.join(HOME, '.dsh-boot-8080.lock')),
+        'boot': os.path.exists(dsh_common.boot_lock()),
         'credentials': os.path.exists(os.path.join(HOME, '.dsh', '.credentials.yaml.lock')),
     }
     # lamps (three-color summary the UI can use directly)

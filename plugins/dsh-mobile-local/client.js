@@ -223,7 +223,10 @@ window.__ModuleLoader__.load({
               h('button', { className: 'mb-close', onClick: load, title: 'Refresh status' }, 'Refresh'),
               h('button', { className: 'mb-close', onClick: props.onClose }, 'Close')),
             h('div', { className: 'mb-lamps' },
-              h(Lamp, { on: dshOn, text: 'DSH ' + (s.dsh && s.dsh.http ? s.dsh.http : (dshOn ? 'running' : 'stopped')) }),
+              // State first, code second. This used to print the bare HTTP code ('DSH 401'), which tells
+              // the user nothing about whether DSH is up — the Console app already showed a state.
+              h(Lamp, { on: dshOn, text: 'DSH ' + (dshOn ? 'running' : 'stopped')
+                + (s.dsh && s.dsh.http ? ' (HTTP ' + s.dsh.http + ')' : '') }),
               h(Lamp, { on: brOn, text: 'bridge ' + (s.bridge && s.bridge.ver ? 'v' + s.bridge.ver : (brOn ? 'up' : 'none')) }),
               h(Lamp, { on: adbOn, text: 'adb ' + (adbOn ? s.adb.devices[0] : 'not connected') })),
             CATS.map((cat) => {
