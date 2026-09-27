@@ -173,9 +173,20 @@ PYX
   fi
   for pt in $CANDS "338,1151" "348,1152" "330,1150"; do
     [ -n "$pt" ] || continue
-    tap_xy "$pt"; sleep 3
-    if [ "$(cur_pkg)" = "com.android.systemui" ] || ui | grep -q "安全验证"; then GOT=1; ok "the verification dialog appeared (tapped $pt)"; break; fi
-    warn "no reaction at $pt; trying the next one"
+    tap_xy "$pt"
+    # Wait for the dialog instead of sampling once after 3s. Measured 2026-09-27: the tap DOES work,
+    # but 「安全验证」 came up after the old `sleep 3` had already elapsed, so the tool reported
+    # "no reaction" and moved on to the next candidate — every later tap then landed on a screen
+    # with no link, and the run ended as "could not bring up 安全验证" while the dialog was in fact
+    # open behind it. cur_pkg is cheap, so poll it; `ui` is slow and only used as a fallback.
+    W=0
+    for _ in $(seq 1 12); do
+      sleep 1; W=$((W+1))
+      [ "$(cur_pkg)" = "com.android.systemui" ] && { GOT=1; break; }
+    done
+    [ "$GOT" != 1 ] && ui | grep -q "安全验证" && GOT=1
+    [ "$GOT" = 1 ] && { ok "the verification dialog appeared (tapped $pt, after ${W}s)"; break; }
+    warn "no reaction at $pt after ${W}s; trying the next one"
   done
   if [ "$GOT" != 1 ] && ui | grep -q "已安装相同版本"; then
     # Not a failure: this page means the APK is already installed, which is exactly the goal.

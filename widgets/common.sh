@@ -30,6 +30,29 @@ step() { printf '\n▶ %s\n' "$(dsh_msg "$*")"; }
 ok()   { printf '   ✔ %s\n' "$(dsh_msg "$*")"; }
 warn() { printf '   ⚠ %s\n' "$(dsh_msg "$*")"; }
 bad()  { printf '   ✘ %s\n' "$(dsh_msg "$*")" >&2; }
+
+# ---- Lines that interpolate a value: translate FIRST, substitute SECOND ----
+#
+# Why these exist. `step "… serves $DSH_PORT"` expands the variable **before** dsh_msg runs, so the
+# lookup sees "… serves 8080" while the table holds "… serves $DSH_PORT" — a miss, and the line
+# prints English however complete the table is. Measured 2026-09-27: 85 call sites were dead this
+# way (the user spotted one: "② Check whether something already serves 8080" among Chinese lines).
+#
+# The fix is to hand dsh_msg the **template**, then substitute. The template is single-quoted at the
+# call site and the values follow as arguments:
+#
+#     stepf '② Check whether something already serves %s' "$DSH_PORT"
+#
+# So the table keys and values on %s, exactly like printf — and because substitution happens after
+# translation, a language can reorder the values, which concatenation can never do.
+_dsh_fmt() { local f; f="$(dsh_msg "$1")"; shift; printf "$f" "$@"; }
+logf()  { printf '%s %s\n' "$(date '+%H:%M:%S')" "$(_dsh_fmt "$@")"; }
+stepf() { printf '\n▶ %s\n' "$(_dsh_fmt "$@")"; }
+okf()   { printf '   ✔ %s\n' "$(_dsh_fmt "$@")"; }
+warnf() { printf '   ⚠ %s\n' "$(_dsh_fmt "$@")"; }
+badf()  { printf '   ✘ %s\n' "$(_dsh_fmt "$@")" >&2; }
+sayf()  { printf '%s\n' "$(_dsh_fmt "$@")"; }
+
 die()  { bad "$*"; publish_status; printf '\n[%s] failed (took %ss)\n' "$SELF" "$(( $(date +%s) - T0 ))"; exit 1; }
 done_() { publish_status; printf '\n[%s] done, took %ss\n' "$SELF" "$(( $(date +%s) - T0 ))"; }
 need()  { command -v "$1" >/dev/null 2>&1; }
