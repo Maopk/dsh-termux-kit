@@ -7,6 +7,28 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-09-28 01:25 · 【推送记录】源码推上 GitHub（不发版）
+
+做了什么：按 CONTRIBUTING §九 执行：`tools/pre-push-check --strict`（12/12 全绿）→ `git pull --rebase origin master`
+（无动作，远端是本地祖先）→ `dsh-gh push`。
+**推送前先摘掉未发版的产物**：`dist/` 里 1.17 / 1.18 / 2.23 三个 APK 与 SHA256SUMS 的改动
+用 `git filter-branch --index-filter`（把 dist/ 钉回远端那棵树）从待推范围里剔除 —— 远端现有 dist/ 里都是
+**已发版**的产物，未发版的不该先上去（用户 2026-09-28 明确："现在只推源码"）。顺手把上轮 filter-branch
+漏掉的第 19 条旧式前缀 `P0:` 统一成 `ui:`。**两次改写都只动路径/标题，代码内容一字未动**，
+改写前留了备份分支 `backup/before-dist-strip`。
+未发版的三个 APK 用 `.git/info/exclude` 挡住（**只影响本机**，不入库、也不弄脏 git status），
+发版时 `git add -f` 再入库。
+为什么：用户要求先把这一波 UI 改动（P0–P2）的源码推上去跑几天；发版时机由他定。
+结果：✅ **推送成功**：`60def57..e5252e0  HEAD -> master`；远端 HEAD = **e5252e0**（`git ls-remote` 实测）；
+内容 = **21 个 commit / 48 个文件 / +3973 −696**，其中 `dist/` **零变化**（未发版产物未上远端）。
+新增文件 13 个：CONTRIBUTING.md · CHANGELOG.md · ui/theme.json · 两份 Palette.java · 两份 dsh_theme.xml ·
+tools/{app-verify,i18n-audit,panel-render-test,pre-push-check,sync-apps,ui-bg-check}。
+⚠ 推送后 `git fetch origin` 撞上一次 **TLS connect error（unexpected eof）** —— GitHub 在代理下仍然间歇性抖动
+（clash-doctor 当时四项全绿，所以是链路瞬断而不是核心挂了）；本地 `origin/master` 引用改用 ls-remote 的实测值校准。
+下一步：发版等用户发话（他自己定：UI P0–P2 全落地 + 实机跑 2–3 天）。到时要给他一份发版 checklist：
+三处版本号 bump / CHANGELOG 定稿 / 编译三个产物（控制台 APK、桥 APK、面板 tgz）/ 附 SHA256 / 写 release notes /
+打 tag + 发 GH Release / 更新 README 的"最新版本"指向 —— 全做完我可以自己推。
+
 2026-09-28 01:12 · 检查 GitHub 连通性（用户问"现在 gh 连得上吗"）+ 修 pre-push-check 第 10 条
 
 做了什么：四条并行探针：① `dsh-gh status`（API + token 那条路）② `git ls-remote origin HEAD`（push 走这条）
