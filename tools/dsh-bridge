@@ -28,8 +28,12 @@ case "${1:-status}" in
   status)
     if ! port_open 8788; then
       printf 'bridge: not listening (8788 closed)\n'
+      # No note is meaningful: it means this install has never been seen alive here, which is how the
+      # UIs tell "not installed / never seen" apart from "it stopped".
+      printf 'note: %s\n' "$(cat "$HOME_DIR/.dsh-bridge-state" 2>/dev/null || echo none)"
       exit 2
     fi
+    note running
     P=$(timeout 12 "$SOCK" ping 2>/dev/null || true)
     if printf '%s' "$P" | grep -q '"pong": true'; then
       V=$(printf '%s' "$P" | grep -oE '"ver": *"[^"]*"' | grep -oE '[0-9.]+')
@@ -58,6 +62,12 @@ case "${1:-status}" in
   # tell the bridge's four states apart (running / soft-stopped / fully stopped / not installed). This
   # file records which one the tools put it in. It is a *note*, not the truth: if the system reclaimed
   # the process, the note goes stale — which is exactly why the UI shows it together with a heartbeat.
+  seen)
+    # Mark "this install has the bridge" without claiming it is running. The four-state text shows
+    # `not installed` only when there is no note at all, so whoever installs it should call this.
+    note full
+    ok "noted: the bridge is installed here (state note written)"
+    ;;
   stop)
     if ! port_open 8788; then ok "the bridge was not listening anyway"; exit 0; fi
     timeout 15 "$SOCK" stop >/dev/null 2>&1 && { sleep 1; port_open 8788 && warn "still listening" || { ok "soft-stopped (the process stays; wake restores it in a second)"; note soft; }; } \

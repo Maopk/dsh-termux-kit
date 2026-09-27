@@ -30,7 +30,7 @@ window.__ModuleLoader__.load({
         {"id": "8_enable-wireless-adb", "kind": "button", "cat": "channels", "group": "adb", "icon": "⚡", "danger": false, "label": {"en": "Connect adb", "zh": "连接 adb"}, "hint": {"en": "Wireless debugging only. Needs a real Wi-Fi network, not just the switch.", "zh": "只走无线调试。需要有真实可用的 Wi-Fi，不只是拨开关。"}, "surfaces": ["panel", "console", "widget"]},
         {"id": "adb_lamp", "kind": "lamp", "cat": "channels", "group": "adb", "icon": "●", "danger": false, "label": {"en": "adb", "zh": "adb"}, "hint": {"en": "Green = usable, yellow = connecting, red = failed, grey = not connected (check Wi-Fi).", "zh": "绿=可用，黄=连接中，红=失败，灰=未连接（看 Wi-Fi）。"}, "surfaces": ["panel", "console"]},
         {"id": "bridge_run", "kind": "switch", "cat": "channels", "group": "bridge", "icon": "🌉", "danger": false, "label": {"en": "Bridge running", "zh": "桥运行中"}, "hint": {"en": "On = listening on 8788. Off = soft stop: the port closes but the process stays, so one broadcast brings it back.", "zh": "开=监听 8788 正常工作；关=软停（关端口、进程保留，一条广播就能唤回）。"}, "surfaces": ["panel", "console", "bridge"]},
-        {"id": "bridge_state_text", "kind": "text", "cat": "channels", "group": "bridge", "icon": "·", "danger": false, "label": {"en": "Bridge state", "zh": "桥状态"}, "hint": {"en": "Four states with the last heartbeat: running / soft-stopped (wakeable) / fully stopped (needs a manual open) / not installed.", "zh": "四态 + 最后心跳：运行中 / 软停（可唤醒）/ 真停（需手动打开）/ 未安装。"}, "surfaces": ["panel", "console", "bridge"]},
+        {"id": "bridge_state_text", "kind": "text", "cat": "channels", "group": "bridge", "icon": "·", "danger": false, "label": {"en": "Bridge state", "zh": "桥状态"}, "hint": {"en": "Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).", "zh": "四态由**一次 ping 的结果 + 状态记录**判定（不看时间）：运行中 / 刚断（可唤醒，一条广播就能拉回）/ 长时间未响应（进程自己没了，或端口在听却不应答 —— 唤醒可能有效，无效就手动打开一次「DSH 桥」）/ 未安装（这台机器上从没见过它是活的）。"}, "surfaces": ["panel", "console", "bridge"]},
         {"id": "bridge_wake", "kind": "button", "cat": "channels", "group": "bridge", "icon": "🌉", "danger": false, "label": {"en": "Wake bridge", "zh": "唤醒桥"}, "hint": {"en": "Sends one token-carrying broadcast. Never takes your screen. Can take 20-40s if the process was reclaimed.", "zh": "发一条带 token 的广播把它唤回，绝不抢你的屏幕。进程被回收时要 20-40 秒。"}, "surfaces": ["panel", "console", "widget"]},
         {"id": "bridge_status", "kind": "button", "cat": "channels", "group": "bridge", "icon": "🔎", "danger": false, "label": {"en": "Bridge status", "zh": "桥状态查询"}, "hint": {"en": "Read-only: is the port listening, does it really answer, version, paused flag.", "zh": "只读：端口是否在听、是否真应答、版本、是否被暂停。"}, "surfaces": ["panel", "console"]},
         {"id": "7_reconnect-ai", "kind": "button", "cat": "channels", "group": "bridge", "icon": "🔗", "danger": false, "label": {"en": "Restore both channels", "zh": "恢复全部通道"}, "hint": {"en": "adb first, then the bridge. Use only when you need both; a failure names the channel it came from.", "zh": "先 adb 后桥。两条都要时才用；失败会说清是哪条通道。"}, "surfaces": ["panel", "console"]},
@@ -213,15 +213,6 @@ window.__ModuleLoader__.load({
       }
 
       // ── helpers ──
-      function ago(ts, lang) {
-        if (!ts) return '';
-        const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
-        if (s < 60) return s + (lang === 'zh' ? ' 秒前' : 's ago');
-        const m = Math.round(s / 60);
-        if (m < 60) return m + (lang === 'zh' ? ' 分钟前' : 'm ago');
-        return Math.round(m / 60) + (lang === 'zh' ? ' 小时前' : 'h ago');
-      }
-
       function lampOf(kind, status, extra) {
         // Colour semantics are fixed across all three UIs: green ok · yellow transitional · red broken · grey off/unknown
         if (kind === 'dsh') {
@@ -313,7 +304,6 @@ window.__ModuleLoader__.load({
         const [err, setErr] = useState('');
         const [logOpen, setLogOpen] = useState(false);
         const [unread, setUnread] = useState(0);
-        const [lastSeen, setLastSeen] = useState(0);
         const pressRef = useRef(0);
 
         const pushLog = useCallback((entry) => {
@@ -327,13 +317,6 @@ window.__ModuleLoader__.load({
           try {
             const rs = await Promise.all([api('/status'), api('/auth')]);
             setStatus(rs[0].status); setAuth(rs[1].auth);
-            if (rs[0].status && rs[0].status.bridge && rs[0].status.bridge.ok) {
-              const now = Date.now();
-              setLastSeen(now);
-              try { localStorage.setItem('dsh-bridge-seen', String(now)); } catch (e) {}
-            } else {
-              try { setLastSeen(Number(localStorage.getItem('dsh-bridge-seen') || 0)); } catch (e) {}
-            }
           } catch (e) { setErr((lang === 'zh' ? '读状态失败：' : 'Failed to read status: ') + (e.message || e)); }
         }, [lang]);
 
@@ -494,11 +477,18 @@ window.__ModuleLoader__.load({
           const x = UI_GROUPS.filter((y) => y.id === gid)[0];
           return x ? (lang === 'zh' ? x.zh : x.en) : gid;
         };
+        // Four states, from **one ping plus the state note** — deliberately not from a timer
+        // (the user asked for exactly that). tasksd already reduced the signals to `state`.
         const brState = (() => {
           const b = s.bridge || {};
-          if (b.ok) return (lang === 'zh' ? '运行中' : 'running') + (b.ver ? ' · v' + b.ver : '') + (lastSeen ? ' · ' + ago(lastSeen, lang) : '');
-          if (b.port) return lang === 'zh' ? '端口在听但不应答（可能被冻结）' : 'port open but no answer (frozen?)';
-          return lang === 'zh' ? '未在运行（软停可唤醒；真停/未安装需手动打开一次）' : 'not running (soft-stop is wakeable; full stop / not installed needs a manual open)';
+          switch (b.state) {
+            case 'running': return (lang === 'zh' ? '运行中' : 'running') + (b.ver ? ' · v' + b.ver : '');
+            case 'soft': return lang === 'zh' ? '刚断（可唤醒）' : 'just dropped (wakeable)';
+            case 'frozen': return lang === 'zh' ? '长时间未响应（端口在听却不应答）' : 'long silent (bound but not answering)';
+            case 'silent': return lang === 'zh' ? '长时间未响应' : 'long silent';
+            case 'never': return lang === 'zh' ? '未安装' : 'not installed';
+            default: return lang === 'zh' ? '未知' : 'unknown';
+          }
         })();
         const channelsSection = section('channels', h('div', null,
           h('div', { className: 'mb-sub' }, g('adb')),

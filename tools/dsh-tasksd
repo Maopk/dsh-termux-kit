@@ -163,6 +163,28 @@ def status():
         m = re.search(r'"ver":\s*"([^"]+)"', r)
         st['bridge']['ver'] = m.group(1) if m else None
         st['bridge']['ok'] = '"pong": true' in r
+        # Four states for the UIs, decided by **one ping plus the state note**, never by a timer
+        # (the user asked for exactly that: no "3 seconds ago"). Rules:
+        #   running  the ping answered
+        #   soft     ping failed and the note says the last thing we did was a soft stop -> one broadcast brings it back
+        #   never    ping failed and there is no note at all -> this install has never been seen alive here
+        #   silent   ping failed, port closed, but we have seen it before -> the process went away on its own
+        #   frozen   the port is open yet nothing answers -> it is bound but not responding
+        try:
+            note = open(os.path.join(HOME, '.dsh-bridge-state'), encoding='utf-8').read().split()[0]
+        except Exception:
+            note = ''
+        st['bridge']['note'] = note or 'none'
+        if st['bridge']['ok']:
+            st['bridge']['state'] = 'running'
+        elif st['bridge'].get('port'):
+            st['bridge']['state'] = 'frozen'
+        elif note == 'soft':
+            st['bridge']['state'] = 'soft'
+        elif note in ('', 'none'):
+            st['bridge']['state'] = 'never'
+        else:
+            st['bridge']['state'] = 'silent'
     except Exception:
         st['bridge']['ok'] = False
     # adb

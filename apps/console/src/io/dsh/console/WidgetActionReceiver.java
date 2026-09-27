@@ -18,13 +18,13 @@ public class WidgetActionReceiver extends BroadcastReceiver {
             TermuxRunner.run(ctx, "open", Lang.t("Open UI"), TermuxRunner.openUiCmd(), false);
         } else {
             String label = what, command = TermuxRunner.taskCmd(what);
-            for (Tasks.T t : Tasks.ALL) if (t.id.equals(what)) { label = t.label; if (t.cmd != null) command = t.cmd; }
+            for (Tasks.T t : Tasks.ALL) if (t.id.equals(what)) { UiControls.C c = UiControls.get(t.id); label = c != null ? c.labelEn : t.id; if (t.cmd != null) command = t.cmd; }
             TermuxRunner.run(ctx, what, label, command, false);
         }
     }
 
     private static String labelOf(String id) {
-        for (Tasks.T t : Tasks.ALL) if (t.id.equals(id)) return t.label;
+        for (Tasks.T t : Tasks.ALL) if (t.id.equals(id)) { UiControls.C c = UiControls.get(t.id); return c != null ? c.labelEn : t.id; }
         return id;
     }
 

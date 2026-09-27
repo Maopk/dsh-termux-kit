@@ -7,6 +7,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.content.IntentFilter;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -94,6 +95,10 @@ public class MainActivity extends Activity {
 
     // Log panel: its own screen, no longer the permanent output box at the bottom
     private AlertDialog logDialog;
+    private Switch bridgeSwitch;
+    private TextView bridgeStateView;
+    /** Guards the switch against firing a task while render() is setting it from the status. */
+    private boolean bridgeSwitchBusy;
     private TextView logBody;
     private ScrollView logScroll;
 
@@ -236,18 +241,11 @@ public class MainActivity extends Activity {
         titleRow.addView(vt);
         root.addView(titleRow);
 
-        lamps = new TextView(this);
-        lamps.setText(Lang.t("● DSH　● Bridge　● adb")); lamps.setTextSize(15);
-        lamps.setPadding(0, dp(10), 0, 0); root.addView(lamps);
-
-        line = new TextView(this);
-        line.setTextSize(12); line.setPadding(0, dp(6), 0, dp(10));
-        line.setTextColor(Color.parseColor("#8B949E")); root.addView(line);
-
+        // ── Busy strip: directly under the header, so a press always shows progress where you look ──
         busyRow = new LinearLayout(this);
         busyRow.setOrientation(LinearLayout.HORIZONTAL);
         busyRow.setGravity(Gravity.CENTER_VERTICAL);
-        busyRow.setPadding(0, 0, 0, dp(8));
+        busyRow.setPadding(0, dp(10), 0, dp(4));
         busyRow.setVisibility(View.GONE);
         spinner = new ProgressBar(this);
         spinner.setIndeterminate(true);
@@ -259,39 +257,40 @@ public class MainActivity extends Activity {
         busyRow.addView(busyText);
         root.addView(busyRow);
 
-        // ── Shortcut row: refresh status + log (the log is never disabled while busy, so you can read it while waiting) ──
-        LinearLayout top = new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL);
-        Button bRefresh = mkBtn(Lang.t("Refresh status"), false, v -> { toast(Lang.t("Reading status…"));
-            run("status", Lang.t("Refresh status"), TermuxRunner.statusCmd(), true, false, false, 25, true); });
-        logBtn = mkBtn(Lang.t("Log"), false, 0xFF79C0FF, v -> { toast(Lang.t("Opening log")); openLog(); });
-        buttons.add(bRefresh);
-        top.addView(bRefresh, lp());
-        top.addView(logBtn, lp());
-        root.addView(top);
-
-        // ── Sections grouped by function ──
-        for (String cat : Tasks.CATS) {
-            int n = 0;
-            for (Tasks.T x : Tasks.ALL) if (cat.equals(x.cat)) n++;
-            if (n == 0) continue;
-            TextView h = new TextView(this);
-            h.setText("▍" + Lang.t(cat));   // same static-array trap as the task labels: translate at render
-            h.setTextSize(13); h.setTypeface(Typeface.DEFAULT_BOLD);
-            h.setTextColor(Color.parseColor("#58A6FF"));
-            h.setPadding(0, dp(14), 0, dp(2));
-            root.addView(h);
-            for (Tasks.T task : Tasks.ALL) {
-                if (!cat.equals(task.cat)) continue;
-                // Translate at RENDER time: Tasks.ALL is static, so wrapping there would freeze the
-                // language that happened to be active when the class was first loaded.
-                Button bt = mkBtn(Lang.t(task.label) + "　·　" + Lang.t(task.hint), task.danger, v -> fire(task));
-                buttons.add(bt);
-                root.addView(bt, wideLp());
-            }
-            // The "install password authorization" switch hangs under the maintenance section (user requirement: a switch, not a button)
-            if (Tasks.CARE.equals(cat)) {
-                root.addView(buildAuthRow(), wideLp());
-                root.addView(buildLangRow(), wideLp());
+        // ── Everything below comes from the generated control source (ui/controls.json) ──
+        // One source, three surfaces: the page panel and the bridge app render the same entries, so the
+        // same control cannot end up named or explained differently here than there.
+        for (String[] cat : UiControls.CATS) {
+            List<UiControls.C> list = UiControls.ofCat(cat[0]);
+            if (list.isEmpty()) continue;
+            root.addView(sectionHeader(Lang.t(cat[1])));
+            String openGroup = "";
+            for (UiControls.C ctrl : list) {
+                if (ctrl.group.length() > 0 && !ctrl.group.equals(openGroup)) {
+                    openGroup = ctrl.group;
+                    root.addView(subHeader(Lang.t(UiControls.groupEn(openGroup))));
+                }
+                if ("button".equals(ctrl.kind)) {
+                    Button bt = controlButton(ctrl);
+                    buttons.add(bt);
+                    root.addView(bt, wideLp());
+                } else if ("switch".equals(ctrl.kind)) {
+                    root.addView(switchRow(ctrl), wideLp());
+                } else if ("lamp".equals(ctrl.kind)) {
+                    if (lamps == null) {
+                        lamps = new TextView(this);
+                        lamps.setTextSize(15);
+                        lamps.setPadding(0, dp(8), 0, dp(2));
+                        root.addView(lamps);
+                        line = new TextView(this);
+                        line.setTextSize(12);
+                        line.setTextColor(Color.parseColor("#8B949E"));
+                        line.setPadding(0, dp(4), 0, dp(8));
+                        root.addView(line);
+                    }
+                } else if ("text".equals(ctrl.kind)) {
+                    root.addView(textRow(ctrl), wideLp());
+                }
             }
         }
 
@@ -304,15 +303,6 @@ public class MainActivity extends Activity {
         llp.setMargins(0, dp(12), 0, 0);
         lastLine.setOnClickListener(v -> openLog());
         root.addView(lastLine, llp);
-
-        TextView about = new TextView(this);
-        about.setText(Lang.t("About"));
-        about.setTextSize(13); about.setTypeface(Typeface.DEFAULT_BOLD);
-        about.setTextColor(Color.parseColor("#58A6FF"));
-        about.setPadding(0, dp(14), 0, dp(2));
-        root.addView(about);
-        root.addView(buildUpdateRow(), wideLp());
-        root.addView(buildProjectRow(), wideLp());
 
         TextView tip = new TextView(this);
         tip.setTextSize(11); tip.setTextColor(Color.parseColor("#6E7681"));
@@ -484,15 +474,34 @@ public class MainActivity extends Activity {
         texts.addView(sub);
         row.addView(texts, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        String mode = Lang.mode();
-        String shown = mode.equals("auto") ? Lang.t("System") : (mode.equals("zh") ? Lang.t("Chinese") : "English");
-        Button b = mkBtn(shown, false, 0xFF79C0FF, v -> {
-            String next = mode.equals("auto") ? "zh" : (mode.equals("zh") ? "en" : "auto");
-            Lang.setMode(this, next);
-            run("lang", Lang.t("Language"), TermuxRunner.HOME + "/.local/bin/dsh-lang set " + next, false, true);
-            recreate();
-        });
-        row.addView(b);
+        // Three choices, not a cycling button (user's call): "System / 中文 / English" — a cycle hides
+        // which option you will land on, and this setting is shared by the widgets and the page panel.
+        final String mode = Lang.mode();
+        LinearLayout choices = new LinearLayout(this);
+        choices.setOrientation(LinearLayout.HORIZONTAL);
+        String[] ids = { "auto", "zh", "en" };
+        String[] names = { Lang.t("System"), "中文", "English" };
+        for (int i = 0; i < ids.length; i++) {
+            final String id = ids[i];
+            Button cb = new Button(this);
+            cb.setText(names[i]);
+            cb.setTextSize(12);
+            cb.setAllCaps(false);
+            cb.setMinWidth(dp(58));
+            cb.setPadding(dp(8), dp(6), dp(8), dp(6));
+            boolean on = mode.equals(id);
+            cb.setTextColor(Color.parseColor(on ? "#0D1117" : "#79C0FF"));
+            cb.setBackgroundColor(Color.parseColor(on ? "#58A6FF" : "#161B22"));
+            cb.setOnClickListener(v -> {
+                Lang.setMode(this, id);
+                run("lang", Lang.t("Language"), TermuxRunner.HOME + "/.local/bin/dsh-lang set " + id, false, true);
+                recreate();
+            });
+            LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cbp.setMargins(0, 0, dp(6), 0);
+            choices.addView(cb, cbp);
+        }
         box.addView(row);
         return box;
     }
@@ -607,28 +616,36 @@ public class MainActivity extends Activity {
     }
 
     // ---------- Execution ----------
-    private void fire(Tasks.T task) {
-        if (task.danger) {
+    /** One entry point for a press: text comes from the generated control source, execution from Tasks. */
+    private void fire(String id) {
+        UiControls.C c = UiControls.get(id);
+        String label = c != null ? c.labelEn : id;
+        String hint = c != null ? c.hintEn : "";
+        boolean danger = c != null && c.danger;
+        if (danger) {
             new AlertDialog.Builder(this)
-                    .setTitle(Lang.t("Run ") + Lang.t(task.label) + "?")
-                    .setMessage(Lang.t(task.hint) + "\n\n⚠ Confirmation required: restart/shutdown drops the current web session; "
-                            + Lang.t("revoke-style actions do not come back on their own (re-authorize to restore)."))
+                    .setTitle(Lang.t("Run ") + Lang.t(label) + "?")
+                    .setMessage(Lang.t(hint) + "\n\n⚠ " + Lang.t("Confirmation required: restart/shutdown drops the current web session, and a full stop of the bridge may need a manual open on this ROM."))
                     .setNegativeButton(Lang.t("Cancel"), null)
                     .setPositiveButton(Lang.t("Run"), (d, w) -> {
-                        toast(Lang.t("Sent: ") + Lang.t(task.label));
-                        sendTask(task);
+                        toast(Lang.t("Sent: ") + Lang.t(label));
+                        sendTask(id);
                     })
                     .show();
             return;
         }
-        toast(Lang.t("Sent: ") + Lang.t(task.label));
-        sendTask(task);
+        toast(Lang.t("Sent: ") + Lang.t(label));
+        sendTask(id);
     }
 
     /** Single entry point: uses each task's own wait window (long tasks like backup/restart no longer raise false alarms). */
-    private void sendTask(Tasks.T task) {
-        run(task.id, Lang.t(task.label), task.cmd != null ? task.cmd : TermuxRunner.taskCmd(task.id),
-                false, false, false, task.waitS, false);
+    private void sendTask(String id) {
+        Tasks.T task = Tasks.get(id);
+        UiControls.C c = UiControls.get(id);
+        String label = c != null ? c.labelEn : id;
+        String cmd = task != null && task.cmd != null ? task.cmd : TermuxRunner.taskCmd(id);
+        run(id, Lang.t(label), cmd,
+                false, false, false, Tasks.waitOf(id), false);
     }
 
     private void run(String cmdId, String label, String command, boolean isStatus) {
@@ -799,12 +816,14 @@ public class MainActivity extends Activity {
         String json = Last.status(this);
         String d = "grey", br = "grey", a = "grey";
         String detail = Lang.t("No status yet — tap Refresh status");
+        JSONObject bjOut = null;
         if (json != null && json.length() > 0) {
             try {
                 JSONObject o = new JSONObject(json);
                 JSONObject L = o.optJSONObject("lamps");
                 if (L != null) { d = L.optString("dsh", "grey"); br = L.optString("bridge", "grey"); a = L.optString("adb", "grey"); }
                 JSONObject dj = o.optJSONObject("dsh"), bj = o.optJSONObject("bridge"), aj = o.optJSONObject("adb");
+                bjOut = bj;
                 detail = o.optString("ts", "");
                 if (dj != null) detail += Lang.t("　DSH ") + (dj.optBoolean("ok") ? Lang.t("running (HTTP ") + dj.optString("http") + Lang.t(")") : (dj.optBoolean("port") ? Lang.t("port open but not ready") : Lang.t("stopped")));
                 if (bj != null) detail += Lang.t("　Bridge ") + (bj.optBoolean("ok") ? "v" + bj.optString("ver") : (bj.optBoolean("port") ? Lang.t("port open but not answering") : Lang.t("none")));
@@ -832,17 +851,32 @@ public class MainActivity extends Activity {
         SpannableString s = new SpannableString(lampText);
         String[] names = {dName, bName, aName};
         String[] cols = {d, br, a};
-        int cursor = 0;
+        // Colour by *finding* each dot and the label that follows it, never by a hard-coded offset:
+        // the line is built from translated names, so any fixed index breaks in the other language
+        // (measured: a hard-coded "Bridge".length() painted the adb dot green while adb was offline).
+        int from = 0;
         for (int k = 0; k < names.length; k++) {
-            int dot = cursor;                       // the ● of this segment
-            int nameStart = dot + 2;                // "● " is two characters
-            int nameEnd = nameStart + names[k].length();
+            int dot = lampText.indexOf('\u25CF', from);
+            if (dot < 0) break;
+            int nameStart = lampText.indexOf(names[k], dot);
             int col = c(cols[k]);
-            if (dot + 1 <= lampText.length()) s.setSpan(new ForegroundColorSpan(col), dot, dot + 1, 0);
-            if (nameEnd <= lampText.length()) s.setSpan(new ForegroundColorSpan(col), nameStart, nameEnd, 0);
-            cursor = nameEnd + 1;                   // skip the full-width separator
+            s.setSpan(new ForegroundColorSpan(col), dot, dot + 1, 0);
+            if (nameStart >= 0 && nameStart + names[k].length() <= lampText.length()) {
+                s.setSpan(new ForegroundColorSpan(col), nameStart, nameStart + names[k].length(), 0);
+                from = nameStart + names[k].length();
+            } else {
+                from = dot + 1;
+            }
         }
         lamps.setText(s);
+        // Four-state bridge line and the switch that mirrors it (option D: the switch always shows the
+        // state that was just read, and setting it here must not fire a task).
+        if (bridgeStateView != null) bridgeStateView.setText(bridgeStateText(bjOut));
+        if (bridgeSwitch != null) {
+            bridgeSwitchBusy = true;
+            bridgeSwitch.setChecked(bjOut != null && "running".equals(bjOut.optString("state", "")));
+            bridgeSwitchBusy = false;
+        }
         line.setText(detail + (perm ? "" : Lang.t("　⚠ missing RUN_COMMAND permission")));
         refreshLogView();
     }
@@ -892,4 +926,133 @@ public class MainActivity extends Activity {
         x.setMargins(0, dp(3), 0, dp(3)); return x;
     }
     private int dp(int v) { return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()); }
+
+    // ══ helpers for the generated control list (ui/controls.json → UiControls.java) ══
+
+    private TextView sectionHeader(String text) {
+        TextView h = new TextView(this);
+        h.setText("▍" + text);
+        h.setTextSize(13); h.setTypeface(Typeface.DEFAULT_BOLD);
+        h.setTextColor(Color.parseColor("#58A6FF"));
+        h.setPadding(0, dp(14), 0, dp(2));
+        return h;
+    }
+
+    private TextView subHeader(String text) {
+        TextView h = new TextView(this);
+        h.setText(text);
+        h.setTextSize(11.5f); h.setTypeface(Typeface.DEFAULT_BOLD);
+        h.setTextColor(Color.parseColor("#8B949E"));
+        h.setPadding(0, dp(9), 0, dp(3));
+        return h;
+    }
+
+    /**
+     * A control button: bold name, one-line consequence underneath (⚠ when dangerous).
+     * The subtitle is what the spec asks every control to carry; long-press opens the full text, so a
+     * clipped subtitle never hides the consequence.
+     */
+    private Button controlButton(final UiControls.C ctrl) {
+        String label = Lang.t(ctrl.labelEn);
+        String sub = (ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.hintEn);
+        final Button bt = mkBtn(label + "\n" + sub, ctrl.danger, v -> fire(ctrl.id));
+        bt.setTextSize(13);
+        bt.setAllCaps(false);
+        bt.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        bt.setPadding(dp(12), dp(9), dp(12), dp(9));
+        bt.setMinHeight(dp(54));
+        bt.setOnLongClickListener(v -> { showHint(ctrl); return true; });
+        if ("project-page".equals(ctrl.id)) {
+            bt.setOnClickListener(v -> {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Maopk/dsh-termux-kit"))); }
+                catch (Throwable t) { toast("github.com/Maopk/dsh-termux-kit"); }
+            });
+        }
+        return bt;
+    }
+
+    private void showHint(UiControls.C ctrl) {
+        new AlertDialog.Builder(this)
+                .setTitle((ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.labelEn))
+                .setMessage(Lang.t(ctrl.hintEn))
+                .setPositiveButton(Lang.t("OK"), null)
+                .show();
+    }
+
+    /** Switches are genuinely switches: they express a state, not an action (spec §二). */
+    private View switchRow(UiControls.C ctrl) {
+        if ("lang".equals(ctrl.id)) return buildLangRow();
+        if ("password-access".equals(ctrl.id)) return buildAuthRow();
+        // bridge_run — on = listening, off = soft stop. The state text beside it is the four-state line.
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackgroundResource(R.drawable.box);
+        int p = dp(10); box.setPadding(p, p, p, dp(6));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        Switch sw = new Switch(this);
+        bridgeSwitch = sw;
+        sw.setTextSize(13.5f);
+        sw.setText(Lang.t(ctrl.labelEn));
+        sw.setPadding(0, 0, 0, 0);
+        sw.setOnCheckedChangeListener((v, on) -> {
+            if (bridgeSwitchBusy) return;           // ignore the programmatic set from render()
+            toast(Lang.t(on ? "Sent: Wake bridge" : "Sent: stop the bridge listening"));
+            fireProgrammatic(on ? "bridge_wake" : "bridge_stop");
+        });
+        row.addView(sw, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        box.addView(row);
+        bridgeStateView = new TextView(this);
+        bridgeStateView.setTextSize(12);
+        bridgeStateView.setTextColor(Color.parseColor("#8B949E"));
+        bridgeStateView.setPadding(0, dp(4), 0, 0);
+        box.addView(bridgeStateView);
+        TextView hint = new TextView(this);
+        hint.setTextSize(11); hint.setTextColor(Color.parseColor("#6E7681"));
+        hint.setText(Lang.t(ctrl.hintEn));
+        hint.setPadding(0, dp(3), 0, 0);
+        hint.setOnLongClickListener(v -> { showHint(ctrl); return true; });
+        box.addView(hint);
+        return box;
+    }
+
+    /** No confirm dialog for a switch flip: the switch itself is the confirmation (and it can be flipped back). */
+    private void fireProgrammatic(String id) {
+        toast(Lang.t("Sent: ") + Lang.t(id));
+        sendTask(id);
+    }
+
+    private View textRow(UiControls.C ctrl) {
+        if ("version-update".equals(ctrl.id)) return buildUpdateRow();
+        if ("bridge_state_text".equals(ctrl.id)) {
+            // Rendered by render() from the status JSON; here we only need the placeholder.
+            bridgeStateView = new TextView(this);
+            bridgeStateView.setTextSize(12);
+            bridgeStateView.setTextColor(Color.parseColor("#8B949E"));
+            bridgeStateView.setPadding(dp(2), dp(4), dp(2), dp(8));
+            bridgeStateView.setText(Lang.t("Reading status…"));
+            return bridgeStateView;
+        }
+        TextView t = new TextView(this);
+        t.setTextSize(11.5f);
+        t.setTextColor(Color.parseColor("#6E7681"));
+        t.setPadding(dp(2), dp(4), dp(2), dp(8));
+        t.setText((ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.hintEn));
+        return t;
+    }
+
+    /** The bridge's four states, decided by one ping plus the state note — never by a timer. */
+    private String bridgeStateText(JSONObject bj) {
+        if (bj == null) return "";
+        String st = bj.optString("state", "");
+        String ver = bj.optString("ver", "");
+        if ("running".equals(st)) return Lang.t("Bridge: running") + (ver.length() > 0 ? " · v" + ver : "");
+        if ("soft".equals(st)) return Lang.t("Bridge: just dropped (wakeable)");
+        if ("frozen".equals(st)) return Lang.t("Bridge: long silent (bound but not answering)");
+        if ("silent".equals(st)) return Lang.t("Bridge: long silent");
+        if ("never".equals(st)) return Lang.t("Bridge: not installed");
+        return Lang.t("Bridge: unknown");
+    }
+
 }

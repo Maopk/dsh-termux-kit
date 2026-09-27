@@ -1,0 +1,96 @@
+package io.dsh.console;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * GENERATED FILE — do not edit. Source: ui/controls.json, generator: tools/ui-controls.
+ *
+ * Why generated: the same controls must read identically in the bridge app, the console app and
+ * the page panel, and three hand-kept copies drift apart (that is exactly what happened before).
+ * Label/hint are **English keys**: render them with Lang.t() so the runtime language switch
+ * still works; the Chinese side lives in i18n/zh.json, the kit's single translation source.
+ */
+final class UiControls {
+    static final String VERSION = "1.14";
+
+    static final class C {
+        final String id, kind, cat, group, icon, labelEn, hintEn;
+        final boolean danger;
+        C(String id, String kind, String cat, String group, String icon, String labelEn, String hintEn, boolean danger) {
+            this.id = id; this.kind = kind; this.cat = cat; this.group = group;
+            this.icon = icon; this.labelEn = labelEn; this.hintEn = hintEn; this.danger = danger;
+        }
+    }
+
+    /** Category order on screen, and the two column names (id, en, zh). */
+    static final String[][] CATS = { {"startstop", "Start / Stop", "启动 / 停止"}, {"channels", "Channels (adb and bridge separate)", "通道（adb 与桥分开）"}, {"maintenance", "Maintenance", "维护"}, {"emergency", "Emergency", "紧急"}, {"statuslog", "Status / Log", "状态 / 日志"} };
+    static final String[][] GROUPS = { {"adb", "channels", "adb · wireless debugging, needs working Wi-Fi", "adb · 无线调试，需要可用 Wi-Fi"}, {"bridge", "channels", "bridge · accessibility loopback, no network", "桥 · 无障碍回环，不需要网络"} };
+
+    static final C[] ALL = {
+        new C("1_start-dsh", "button", "startstop", "", "▶", "Start DSH", "Starts DSH and opens the page; if it is already running it only opens the page.", false),
+        new C("4_soft-restart-dsh", "button", "startstop", "", "↻", "Soft restart", "Restarts the service with SIGTERM. Cost: drops the current web session.", true),
+        new C("6_hard-restart-dsh", "button", "startstop", "", "⛔", "Hard restart", "Restarts after a kill -9 and clears the orphan lock. Cost: drops the current web session.", true),
+        new C("2_shutdown-dsh", "button", "startstop", "", "■", "Stop DSH", "Stops DSH and closes the browser. The bridge is a separate channel and is left alone by default.", true),
+        new C("adb_ensure", "button", "channels", "adb", "🔌", "Repair adb channel", "Wi-Fi state → Wireless debugging switch (written through the bridge) → port → connect → verify. Says which step failed.", false),
+        new C("8_enable-wireless-adb", "button", "channels", "adb", "⚡", "Connect adb", "Wireless debugging only. Needs a real Wi-Fi network, not just the switch.", false),
+        new C("adb_lamp", "lamp", "channels", "adb", "●", "adb", "Green = usable, yellow = connecting, red = failed, grey = not connected (check Wi-Fi).", false),
+        new C("bridge_run", "switch", "channels", "bridge", "🌉", "Bridge running", "On = listening on 8788. Off = soft stop: the port closes but the process stays, so one broadcast brings it back.", false),
+        new C("bridge_state_text", "text", "channels", "bridge", "·", "Bridge state", "Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).", false),
+        new C("bridge_wake", "button", "channels", "bridge", "🌉", "Wake bridge", "Sends one token-carrying broadcast. Never takes your screen. Can take 20-40s if the process was reclaimed.", false),
+        new C("bridge_status", "button", "channels", "bridge", "🔎", "Bridge status", "Read-only: is the port listening, does it really answer, version, paused flag.", false),
+        new C("7_reconnect-ai", "button", "channels", "bridge", "🔗", "Restore both channels", "adb first, then the bridge. Use only when you need both; a failure names the channel it came from.", false),
+        new C("10_net-fix", "button", "channels", "bridge", "🩺", "Network first aid", "When foreign sites die: decides whether the Clash core stopped or the config went bad, then repairs.", false),
+        new C("11_update-apps", "button", "maintenance", "", "⬆", "Update the two apps", "Downloads the latest console and bridge from the release, checks SHA256, then installs them.", false),
+        new C("3_backup-dsh", "button", "maintenance", "", "💾", "Backup", "Packs DSH state and verifies the archive; the result goes to Download/dsh/.", false),
+        new C("5_cleanup-dsh", "button", "maintenance", "", "🧹", "Cleanup", "Deletes only this kit's own artifacts. Your files are not touched.", false),
+        new C("bridge_full_stop", "button", "maintenance", "", "⏻", "Fully stop bridge", "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.", true),
+        new C("lang", "switch", "maintenance", "", "🌐", "Language", "System / Chinese / English. The widgets and the page panel follow this too.", false),
+        new C("project-page", "button", "maintenance", "", "🔗", "Project page", "Opens github.com/Maopk/dsh-termux-kit - source, releases and docs.", false),
+        new C("version-update", "text", "maintenance", "", "·", "Version", "Installed version and whether a newer release exists. If the check fails it says so instead of claiming it is up to date.", false),
+        new C("password-access", "switch", "emergency", "", "🔑", "Password access", "On = the AI may use your 6-digit lock-screen password to pass system verification for you (installing packages, removing settings restrictions). Off = revoked at once. Never for unlocking the phone to read content, payments, or anything unrelated to the task at hand.", true),
+        new C("0_emergency-stop", "button", "emergency", "", "🛑", "Emergency stop", "Revokes the AI's control of the phone: soft-stops the bridge and revokes the token. adb is a separate channel and stays up.", true),
+        new C("lamp_dsh", "lamp", "statuslog", "", "●", "DSH", "Green = the web service answers, yellow = half-started, red = down, grey = not running.", false),
+        new C("lamp_bridge", "lamp", "statuslog", "", "●", "Bridge", "Green = listening and answering, grey = soft-stopped or not installed.", false),
+        new C("status_refresh", "button", "statuslog", "", "🔄", "Refresh status", "Reads the state once and updates the lamps. Read-only: it never wakes a channel.", false),
+        new C("log", "button", "statuslog", "", "📜", "Log", "History: scrollable, copyable. Results you tapped and automatic refreshes are kept apart and never overwrite each other.", false),
+    };
+
+    static C get(String id) {
+        for (C c : ALL) if (c.id.equals(id)) return c;
+        return null;
+    }
+
+    static List<C> ofCat(String cat) {
+        List<C> out = new ArrayList<C>();
+        for (C c : ALL) if (c.cat.equals(cat)) out.add(c);
+        return out;
+    }
+
+    static List<C> ofGroup(String group) {
+        List<C> out = new ArrayList<C>();
+        for (C c : ALL) if (c.group.equals(group)) out.add(c);
+        return out;
+    }
+
+    /** Category/group names by id, in both languages (fall back to the id). */
+    static String catEn(String id) {
+        for (String[] c : CATS) if (c[0].equals(id)) return c[1];
+        return id;
+    }
+
+    static String catZh(String id) {
+        for (String[] c : CATS) if (c[0].equals(id)) return c[2];
+        return id;
+    }
+
+    static String groupEn(String id) {
+        for (String[] g : GROUPS) if (g[0].equals(id)) return g[1];
+        return id;
+    }
+
+    static String groupZh(String id) {
+        for (String[] g : GROUPS) if (g[0].equals(id)) return g[2];
+        return id;
+    }
+}

@@ -30,6 +30,10 @@ public class MainActivity extends Activity {
     private TextView tokenView;
     private TextView warnView;
     private Button idleBtn;
+    private android.widget.Switch runSwitch;
+    private android.widget.Switch idleSwitch;
+    private TextView bridgeState;
+    private boolean runGuard, idleGuard;
     private Button langBtn;   // language switch: auto → 中文 → English
     private Button projBtn;   // 本项目的网址（点开就是仓库）
     private TextView updateView;   // 打开时自动查一次发行版，有新的就显示在这里
@@ -107,9 +111,17 @@ public class MainActivity extends Activity {
             }
         });
 
-        idleBtn = new Button(this);
-        idleBtn.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { cycleIdle(); }
+        // A real switch, not a "tap to cycle" button: it expresses a lasting state (spec §二).
+        idleSwitch = new android.widget.Switch(this);
+        idleSwitch.setTextSize(15f);
+        idleSwitch.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
+                if (idleGuard) return;
+                getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE).edit()
+                        .putInt("idleMin", on ? 30 : 0).apply();
+                toast(Lang.t(on ? "Idle auto-stop on: soft-stops after 30 idle minutes" : "Idle auto-stop off: always listening"));
+                updateIdleBtn();
+            }
         });
 
         langBtn = new Button(this);
@@ -162,6 +174,27 @@ public class MainActivity extends Activity {
                 updateState();
             }
         });
+
+        runSwitch = new android.widget.Switch(this);
+        runSwitch.setTextSize(15f);
+        runSwitch.setText(Lang.t("Bridge running"));
+        runSwitch.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
+                if (runGuard) return;
+                BridgeService svc = BridgeService.INSTANCE;
+                if (on) {
+                    if (svc != null) svc.resumeListening();
+                    toast(Lang.t("Resumed listening on 127.0.0.1:") + BridgeService.PORT);
+                } else {
+                    if (svc != null) svc.stopListening(null);
+                    toast(Lang.t("Soft-stopped: the port is closed, the process stays, one broadcast brings it back"));
+                }
+                updateState();
+            }
+        });
+        bridgeState = new TextView(this);
+        bridgeState.setTextSize(12.5f);
+        bridgeState.setTextColor(0xFF8B949E);
 
         warnView = new TextView(this);
         warnView.setTextSize(14f);
@@ -295,6 +328,12 @@ public class MainActivity extends Activity {
         stateView.setText(Lang.t("Accessibility: ") + (on ? Lang.t("on ✅") : Lang.t("off ❌"))
                 + "\n" + Lang.t("Port: ") + listen
                 + (on ? "" : "\n" + Lang.t("Tap ① Open accessibility settings and switch DSH Bridge on in the list")));
+        if (bridgeState != null) {
+            boolean listening = svc != null && svc.isListening();
+            bridgeState.setText(listening ? Lang.t("Bridge: running") + " · v" + ver
+                                          : Lang.t("Bridge: just dropped (wakeable)"));
+            if (runSwitch != null) { runGuard = true; runSwitch.setChecked(listening); runGuard = false; }
+        }
         boolean notifOk = true;
         try {
             android.app.NotificationManager nm =
@@ -318,29 +357,118 @@ public class MainActivity extends Activity {
      *  look for), then setup ①②③, then behaviour, then emergency last but most prominent. */
     private void layoutAll(LinearLayout root, TextView title, TextView desc, TextView tokenView,
                            Button copy, Button open, Button refresh, Button notif, Button panic) {
+        // Sections come from the generated control source (ui/controls.json → UiControls.java), in the same
+        // order the console and the page panel use. Only bridge-side controls appear here.
         root.addView(title);
         root.addView(stateView);                 // live status first: it is the thing you check
-        root.addView(desc);
-        root.addView(tokenView);
-        root.addView(copy);
-
-        root.addView(section("Setup"));
-        root.addView(open);
-        root.addView(refresh);
-        root.addView(notif);                     // ③ right after ②
-
-        root.addView(section("Behaviour"));
-        root.addView(idleBtn);
-        root.addView(langBtn);
-
         root.addView(warnView);
 
-        root.addView(section("About"));
-        root.addView(updateView);
-        root.addView(projBtn);
+        root.addView(section(UiControls.catEn("channels")));
+        root.addView(sub(UiControls.groupEn("bridge")));
+        root.addView(runSwitch);
+        root.addView(bridgeState);
+        root.addView(hintOf("bridge_run"));
 
-        root.addView(section("Emergency"));
-        root.addView(panic);
+        root.addView(section(UiControls.catEn("maintenance")));
+        root.addView(refresh);                   // bridge_refresh
+        root.addView(hintOf("bridge_refresh"));
+        root.addView(open);                      // open-accessibility
+        root.addView(hintOf("open-accessibility"));
+        root.addView(notif);                     // open-notification
+        root.addView(hintOf("open-notification"));
+        root.addView(copy);                      // copy-token
+        root.addView(hintOf("copy-token"));
+        root.addView(idleSwitch);
+        root.addView(hintOf("idle-auto-stop"));
+        root.addView(langRow());                 // lang: three explicit choices
+        root.addView(fullStopBtn());             // bridge_full_stop (danger, but Maintenance)
+        root.addView(hintOf("bridge_full_stop"));
+        root.addView(updateView);                // version-update
+        root.addView(projBtn);                   // project-page
+
+        root.addView(section(UiControls.catEn("emergency")));
+        root.addView(panic);                     // bridge_panic
+        root.addView(hintOf("bridge_panic"));
+
+        root.addView(section(Lang.t("About this app")));
+        root.addView(desc);
+        root.addView(tokenView);
+    }
+
+    /** A small grey consequence line under a control — every control carries one (spec §四). */
+    private TextView hintOf(String id) {
+        UiControls.C c = UiControls.get(id);
+        TextView t = new TextView(this);
+        t.setTextSize(11.5f);
+        t.setTextColor(0xFF6E7681);
+        t.setText(c == null ? "" : ((c.danger ? "⚠ " : "") + Lang.t(c.hintEn)));
+        return t;
+    }
+
+    private TextView sub(String name) {
+        TextView t = new TextView(this);
+        t.setText(name);
+        t.setTextSize(11.5f);
+        t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        t.setTextColor(0xFF8B949E);
+        int p = (int) (4 * getResources().getDisplayMetrics().density);
+        t.setPadding(0, p, 0, p);
+        return t;
+    }
+
+    /** Language: three explicit choices — a cycling button hides which option you will land on. */
+    private LinearLayout langRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        String[] ids = { "auto", "zh", "en" };
+        String[] names = { Lang.t("System"), "中文", "English" };
+        String mode = Lang.mode();
+        for (int i = 0; i < ids.length; i++) {
+            final String id = ids[i];
+            Button b = new Button(this);
+            b.setText(names[i]);
+            b.setTextSize(12f);
+            b.setAllCaps(false);
+            boolean on = mode.equals(id);
+            b.setTextColor(on ? 0xFF0D1117 : 0xFF79C0FF);
+            b.setBackgroundColor(on ? 0xFF58A6FF : 0xFF161B22);
+            b.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { Lang.setMode(MainActivity.this, id); recreate(); }
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, (int) (6 * getResources().getDisplayMetrics().density), 0);
+            row.addView(b, lp);
+        }
+        return row;
+    }
+
+    /** Full stop is dangerous **and** lives under Maintenance (user's call): confirm first, then say the cost. */
+    private Button fullStopBtn() {
+        UiControls.C c = UiControls.get("bridge_full_stop");
+        Button b = new Button(this);
+        b.setAllCaps(false);
+        b.setText("⚠ " + Lang.t(c == null ? "Fully stop bridge" : c.labelEn));
+        b.setTextColor(0xFFFFFFFF);
+        b.setBackgroundColor(0xFFB3261E);
+        b.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                new android.app.AlertDialog.Builder(MainActivity.this)
+                        .setTitle("⚠ " + Lang.t("Fully stop the bridge?"))
+                        .setMessage(Lang.t("Accessibility is unbound and the app exits. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand."))
+                        .setNegativeButton(Lang.t("Cancel"), null)
+                        .setPositiveButton(Lang.t("Stop it"), new android.content.DialogInterface.OnClickListener() {
+                            @Override public void onClick(android.content.DialogInterface d, int w) {
+                                BridgeService svc = BridgeService.INSTANCE;
+                                if (svc != null) svc.panic("Full stop from the app");
+                                toast(Lang.t("Fully stopped; accessibility is off"));
+                                updateState();
+                            }
+                        })
+                        .show();
+            }
+        });
+        return b;
     }
 
     private TextView section(String label) {
@@ -356,12 +484,11 @@ public class MainActivity extends Activity {
 
     private void updateIdleBtn() {
         int m = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE).getInt("idleMin", 30);
-        idleBtn.setText(Lang.t("Idle auto-stop: ") + (m <= 0 ? Lang.t("off (always listening)") : m + Lang.t(" min idle → stop")) + Lang.t(" · tap to switch"));
-        if (langBtn != null) {
-            String mo = Lang.mode();
-            String shown = mo.equals("auto") ? Lang.t("System") : (mo.equals("zh") ? Lang.t("Chinese") : "English");
-            langBtn.setText(Lang.t("Language: ") + shown + " · " + Lang.t("tap to switch"));
-        }
+        if (idleSwitch == null) return;
+        idleGuard = true;
+        idleSwitch.setChecked(m > 0);
+        idleGuard = false;
+        idleSwitch.setText(Lang.t("Idle auto-stop") + (m > 0 ? " (" + m + Lang.t(" min") + ")" : ""));
     }
 
     private void cycleIdle() {

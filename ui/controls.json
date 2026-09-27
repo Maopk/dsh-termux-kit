@@ -233,8 +233,8 @@
         "zh": "桥状态"
       },
       "hint": {
-        "en": "Four states with the last heartbeat: running / soft-stopped (wakeable) / fully stopped (needs a manual open) / not installed.",
-        "zh": "四态 + 最后心跳：运行中 / 软停（可唤醒）/ 真停（需手动打开）/ 未安装。"
+        "en": "Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).",
+        "zh": "四态由**一次 ping 的结果 + 状态记录**判定（不看时间）：运行中 / 刚断（可唤醒，一条广播就能拉回）/ 长时间未响应（进程自己没了，或端口在听却不应答 —— 唤醒可能有效，无效就手动打开一次「DSH 桥」）/ 未安装（这台机器上从没见过它是活的）。"
       },
       "danger": false,
       "surfaces": [

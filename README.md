@@ -12,13 +12,14 @@ Everything is built on **Termux + an Accessibility service + the official `RUN_C
 
 | Path | Contents |
 |---|---|
-| `apps/console/` | Source of the **DSH Console app**: a GUI for the 9 task widgets + a home-screen widget |
+| `apps/console/` | Source of the **DSH Console app**: a GUI for the 12 task widgets + a home-screen widget |
 | `apps/bridge/` | Source of the **DSH Bridge app**: Accessibility service + loopback API so an AI can read the screen, tap, swipe and type |
-| `widgets/` | 9 Termux home-screen task widgets + the shared library `common.sh` |
+| `widgets/` | 12 Termux home-screen task widgets + the shared library `common.sh` |
 | `i18n/zh.json` | **The only translation source**: every English string → Chinese. `tools/i18n-table` generates the bash table and both apps' Java tables from it, each with that runtime's own escaping rules (see [`docs/i18n.md`](docs/i18n.md)) |
-| `tools/` | 33 command-line tools (start, backup, install APKs, tap UI by text, Clash self-check, i18n generation, …) |
+| `tools/` | 43 command-line tools (start, backup, install APKs, tap UI by text, Clash self-check, i18n and UI-table generation, …) |
 | `plugins/` | 3 DSH page plugins (phone task panel / AI self-look & remote control / file panel) |
-| `tests/selftest.sh` | Self-test suite: 60 checks (syntax → dry-run → regression → real run → cold-start sandbox) |
+| `ui/controls.json` | **The only source for the three UIs**: categories, control names, one-line consequences, danger flags, per-surface presence. `tools/ui-controls` generates the page-panel block and both apps' `UiControls.java`; `ui-controls check` (md5 per artifact) is part of the self-test |
+| `tests/selftest.sh` | Self-test suite: 93 checks (syntax → dry-run → regression → real run → cold-start sandbox → tool/UI drift) |
 | `docs/` | [`operations.md`](docs/operations.md) — how to diagnose the recurring failures · [`architecture.md`](docs/architecture.md) — one-page architecture & data flow · `DSH运维笔记.md` — the raw Chinese engineering journal behind them |
 | `dist/` | Prebuilt APKs + SHA256 |
 
@@ -65,6 +66,25 @@ Two more steps after installing:
 
 ## Usage
 
+### How the three UIs stay identical
+
+The bridge app, the console app and the page panel show the **same categories, the same control names and
+the same one-line consequences**, because all three are generated from one file — `ui/controls.json`
+(`tools/ui-controls gen`; `ui-controls check` compares the md5 of each artifact and runs in the self-test).
+
+- **Five categories**: Start·Stop / Channels (adb and bridge separate) / Maintenance / Emergency / Status·Log.
+- **Kinds are explicit**: a button triggers one action; a switch expresses a lasting state (bridge running,
+  idle auto-stop, PIN usage rights); a lamp is read-only.
+- **Every control explains itself**: one grey line under the name says what it does and what it costs, and a
+  long-press opens the full text. Danger adds ⚠ and a red border — it never moves the control to another category.
+- **Fixed colour semantics**: green ok · yellow transitional · red broken · grey off/not installed; the lamp
+  line colours each dot by finding it (`indexOf`), never by a hard-coded offset.
+- **The bridge has four states**, decided by one ping plus a state note — not by a timer: running /
+  just dropped (wakeable) / long silent / not installed.
+- **Cross-UI sync**: PIN usage rights live in one 600 file on disk; whichever surface flips the switch writes
+  it at once and the others read it on refresh, so no surface keeps a private cache.
+
+
 ### Home-screen widgets (`~/.shortcuts/tasks/`, run by Termux:Widget)
 
 | Widget | What it does |
@@ -84,12 +104,14 @@ Every widget supports `--dry-run` (print only, execute nothing).
 
 ### DSH Console app
 
-- Three status lamps on top (DSH / bridge / adb) plus a detail line with timestamps.
-- Buttons are **grouped by function**: `Start·Stop` / `Channels (adb and bridge kept separate)` / `Maintenance` / `Emergency`.
+- **Status / log** section: three lamps (DSH / bridge / adb — green ok, yellow transitional, red broken, grey off), a detail line, `Refresh status` (read-only: it never wakes a channel) and the log.
+- Every control carries a one-line consequence under its name; **long-press any of them for the full text**. Danger is a red border + ⚠, never a different category.
+- Five categories, identical in all three UIs: `Start·Stop` / `Channels (adb and bridge kept separate)` / `Maintenance` / `Emergency` / `Status·Log`. Inside Channels, adb and the bridge are two labelled groups: *adb · wireless debugging, needs working Wi-Fi* and *bridge · accessibility loopback, no network*.
 - **Logs** live on their own screen: command sent, result, exit code, raw output; the button shows an unread badge.
 - “PIN usage rights” is a **switch**: on = the AI may use your 6-digit lock-screen PIN to pass system verification; off = revoked immediately.
-- **Language switch** (System / 中文 / English) under Maintenance: it writes the shared `~/.dsh-lang`, so the app, the DSH page panel and the 10 widgets all follow the same choice. Source text is English; Chinese comes from the shared table in `i18n/zh.json` (see [`docs/i18n.md`](docs/i18n.md)).
-- Dangerous actions (restart / shutdown / emergency stop / revoke) require confirmation.
+- **Language switch** (System / 中文 / English) under Maintenance: it writes the shared `~/.dsh-lang`, so the app, the DSH page panel and the 12 widgets all follow the same choice. Source text is English; Chinese comes from the shared table in `i18n/zh.json` (see [`docs/i18n.md`](docs/i18n.md)).
+- `Bridge running` is a real **switch** (on = listening on 8788, off = soft stop), and the line under it names the state from one ping: *running / just dropped (wakeable) / long silent / not installed*. `Fully stop bridge` is separate, dangerous, and says so: on this ROM it may not be wakeable again.
+- Dangerous actions (restart / shutdown / full stop / emergency stop) require confirmation.
 - Timeouts are per task (backup 420s / restart 300s / queries 25s with one automatic resend), and timeout messages state the real reason (e.g. “the phone was busy”).
 - It requests exactly one permission: `com.termux.permission.RUN_COMMAND`. No storage, network, accessibility or overlay permissions.
 
@@ -97,7 +119,7 @@ Every widget supports `--dry-run` (print only, execute nothing).
 
 Drop a directory into your DSH profile's `local/`, register it in **both** `dependencies` and `dsh.profile.bundles` in `package.json`, then `pnpm install` and refresh the page:
 
-- `dsh-mobile-local` — the ☰ button at the bottom right opens a phone task panel (grouped tasks + status lamps + the PIN switch). Backed by `tools/dsh-tasksd` on `127.0.0.1:8787` (token + allow-list).
+- `dsh-mobile-local` — the ☰ button opens the same five categories as the app (status lamps, task buttons with one-line consequences, the bridge switch, the PIN switch, and a log panel with copy / clear / unread badge that stays usable while a task runs). Backed by `tools/dsh-tasksd` on `127.0.0.1:8787` (token + allow-list). It follows `~/.dsh-lang`, so one language setting moves the widgets, the panel and both apps.
 - `dsh-selflook-local` — renders the page to PNG (so the AI can look at it) and delivers click/swipe/eval commands into the page.
 - `dsh-filepanel-local` — the local file-panel implementation, which also serves as the RPC channel for the two plugins above.
 

@@ -1,93 +1,84 @@
 package io.dsh.console;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * Task list: the id is the script name under ~/.shortcuts/tasks on the Termux side (that side owns the
- * allowlist; this is only the menu).
+ * Execution table for the console's task buttons: **id → how to run it**, nothing else.
  *
- * Since v0.5 every task carries a **function category** cat, and the UI shows them in sections instead
- * of stacking every button in one column. The category is display-only; the widget (DshWidget) looks
- * only at WIDGET_SAFE and is unaffected.
+ * The labels, hints, categories and the danger flag used to live here too, which meant the same control
+ * was described in this file, in the page panel and in the bridge app — three descriptions that drift.
+ * Since 2026-09-27 all of that comes from the generated {@link UiControls} (source: ui/controls.json),
+ * and this class keeps only what is genuinely console-side: the command to run and how long it usually
+ * needs before the app should stop waiting.
+ *
+ * Why per-task waitS: every task once shared one 45-second timeout, so backup/cleanup/restart — which
+ * inherently need 1-5 minutes — timed out every single time (false alarms), and a real failure looked
+ * exactly the same. Each entry now carries its own window, and the UI says so while waiting.
  */
 final class Tasks {
-    /** Start / stop: changes DSH's own running state. */
-    static final String RUN = "Start / Stop";
-    /** Channels: the bridge (accessibility loopback, no network) and adb (wireless debugging, needs working Wi-Fi) are two independent channels, always listed separately. */
-    static final String LINK = "Channels (adb and bridge separate)";
-    /** Maintenance: does not change run state, only touches artifacts on disk. */
-    static final String CARE = "Maintenance";
-    /** Emergency: gives up control; listed last but kept most prominent (red). */
-    static final String SOS = "Emergency";
-    /** The UI uses this order for its sections. */
-    static final String[] CATS = { RUN, LINK, CARE, SOS };
 
     static final class T {
-        final String id, label, hint, cat;
-        final boolean danger;
-        /** Non-null means run this command directly (without the wrapper script in ~/.shortcuts/tasks). */
+        final String id;
+        /** Non-null means run this command directly instead of the widget script of the same id. */
         final String cmd;
-        /**
-         * How long this command **usually takes at most** (seconds). Why it exists: every task used to
-         * share one 45-second timeout, so tasks that inherently need 1-5 minutes (backup/cleanup/restart)
-         * **timed out every single time** (false alarms) while real failures were indistinguishable from
-         * them. Each task now gets its own window, and the text says "this one usually answers within Ns".
-         */
         final int waitS;
-        T(String id, String cat, String label, String hint, boolean danger) {
-            this(id, cat, label, hint, danger, null, 90);
-        }
-        T(String id, String cat, String label, String hint, boolean danger, String cmd) {
-            this(id, cat, label, hint, danger, cmd, 90);
-        }
-        T(String id, String cat, String label, String hint, boolean danger, String cmd, int waitS) {
-            this.id = id; this.cat = cat; this.label = label; this.hint = hint;
-            this.danger = danger; this.cmd = cmd; this.waitS = waitS;
-        }
+        T(String id, String cmd, int waitS) { this.id = id; this.cmd = cmd; this.waitS = waitS; }
+        T(String id, int waitS) { this(id, null, waitS); }
     }
 
     static final T[] ALL = new T[] {
-        // ── Start / Stop ─────────────────────────────────────────────
-        new T("1_start-dsh", RUN, "Start DSH", "Opens the page directly if it is already running; includes the start mutex and a real readiness check", false, null, 240),
-        new T("open", RUN, "Open Web UI", "Opens the page at the address in ~/.dsh-url (prefers the desktop PWA)", false, TermuxRunner.openUiCmd(), 60),
-        new T("4_soft-restart-dsh", RUN, "Soft restart", "Restarts after SIGTERM; drops the current web session", true, null, 300),
-        new T("6_hard-restart-dsh", RUN, "Hard restart", "Restarts after a -9 kill; drops the current web session", true, null, 300),
-        new T("2_shutdown-dsh", RUN, "Shut down DSH", "Stops DSH and closes the browser; the bridge is a separate channel and is left alone by default", true, null, 200),
-
-        // ── Channels ───────────────────────────────────────────────────
-        new T("8_enable-wireless-adb", LINK, "Connect adb", "Wireless debugging only: set the switch → find the port → adb connect (needs working Wi-Fi)", false, null, 220),
-        // adb breaks on its own: Wi-Fi dropping makes Android clear the Wireless-debugging switch and the port
-        // changes after a reboot, so "connect" alone does not keep it usable. This one walks the whole ladder
-        // (Wi-Fi state → that switch, borrowed through the **bridge** → port → connect → verify) and names the
-        // rung that failed. It is a button of its own instead of part of the bridge's, because the two channels
-        // must stay separable: when it fails you need to know it was adb, not the bridge.
-        // Absolute path for the same reason as bridge_wake below (RUN_COMMAND's PATH has no ~/.local/bin).
-        new T("adb_ensure", LINK, "Repair adb channel", "Full check: Wi-Fi state → Wireless debugging switch (borrowed through the bridge) → port → connect → verify; says which step failed", false,
-                TermuxRunner.HOME + "/.local/bin/droid-ensure", 180),
-        // ⚠ These two must use **absolute paths**: RUN_COMMAND goes through `bash -lc`, and its measured
-        //   PATH is only /data/data/com.termux/files/usr/bin:. — no ~/.local/bin, so when they were
-        //   written as a bare `dsh-bridge wake` both returned exit=127 (command not found).
-        new T("bridge_wake", LINK, "Wake bridge", "Accessibility loopback only: a broadcast carrying the token, no network needed", false,
-                TermuxRunner.HOME + "/.local/bin/dsh-bridge wake", 90),
-        new T("bridge_status", LINK, "Check bridge status", "Bridge only: port / whether it really answers / version / paused", false,
-                TermuxRunner.HOME + "/.local/bin/dsh-bridge status", 40),
-        new T("7_reconnect-ai", LINK, "Restore everything (adb + bridge)", "For when you need both channels: adb first, then the bridge; a failure names the channel it came from", false, null, 280),
-
-        // ── Maintenance ───────────────────────────────────────────────────
-        // Note: "password access" (whether the AI may use the user's lock-screen password to pass
-        // identity checks) is **a switch, not a button**, drawn under the maintenance section (see
-        // MainActivity.buildAuthRow) — it governs more than package installs.
-        // One-tap network first aid (the recurring "foreign sites dead" failure on this phone).
-        new T("10_net-fix", LINK, "Network first aid", "Decides whether the Clash core is stopped or the generated config went bad, then repairs it (clash-doctor --fix)", false, null, 240),
-
-        // One-tap update: both apps check the repo on open, and this turns "there is a new
-        // release" into "it is installed" without a manual download.
-        new T("11_update-apps", CARE, "Update the two apps", "Downloads the latest console and bridge from the repo, verifies them, and installs them (keeps the screen awake meanwhile)", false, null, 600),
-        new T("3_backup-dsh", CARE, "Backup", "Packs and verifies the archive (zstd -t + entry count)", false, null, 420),
-        new T("5_cleanup-dsh", CARE, "Cleanup", "Deletes only my own artifacts; never touches config or notes", false, null, 420),
-
-        // ── Emergency ───────────────────────────────────────────────────
-        new T("0_emergency-stop", SOS, "Emergency stop", "Revokes the AI's control of the phone (bridge stop + revoke token)", true, null, 180),
+        // ── Start / stop ──────────────────────────────────────────────
+        new T("1_start-dsh", 240),
+        new T("4_soft-restart-dsh", 300),
+        new T("6_hard-restart-dsh", 300),
+        new T("2_shutdown-dsh", 200),
+        // "Open Web UI" carries its own command and never goes through tasksd's allowlist.
+        new T("open", TermuxRunner.openUiCmd(), 60),
+        // ── Channels: adb (wireless debugging, needs Wi-Fi) ───────────
+        new T("adb_ensure", 220),
+        new T("8_enable-wireless-adb", 220),
+        // ── Channels: bridge (accessibility loopback, no network) ────
+        new T("bridge_wake", TermuxRunner.HOME + "/.local/bin/dsh-bridge wake", 90),
+        new T("bridge_status", TermuxRunner.HOME + "/.local/bin/dsh-bridge status", 40),
+        // The bridge run switch needs both directions as real tasks (on = wake, off = soft stop).
+        new T("bridge_stop", TermuxRunner.HOME + "/.local/bin/dsh-bridge stop", 60),
+        new T("7_reconnect-ai", 280),
+        new T("10_net-fix", 300),
+        // ── Maintenance ──────────────────────────────────────────────
+        new T("11_update-apps", 420),
+        new T("3_backup-dsh", 420),
+        new T("5_cleanup-dsh", 300),
+        // Full stop is a one-way door on this ROM; it is dangerous but belongs to Maintenance (user's call).
+        new T("bridge_full_stop", TermuxRunner.HOME + "/.local/bin/dsh-bridge off", 60),
+        // ── Emergency ────────────────────────────────────────────────
+        new T("0_emergency-stop", 180),
+        // ── Status / log ─────────────────────────────────────────────
+        new T("status_refresh", TermuxRunner.statusCmd(), 25),
     };
 
-    /** Only safe actions go on the widget — a mis-tap from the home screen costs too much. */
-    static final String[] WIDGET_SAFE = { "1_start-dsh", "8_enable-wireless-adb", "bridge_wake", "3_backup-dsh" };
+    static T get(String id) {
+        for (T t : ALL) if (t.id.equals(id)) return t;
+        return null;
+    }
+
+    /** Wait window for an id, with a sane default for anything the table does not know. */
+    static int waitOf(String id) {
+        T t = get(id);
+        return t == null ? 90 : t.waitS;
+    }
+
+    /** Command override for an id (absolute path), or null to let tasksd run the widget script. */
+    static String cmdOf(String id) {
+        T t = get(id);
+        return t == null ? null : t.cmd;
+    }
+
+    static List<T> all() { return new ArrayList<T>(java.util.Arrays.asList(ALL)); }
+
+    /**
+     * Only safe actions go on the home-screen widget: a mis-tap there costs too much.
+     * Must stay in step with the `widget` surface in ui/controls.json — check-task-ids verifies that.
+     */
+    static final String[] WIDGET_SAFE = { "1_start-dsh", "8_enable-wireless-adb", "bridge_wake", "status_refresh" };
 }
