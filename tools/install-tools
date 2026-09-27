@@ -1,0 +1,56 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# install-tools —— 把仓库里的运行时工具同步进 ~/.local/bin（安装位=仓库的副本，不是第二份代码）
+#
+# 为什么要有这个：这些工具一直是**手工 cp** 过去的，于是两边悄悄分家。2026-09-27 逐个 cmp 发现
+# 5 个不一致，其中 4 个是安装位过期：
+#   dsh-restart     还在用 i18n 改造前的 `warn "$VAR"`（仓库已是指针式的 warnf "%s"）
+#   dsh-tasksd      白名单少了 '11_update-apps'（面板发这个任务就会被拒）
+#   i18n-build-table 还是双引号生成器（仓库已改成单引号 sq()，就是那次生成文件语法错误的修复）
+#   dsh-screen-ui   缺「前台不是设置就不点」的守卫（用户最在意的：别在他的界面上乱点）
+# 一个"行为与仓库不一致"的工具比没有工具更坏 —— 我照着仓库文件推理，跑起来却是旧代码。
+# 所以把复制这件事显式化：默认同步，--check 只报告不动手。
+#
+# Usage:
+#   install-tools            同步（只动已存在于 ~/.local/bin 的那些；原子替换，不打断在跑的进程）
+#   install-tools --check    只报告差异，一个字节都不改（有差异退出码 1）
+set -u
+REPO="${DSH_KIT_REPO:-$HOME/dsh-termux-kit}"
+SRC="$REPO/tools"; DST="$HOME/.local/bin"
+CHECK=0; [ "${1:-}" = "--check" ] && CHECK=1
+
+[ -d "$SRC" ] || { echo "✘ 仓库 tools/ 不存在: $SRC" >&2; exit 2; }
+[ -d "$DST" ] || mkdir -p "$DST"
+
+# 有意不同步的（写在这里，不静默）：
+#   droid —— 仓库那份是英文版，安装位那份是用户实际在读的中文版；两份 231 行、**只有提示文字不同**。
+#            正确解法是让独立工具也吃 dsh-lang 的语言开关，而不是靠复制某一版覆盖另一版。
+SKIP="droid"
+
+changed=0; same=0; absent=0; skipped=0
+for f in "$SRC"/*; do
+  b=$(basename "$f")
+  case "$b" in __pycache__|*.bak-*|*.pyc) continue ;; esac
+  [ -f "$f" ] || continue
+  if [ ! -f "$DST/$b" ]; then
+    printf '   · %-20s 仓库有、本机未装（开发类工具就在仓库里跑）\n' "$b"; absent=$((absent+1)); continue
+  fi
+  if cmp -s "$f" "$DST/$b"; then same=$((same+1)); continue; fi
+  if [ "$b" = "$SKIP" ]; then
+    printf '   ⏭ %-20s 有意跳过（英文版 vs 中文版）\n' "$b"; skipped=$((skipped+1)); continue
+  fi
+  if [ "$CHECK" = 1 ]; then
+    printf '   ⚠ %-20s 有差异（仓库 %s 字节 / 安装位 %s 字节）\n' "$b" "$(wc -c <"$f")" "$(wc -c <"$DST/$b")"
+    changed=$((changed+1)); continue
+  fi
+  # 原子替换：先写 .new 再 mv。直接 cp 覆盖会就地截断，正在跑的脚本（如 dsh-tasksd）会被读坏。
+  if cp "$f" "$DST/.$b.new" && chmod 755 "$DST/.$b.new" && mv -f "$DST/.$b.new" "$DST/$b"; then
+    printf '   ↑ %-20s 已同步\n' "$b"; changed=$((changed+1))
+  else
+    printf '   ✘ %-20s 同步失败\n' "$b" >&2; rm -f "$DST/.$b.new"
+  fi
+done
+
+printf '\n   一致 %d · 需同步 %d · 有意跳过 %d · 未装 %d\n' "$same" "$changed" "$skipped" "$absent"
+if [ "$CHECK" = 1 ] && [ "$changed" -gt 0 ]; then
+  echo '   → 跑 install-tools（不带参数）即可对齐'; exit 1
+fi

@@ -13,7 +13,9 @@
 #
 # 另外：用户提醒过"别滑过头" —— 所以只轻滑 1 次（300px），找不到就再轻滑 1 次，最多 3 次。
 #
-# Usage: dsh-screen-ui 永不 | 1 分钟 | 10 分钟 | 15 秒 …
+# Usage: dsh-screen-ui 15 秒 | 30 秒 | 1 分钟 | 2 分钟 | 5 分钟 | 10 分钟
+#   ⚠ 这 ROM 的菜单**最多 10 分钟、没有「永不」**（写 1800000 系统收，但菜单里没有对应项，
+#     那一行会显示成空值 —— 用户看到的"奇怪状态"就是这么来的）。要"别灭屏"请用 dsh-screen keep。
 set -u
 SOCK="$HOME/.local/bin/droid-sock"
 IMG="$HOME/.smoke/scrui.png"
@@ -57,7 +59,8 @@ print("%d %d %s" % best if best else "")
 }
 
 # 弹窗里按**文字**找选项（树里每个 RadioButton 都带 desc）
-tree_tap() {   # $1 = 选项文字
+tree_tap() {   # $1 = 选项文字；返回 2 = 设置已不在前台（拒绝盲点）
+  in_settings || return 2
   local y
   y=$(timeout 25 "$SOCK" ui '' 80 2>/dev/null | awk -v w="$1" '
     index($0, "desc=\x27" w "\x27") > 0 {
@@ -73,15 +76,35 @@ row_value() {  # 从树里读「自动锁屏」那一行的当前值
     | sed -n "s/.*text='\([^']*\)'.*/\1/p"
 }
 
-WANT="${1:?用法: dsh-screen-ui 永不|1 分钟|10 分钟|15 秒}"
+WANT="${1:?用法: dsh-screen-ui 15 秒|30 秒|1 分钟|2 分钟|5 分钟|10 分钟（本 ROM 没有「永不」）}"
 
 # ⚠ 全程保持屏幕常亮：这个流程要跑一两分钟（每步一次截图+OCR），而用户的超时是 1 分钟 ——
 #   实测跑一半屏幕就灭了，截图是黑的、OCR 什么都读不到，于是"找不到那一行"。
 #   这跟装包工具是同一个毛病，处理方式也一样：进来 keep，退出（含失败/中断）restore。
 SCREEN="$HOME/.local/bin/dsh-screen"
-screen_restore() { [ -x "$SCREEN" ] && "$SCREEN" restore >/dev/null 2>&1 || true; }
+PREV_PKG=$(timeout 12 "$SOCK" cur 2>/dev/null | sed -n 's/.*"pkg": *"\([^"]*\)".*/\1/p')
+cleanup() {
+  [ -x "$SCREEN" ] && "$SCREEN" restore >/dev/null 2>&1 || true
+  # 把你原来那个 App 还给你：跑这一趟不该把你从正在看的页面踢走（用户的明确忌讳）
+  # 三级兜底（桥的 start 最不可靠：桥没声明 <queries>，Android 11+ 包可见性让它对
+  # Chrome/Clash 一律 getLaunchIntentForPackage=null → "App not found"）：
+  #   ① 桥 start  ② am start（Termux=shell 身份，不受包可见性限制）  ③ 浏览器专用 VIEW intent
+  if [ -n "$PREV_PKG" ] && [ "$PREV_PKG" != "com.android.settings" ]; then
+    if timeout 25 "$SOCK" start "$PREV_PKG" >/dev/null 2>&1; then
+      printf '   ↩ 前台已切回 %s（桥 start）\n' "$PREV_PKG"
+    elif timeout 25 am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER \
+           -p "$PREV_PKG" >/dev/null 2>&1; then
+      printf '   ↩ 前台已切回 %s（am start）\n' "$PREV_PKG"
+    elif printf '%s' "$PREV_PKG" | grep -qE 'chrome|firefox|browser|webview'; then
+      timeout 40 "$HOME/.local/bin/dsh-browser-open" "$(cat "$HOME/.dsh-url" 2>/dev/null || echo http://127.0.0.1:8080)" --quiet >/dev/null 2>&1 || true
+      printf '   ↩ 用 VIEW intent 兜底切回浏览器\n'
+    else
+      printf '   ⚠ 没能自动切回 %s，按一下最近任务即可\n' "$PREV_PKG"
+    fi
+  fi
+}
 [ -x "$SCREEN" ] && "$SCREEN" keep >/dev/null 2>&1 || true
-trap screen_restore EXIT INT TERM
+trap cleanup EXIT INT TERM
 
 step "打开 设置 → 显示"
 for _ in 1 2 3; do
@@ -118,11 +141,14 @@ fi
 [ -n "$ROW_Y" ] || { bad "上下都扫过了还是没有那一行"; exit 1; }
 
 step "点开它"
+in_settings || { bad "设置已经不在前台了（你可能接管了手机）—— 不点，直接停手"; exit 1; }
 timeout 20 "$SOCK" tap 720 "$ROW_Y" >/dev/null 2>&1
 sleep 2
 
 step "在弹窗里选「$WANT」（弹窗用无障碍树，坐标是准的）"
-if tree_tap "$WANT"; then ok "已点「$WANT」"
+tree_tap "$WANT"; RC=$?
+if [ "$RC" = 0 ]; then ok "已点「$WANT」"
+elif [ "$RC" = 2 ]; then bad "设置已经不在前台了 —— 不点，直接停手"; exit 1
 else
   bad "弹窗里没有「$WANT」；树里认到的选项："
   timeout 25 "$SOCK" ui '' 80 2>/dev/null | sed -n "s/.*desc='\([^']*\)'.*/   \1/p" | grep -E '秒|分钟|取消' | head -8
