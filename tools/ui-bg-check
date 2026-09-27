@@ -1,0 +1,119 @@
+#!/data/data/com.termux/files/usr/bin/python3
+# install: runtime
+r"""ui-bg-check —— 客观回答"滚到底有没有露出别的底色"。
+
+WHY
+---
+用户 2026-09-27 报的现象是"主内容深色，滚到底露出一大块灰褐色"。这种问题肉眼说不清、也不该靠
+"你再截个图给我看"，所以这里把它变成**可复现的测量**：
+
+    取一张屏幕截图 → 沿屏幕中轴取一列像素 → 按行看出每一段的颜色 → 和顶部（页底色）比。
+
+会报出三段：
+    · 顶部（状态栏下方第一行内容）
+    · 内容区中段
+    · 屏幕最底一行（导航栏那一条也算 —— 主题里 navigationBarColor 已经钉成同一个 BG）
+并给出结论：底部是否与顶部同色；若不同，指出从哪一行开始变色、变的是哪个小区块
+（这样"灰块"到底是窗口底色、ScrollView、导航栏还是边缘辉光，一眼可辨）。
+
+用法
+----
+  ui-bg-check                 拍一张当前屏幕并检查
+  ui-bg-check shot.png        检查已有截图
+  ui-bg-check --keep          保留截图（默认也保留，落在 Download/dsh/图片/）
+"""
+import os
+import re
+import subprocess
+import sys
+
+HOME = os.path.expanduser('~')
+OUTDIR = os.path.join(HOME, 'storage', 'shared', 'Download', 'dsh', '图片')
+
+
+def shot():
+    os.makedirs(OUTDIR, exist_ok=True)
+    import time
+    path = os.path.join(OUTDIR, 'bg-check-%s.png' % time.strftime('%Y%m%d-%H%M%S'))
+    r = subprocess.run(['droid', 'shot', path], capture_output=True, text=True)
+    if not os.path.exists(path):
+        r = subprocess.run(['adb', 'exec-out', 'screencap', '-p'], capture_output=True)
+        if r.returncode == 0 and r.stdout[:8] == b'\x89PNG\r\n\x1a\n':
+            with open(path, 'wb') as f:
+                f.write(r.stdout)
+    return path if os.path.exists(path) else None
+
+
+def size(path):
+    out = subprocess.run(['magick', 'identify', '-format', '%w %h', path],
+                         capture_output=True, text=True).stdout.split()
+    return int(out[0]), int(out[1])
+
+
+def column(path, x, h):
+    """沿一列取全部像素 —— **一次** magick 调用。
+
+    第一版是"每个像素起一个 magick identify"，在 3168 行的高屏上要 spawn 几百次，
+    60 秒都跑不完（真被超时杀过）。crop 成一列再用 txt: 输出，一次搞定。
+    """
+    out = subprocess.run(['magick', path, '-crop', '1x%d+%d+0' % (h, x), '-depth', '8', 'txt:-'],
+                         capture_output=True, text=True, timeout=120).stdout
+    cols = []
+    for line in out.splitlines():
+        m = re.match(r'\d+,(\d+): \((\d+),(\d+),(\d+)', line)
+        if m:
+            y, r, g, b = (int(v) for v in m.groups())
+            cols.append((y, '#%02X%02X%02X' % (r, g, b)))
+    return cols
+
+
+def main():
+    path = None
+    for a in sys.argv[1:]:
+        if not a.startswith('--'):
+            path = a
+    if path is None:
+        path = shot()
+    if not path or not os.path.exists(path):
+        print('✘ 拿不到截图（adb 没连上？先 `droid conn`；或直接给一张 png 路径）')
+        return 2
+    w, h = size(path)
+    x = w // 2
+    print('截图 %s（%dx%d）' % (path, w, h))
+
+    # 沿中轴一次取完，压成"颜色段"
+    rows = column(path, x, h)[::4]
+    if not rows:
+        print('✘ 读不出像素（ImageMagick 的 txt: 输出格式变了？）')
+        return 2
+    segs = []
+    for y, c in rows:
+        if segs and segs[-1][2] == c:
+            segs[-1][1] = y
+        else:
+            segs.append([y, y, c])
+    print('\n沿屏幕中轴的颜色分段（只列 >=24px 高的段）：')
+    for a, b, c in segs:
+        if b - a >= 24:
+            print('   y %5d–%-5d  %s   (%d px)' % (a, b, c, b - a + 1))
+
+    top = rows[0][1]
+    bottom = rows[-1][1]
+    # 顶部那一行常是状态栏（半透明/黑），取"第一个够高的内容段"当页底色
+    base = None
+    for a, b, c in segs:
+        if b - a >= 60:
+            base = c
+            break
+    print('\n判定：')
+    print('   页底色（第一段够高的颜色）: %s' % base)
+    print('   屏幕最底一行            : %s' % bottom)
+    if base and bottom == base:
+        print('   ✅ 底部与页底色一致 —— 滚到底/导航栏都没有露出别的底色')
+        return 0
+    print('   ❌ 底部 %s ≠ 页底色 %s —— 有别的层露出来了，看上面分段里变色从哪一行开始' % (bottom, base))
+    return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -17,6 +17,7 @@
 | `widgets/` | 12 个 Termux 桌面小组件 + 公共库 `common.sh` |
 | `tools/` | 26 个命令行工具（启动、备份、装包、按文字点界面、Clash 自检…） |
 | `plugins/` | 3 个 DSH 页面插件（手机任务面板 / AI 自看遥控 / 文件面板） |
+| `ui/theme.json` | **两个 App 的唯一色板 + 主题源**：27 个颜色 → 两份 `Palette.java`、两份 `res/values/dsh_theme.xml`（窗口底色/状态栏/导航栏/滚动辉光/对话框）与控制台的形状 drawable。`tools/ui-controls gen` 生成、`tools/i18n-audit` 逐项核对（含「源码与 res 里不许有裸色值」），所以「滚到底露出一块灰」「两处一个深一个浅」这类问题在结构上不可能再出现 |
 | `ui/controls.json` | **三处 UI 的唯一文案源**：分类、控件名、一句话后果、危险标记、出现在哪几处。`tools/ui-controls` 生成页面插件的控件块和两个 App 的 `UiControls.java`；`ui-controls check`（逐个产物比 md5）已进自检 |
 | `tests/selftest.sh` | 自检套件：93 项（语法 → 预演 → 回归 → 真跑 → 沙箱冷启动 → 工具/UI 漂移） |
 | `docs/` | 运维笔记（每次踩坑的证据与复盘）+ 架构与数据流 |

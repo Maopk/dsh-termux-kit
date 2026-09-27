@@ -6,9 +6,12 @@
     "现在：默认一律深色（用户 2026-09-27 的选择：与其跟随系统，不如两边一致），颜色只能从这里来。",
     "androidTheme 是两份 AndroidManifest.xml 必须写的主题；由 tools/i18n-audit 检查两边一致。",
     "术语：BG=页面底 / CARD=卡片与按钮底 / FG=正文 / DIM=次要说明 / MUTED=最弱的提示 / ACCENT=分类标题 / LINK=链接 / ",
-    "OK=成功 / WARN=等待与提示 / BAD=失败文字 / DANGER=危险描边与实心 / ON_DANGER=实心红上的文字 / DIVIDER=分割线。"
+    "OK=成功 / WARN=等待与提示 / BAD=失败文字 / DANGER=危险描边与实心 / ON_DANGER=实心红上的文字 / DIVIDER=分割线。",
+    "androidTheme 是**App 自己的样式**（由本文件生成 res/values/dsh_theme.xml），不再是直接用平台主题：窗口底色/状态栏/导航栏/边缘辉光都钉死在 BG 上 —— 这样\"滚到底露出一块灰\"这类问题在结构上不可能再出现。",
+    "BOXn/BTNn/DANGERn = 控件形状用的色（由本文件生成 res/drawable/*.xml）：以前这 10 个色值手写在两个 XML 里，谁都没检查，跟色板悄悄漂。",
+    "WIDGET_BG 是 8 位 ARGB（带透明度），生成器原样输出；桌面小组件的布局也用 @color/dsh_*。"
   ],
-  "androidTheme": "@android:style/Theme.Material.NoActionBar",
+  "androidTheme": "@style/DshTheme",
   "dark": {
     "BG": "#0D1117",
     "CARD": "#161B22",
@@ -25,6 +28,20 @@
     "DANGER_FILL": "#FFFFFF",
     "DISABLED": "#4A5058",
     "DIVIDER": "#21262D",
-    "BTN_BORDER": "#30363D"
-  }
+    "BTN_BORDER": "#30363D",
+    "BOX": "#0F141A",
+    "BOX_BORDER": "#30363D",
+    "BTN_BG": "#1A2029",
+    "BTN_PRESSED": "#2D4A7C",
+    "BTN_PRESSED_BORDER": "#4C8DF6",
+    "DISABLED_BG": "#12161C",
+    "DANGER_BG": "#231417",
+    "DANGER_BORDER": "#5A2A2A",
+    "DANGER_PRESSED": "#5A1F1F",
+    "DANGER_PRESSED_BORDER": "#F85149",
+    "WIDGET_BG": "#F21B1F27"
+  },
+  "androidThemeParent": "@android:style/Theme.Material.NoActionBar",
+  "androidDialogTheme": "@style/DshDialog",
+  "androidDialogParent": "@android:style/Theme.Material.Dialog.Alert"
 }

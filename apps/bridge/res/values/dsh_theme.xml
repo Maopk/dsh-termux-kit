@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GENERATED FILE — do not edit. Source: ui/theme.json, generator: tools/ui-controls.
+
+  Why generated: the window background, the status/navigation bars, the overscroll edge glow and
+  the dialog background are not owned by any View in the page. With a platform theme they fall
+  back to the framework's own greys, which is exactly what showed up as a grey block below the
+  content (user report 2026-09-27). Every one of them is pinned to the same palette here, and
+  both apps get a byte-identical copy of this file.
+-->
+<resources>
+    <color name="dsh_bg">#0D1117</color>
+    <color name="dsh_card">#161B22</color>
+    <color name="dsh_accent">#58A6FF</color>
+    <color name="dsh_divider">#21262D</color>
+    <color name="dsh_fg">#E6EDF3</color>
+    <color name="dsh_dim">#8B949E</color>
+    <color name="dsh_widget_bg">#F21B1F27</color>
+
+    <style name="DshTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/dsh_bg</item>
+        <item name="android:colorBackground">@color/dsh_bg</item>
+        <item name="android:statusBarColor">@color/dsh_bg</item>
+        <item name="android:navigationBarColor">@color/dsh_bg</item>
+        <item name="android:colorEdgeEffect">@color/dsh_accent</item>
+        <item name="android:alertDialogTheme">@style/DshDialog</item>
+        <!-- 开关的滑块/进度条/对话框按钮：平台默认强调色是青色，跟这套蓝不是一个产品 -->
+        <item name="android:colorAccent">@color/dsh_accent</item>
+        <item name="android:colorControlActivated">@color/dsh_accent</item>
+    </style>
+
+    <!-- 对话框：底色改成页面里的卡片色（平台默认是 #424242 那一类灰）。
+         **不动 windowBackground** —— 圆角与内边距是平台那份背景给的，换成纯色会画出一个
+         方角底色压在圆角下面（深色页面上看不出，换浅色就会露）。 -->
+    <style name="DshDialog" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorBackground">@color/dsh_card</item>
+        <item name="android:colorBackgroundFloating">@color/dsh_card</item>
+    </style>
+</resources>

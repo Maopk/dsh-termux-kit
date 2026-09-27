@@ -40,6 +40,39 @@
 - 面板 `client.js` 重新部署（v0.8，八个分类与数据源一致）+ `pnpm install` + `dsh-relink-bundles --check`
   通过；刷一下页面即可看到新分类。
 
+## 2026-09-27 — 背景一致性（控制台 1.16 / 桥 2.22 同版追加）
+
+用户报：**控制台滚到底露出一大块灰褐色**，桥底部露灰；并点名「同类隐患」（折叠过渡区、对话框圆角外露、
+日志面板底色）。根因不是某个 View 忘了刷色，而是**那几层根本不属于任何 View**：
+
+- 平台主题的 `windowBackground` 是框架自己的灰（#303030 那一类）—— 内容比屏幕短、或过度滚动时露出的就是它；
+- 状态栏 / 导航栏 / 滚动到头的边缘辉光同理，都走框架默认值；
+- 对话框底色是 Material 的 #424242 灰，跟页面卡片色不是一个。
+
+**做法：把这些层也纳入唯一色板源。**
+- `ui/theme.json` 新增 `androidTheme / androidThemeParent / androidDialogTheme / androidDialogParent`，
+  生成器据此产出 **`res/values/dsh_theme.xml`**（两个 App 逐字节相同）：`windowBackground`、`colorBackground`、
+  `statusBarColor`、`navigationBarColor`、`colorEdgeEffect` 全部钉在 `BG(#0D1117)`；`colorAccent` /
+  `colorControlActivated` 钉在强调蓝（开关与进度条不再是平台青色）；`alertDialogTheme` 指向 `DshDialog`
+  （底色＝卡片色 #161B22）。**不动** dialog 的 `windowBackground` —— 圆角与内边距仍由平台那份背景提供。
+- 两份 manifest 改用 `@style/DshTheme`（不再是平台主题）；控制台的 ScrollView 也显式刷底色 + `fillViewport`：
+  **窗口 → page → ScrollView → root 四层同色**，怎么滚都不会断层。
+- 控件形状的颜色（`box/btn/btn_danger` 里 10 个手写色值）也搬进 `ui/theme.json` 生成，值不变，
+  但不再有「第二套卡片色」（box 曾是 #0F141A，而 Palette.CARD 是 #161B22）。
+- 桌面小组件布局 `res/layout/widget.xml` 的 6 处手写色值改用 `@color/dsh_*`。
+
+**门禁（本次新加）**
+- `i18n-audit`：核对两份 `dsh_theme.xml` 逐字节相同、六个关键项都在、`dsh_bg` 等于 `ui/theme.json` 的 BG；
+  裸色值检查扩展到 **res/ 下的 XML**（只有生成的主题/形状文件与图标 artwork 允许带色值）。
+- `app-verify`：从 APK 里解出 `style/DshTheme`，核对 manifest 指向的就是它、parent 正确、`color/dsh_bg`
+  的实际值、以及**两个 App 的主题逐项相同**（比 item 文本而不比资源 id —— 主题现在是各 App 自己的资源，
+  id 天然不同，比 id 会得出假结论）。
+- 新工具 `tools/ui-bg-check`：截图 → 沿屏幕中轴取一列像素 → 报出「页底色 / 屏幕最底一行 / 是否一致」，
+  把「看着有块灰」变成可复跑的数字。
+
+**顺手**：`Palette` 支持 8 位 ARGB（小组件的半透明底 #F21B1F27）—— 生成器第一版拼出
+`0xFFF21B1F27` 直接编译失败，已修。
+
 ## 2026-09-27 — P0 返工（面板 0.8 / 控制台 1.16 / 桥 2.22）
 
 **为什么会有一版"返工"**（根因写清楚，免得再犯）

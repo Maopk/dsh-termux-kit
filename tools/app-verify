@@ -62,7 +62,7 @@ def android_manifest(path):
 def android_theme(apk):
     """APK 里 <application> 的 android:theme。
 
-    二进制 manifest 里主题是**资源引用**（@0x0103022e），不是字符串，所以直接扫字符串池会
+    二进制 manifest 里主题是**资源引用**（@0x7f060001 这种），不是字符串，所以直接扫字符串池会
     误判成"没声明主题"（第一版就踩了）。用 aapt2 dump xmltree 读真实的属性。
     """
     try:
@@ -72,6 +72,38 @@ def android_theme(apk):
         return None
     m = re.search(r':theme\(0x01010000\)=@(0x[0-9a-fA-F]+)', out)
     return m.group(1) if m else None
+
+
+def theme_style(apk, name='DshTheme'):
+    """从资源表里取 <style name>：返回 (资源 id, parent, [item 行...])。
+
+    为什么要按**名字**取而不是比 id：主题现在是 App 自己的资源，两个 App 的资源表不同，
+    同一个样式在两边的 id 不一样（0x7f060001 / 0x7f030001）—— 比 id 会得出"两边不一致"的假结论。
+    要比的是：manifest 指向的就是这个样式、两边的 parent 与 item 完全相同。
+    """
+    try:
+        out = subprocess.run(['aapt2', 'dump', 'resources', apk],
+                             capture_output=True, text=True, timeout=90).stdout
+    except Exception:
+        return None
+    m = re.search(r'resource (0x[0-9a-fA-F]+) style/%s\n((?:.*\n)*?)(?=resource |type |$)' % re.escape(name), out)
+    if not m:
+        return None
+    body = m.group(2)
+    parent = re.search(r'parent=(0x[0-9a-fA-F]+)', body)
+    items = re.findall(r'\n\s+(0x[0-9a-fA-F]+=@?[^\s]+)', body)
+    return m.group(1), (parent.group(1) if parent else None), items
+
+
+def color_value(apk, name='dsh_bg'):
+    """取 <color name> 的实际值（用来证明窗口底色 = 页底色，而不是"信源码"）。"""
+    try:
+        out = subprocess.run(['aapt2', 'dump', 'resources', apk],
+                             capture_output=True, text=True, timeout=90).stdout
+    except Exception:
+        return None
+    m = re.search(r'resource 0x[0-9a-fA-F]+ color/%s\n\s+\(\) (#[0-9a-fA-F]+)' % re.escape(name), out)
+    return m.group(1).lower() if m else None
 
 
 def main():
@@ -91,13 +123,28 @@ def main():
     if tid is None:
         line('✘', '包里没有声明 android:theme —— 会退回系统默认主题（浅色窗口 + 浅色 ActionBar，标题重复）')
     else:
-        # 两个 App 必须指向**同一个**主题资源，否则又是"一个深一个浅"
-        other = 'bridge' if app == 'console' else 'console'
-        oid = android_theme(APPS[other]['apk']) if os.path.exists(APPS[other]['apk']) else None
-        line('✔', '声明了 android:theme=%s（源码里是 %s）' % (tid, theme['androidTheme']))
-        if oid is not None:
-            line('✔' if oid == tid else '✘',
-                 '另一个 App（%s）的主题=%s —— %s' % (other, oid, '两边一致' if oid == tid else '两边不一致！'))
+        st = theme_style(apk, 'DshTheme')
+        if st is None:
+            line('✘', '包里没有 style/DshTheme（窗口底色没人管 → 内容短或滚到底会露出平台主题的灰）')
+        else:
+            sid, parent, items = st
+            if sid != tid:
+                line('✘', 'manifest 指向的主题 %s 不是 DshTheme(%s) —— 改的不是同一个样式' % (tid, sid))
+            else:
+                line('✔', 'manifest 的 android:theme 就是 style/DshTheme(%s)，parent=%s' % (sid, parent))
+            bg = color_value(apk, 'dsh_bg')
+            line('✔' if bg else '✘', '窗口底色 color/dsh_bg = %s（页底色由 Palette.BG 刷，两边同一个值）' % bg)
+            # 两个 App 必须**逐项相同**（id 会不一样，所以比 item 文本，不比 id）
+            other = 'bridge' if app == 'console' else 'console'
+            ost = theme_style(APPS[other]['apk'], 'DshTheme') if os.path.exists(APPS[other]['apk']) else None
+            if ost is None:
+                line('✘', '另一个 App（%s）还没有 DshTheme' % other)
+            elif ost[1] != parent or ost[2] != items:
+                line('✘', '两个 App 的主题不一致：本包 parent=%s items=%s / %s parent=%s items=%s'
+                     % (parent, items, other, ost[1], ost[2]))
+            else:
+                line('✔', '另一个 App（%s）的主题逐项相同（parent=%s，%d 项：窗口底色/状态栏/导航栏/辉光/对话框）'
+                     % (other, parent, len(items)))
 
     # ② dex：当前翻译表的每条中文都必须真的在包里
     with zipfile.ZipFile(apk) as z:

@@ -230,6 +230,31 @@ def audit_theme(theme):
             % (want, got['console'], got['bridge']))
     else:
         ok('两个 App 的 android:theme 相同：%s' % want)
+    # 主题资源本身：窗口底色/状态栏/导航栏/边缘辉光/对话框都得钉在同一个色板上，
+    # 否则"内容短或滚到底露出一块灰"会以另一种形式回来（那一层不属于任何 View）。
+    files = [os.path.join(CONSOLE_SRC, '..', '..', '..', '..', 'res', 'values', 'dsh_theme.xml'),
+             os.path.join(BRIDGE_SRC, '..', '..', '..', '..', 'res', 'values', 'dsh_theme.xml')]
+    files = [os.path.normpath(f) for f in files]
+    bodies = []
+    for f in files:
+        bodies.append(io.open(f, encoding='utf-8').read() if os.path.exists(f) else None)
+    if None in bodies:
+        bad('res/values/dsh_theme.xml 还没生成（跑 tools/ui-controls gen）')
+    elif bodies[0] != bodies[1]:
+        bad('两个 App 的 dsh_theme.xml 不一致 —— 跑 tools/ui-controls gen')
+    else:
+        body = bodies[0]
+        bg = theme['dark']['BG'].lstrip('#').upper()
+        need = {'android:windowBackground': 'dsh_bg', 'android:colorBackground': 'dsh_bg',
+                'android:statusBarColor': 'dsh_bg', 'android:navigationBarColor': 'dsh_bg',
+                'android:colorEdgeEffect': 'dsh_accent', 'android:alertDialogTheme': 'DshDialog'}
+        miss = [k for k, v in need.items() if not re.search(r'%s">@(?:color|style)/%s<' % (re.escape(k), v), body)]
+        if miss:
+            bad('dsh_theme.xml 里少了/写错了：%s' % ', '.join(miss))
+        elif '#%s' % bg not in body:
+            bad('dsh_theme.xml 里的 dsh_bg 不是 ui/theme.json 的 BG(#%s)' % bg)
+        else:
+            ok('两份 dsh_theme.xml 逐字节相同，窗口底色/状态栏/导航栏/边缘辉光/对话框全部钉在 BG(#%s) 上' % bg)
 
 
 # ── 5. 色板：两份 Palette.java 必须同源 ─────────────────────────────────────
@@ -249,12 +274,27 @@ def audit_palette():
             if not name.endswith('.java') or name in ('Lang.java', 'Palette.java'):
                 continue
             src = io.open(os.path.join(d, name), encoding='utf-8').read()
-            for m in re.finditer(r'#[0-9A-Fa-f]{6}|0xFF[0-9A-Fa-f]{6}', src):
+            for m in re.finditer(r'#(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6})(?![0-9A-Fa-f])|0xFF[0-9A-Fa-f]{6}', src):
                 stray.append('%s/%s %s' % (os.path.basename(d), name, m.group(0)))
+    # res/ 下的 XML 也要查：以前 box/btn/btn_danger 里的 10 个色值是手写的，没有任何检查盯着
+    # （box 是 #0F141A 而 Palette.CARD 是 #161B22 —— 同一套界面两套"卡片色"）。现在它们由
+    # tools/ui-controls 从 ui/theme.json 生成，只有生成的那几个文件允许出现色值。
+    # 允许自带色值的：前四个是 ui/theme.json 生成的；ic_launcher 是**图标图形**（有自己的识别色，
+    # 不是界面配色，硬塞进 UI 色板只会逼着图标改色）。
+    gen_ok = {'dsh_theme.xml', 'box.xml', 'btn.xml', 'btn_danger.xml', 'ic_launcher.xml'}
+    for app_dir in ('dsh-console', 'droid-bridge'):
+        base = os.path.join(HOME, app_dir, 'res')
+        for root, _dirs, files in os.walk(base):
+            for name in sorted(files):
+                if not name.endswith('.xml') or name in gen_ok:
+                    continue
+                body = io.open(os.path.join(root, name), encoding='utf-8').read()
+                for m in re.finditer(r'#(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6})(?![0-9A-Fa-f])|0xFF[0-9A-Fa-f]{6}', body):
+                    stray.append('%s/res/%s %s' % (app_dir, name, m.group(0)))
     if stray:
-        bad('还有裸写的颜色值（必须走 Palette）：%s' % ', '.join(stray[:6]))
+        bad('还有裸写的颜色值（必须走 Palette / ui/theme.json）：%s' % ', '.join(stray[:6]))
     else:
-        ok('两份 Palette.java 完全一致（%d 个颜色），且源码里没有裸色值' % len(a))
+        ok('两份 Palette.java 完全一致（%d 个颜色），Java 与 res/ 里都没有裸色值（只有生成的主题/形状 XML 有）' % len(a))
 
 
 # ── 6. 桥状态口径：python 与 java 的 state→灯色 必须逐项相同 ────────────────

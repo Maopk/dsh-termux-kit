@@ -55,7 +55,7 @@
         android:label="DSH Bridge"
         android:allowBackup="false"
         android:debuggable="false"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/DshTheme">
 
         <activity
             android:name=".MainActivity"

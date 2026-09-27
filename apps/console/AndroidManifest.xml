@@ -22,7 +22,7 @@
     <application
         android:label="DSH Console"
         android:icon="@drawable/ic_launcher"
-        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:theme="@style/DshTheme"
         android:allowBackup="false"
         android:debuggable="false">
 

@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="8dp"
-    android:background="#F21B1F27">
+    android:background="@color/dsh_widget_bg">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -14,18 +14,18 @@
         android:orientation="horizontal"
         android:gravity="center_vertical">
         <TextView android:id="@+id/w_title" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="DSH Console" android:textColor="#E6EDF3"
+            android:layout_weight="1" android:text="DSH Console" android:textColor="@color/dsh_fg"
             android:textSize="13sp" android:textStyle="bold" />
         <TextView android:id="@+id/w_lamp_dsh" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="● DSH" android:textColor="#8B949E" android:textSize="12sp" android:paddingEnd="6dp" />
+            android:text="● DSH" android:textColor="@color/dsh_dim" android:textSize="12sp" android:paddingEnd="6dp" />
         <TextView android:id="@+id/w_lamp_bridge" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="● Bridge" android:textColor="#8B949E" android:textSize="12sp" android:paddingEnd="6dp" />
+            android:text="● Bridge" android:textColor="@color/dsh_dim" android:textSize="12sp" android:paddingEnd="6dp" />
         <TextView android:id="@+id/w_lamp_adb" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="● adb" android:textColor="#8B949E" android:textSize="12sp" />
+            android:text="● adb" android:textColor="@color/dsh_dim" android:textSize="12sp" />
     </LinearLayout>
 
     <TextView android:id="@+id/w_status" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="Tap Refresh to read status" android:textColor="#8B949E" android:textSize="11sp"
+        android:text="Tap Refresh to read status" android:textColor="@color/dsh_dim" android:textSize="11sp"
         android:paddingTop="2dp" android:paddingBottom="4dp" />
 
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"

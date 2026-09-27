@@ -18,6 +18,8 @@ WHY
   ~/droid-bridge/src/io/dsh/bridge/UiControls.java          ← 整文件
   ~/dsh-console/src/io/dsh/console/Palette.java             ← 色板（源：ui/theme.json）
   ~/droid-bridge/src/io/dsh/bridge/Palette.java             ← 色板（同一份源 → 两处不可能再一个深一个浅）
+  ~/dsh-console/res/values/dsh_theme.xml                    ← 主题资源（窗口底色/状态栏/导航栏/边缘辉光/对话框）
+  ~/droid-bridge/res/values/dsh_theme.xml                   ← 同一份，两个 App 逐字节相同
   i18n/zh.json                                               ← 中英对照**合并**进去（缺哪条补哪条），再跑 i18n-table gen
     为什么也写 i18n：Java 侧沿用既有的 Lang.t() 渲染时翻译，翻译表只有 zh.json 一份，
     不然就会出现"控件一套翻译、别处又一套"。
@@ -46,6 +48,11 @@ CONSOLE_JAVA = os.path.join(HOME, 'dsh-console', 'src', 'io', 'dsh', 'console', 
 BRIDGE_JAVA = os.path.join(HOME, 'droid-bridge', 'src', 'io', 'dsh', 'bridge', 'UiControls.java')
 CONSOLE_PALETTE = os.path.join(HOME, 'dsh-console', 'src', 'io', 'dsh', 'console', 'Palette.java')
 BRIDGE_PALETTE = os.path.join(HOME, 'droid-bridge', 'src', 'io', 'dsh', 'bridge', 'Palette.java')
+CONSOLE_BOX = os.path.join(HOME, 'dsh-console', 'res', 'drawable', 'box.xml')
+CONSOLE_BTN = os.path.join(HOME, 'dsh-console', 'res', 'drawable', 'btn.xml')
+CONSOLE_BTN_DANGER = os.path.join(HOME, 'dsh-console', 'res', 'drawable', 'btn_danger.xml')
+CONSOLE_THEME_XML = os.path.join(HOME, 'dsh-console', 'res', 'values', 'dsh_theme.xml')
+BRIDGE_THEME_XML = os.path.join(HOME, 'droid-bridge', 'res', 'values', 'dsh_theme.xml')
 ZH = os.path.join(ROOT, 'i18n', 'zh.json')
 BEGIN = '      // ── generated:controls (ui/controls.json) — do not edit by hand; run tools/ui-controls gen ──'
 END = '      // ── /generated:controls ──'
@@ -229,12 +236,104 @@ def palette_file(pkg, theme):
     L.append(' */')
     L.append('final class Palette {')
     for name in sorted(theme['dark']):
-        L.append('    static final int %s = 0xFF%s;' % (name, theme['dark'][name].lstrip('#').upper()))
+        v = theme['dark'][name].lstrip('#').upper()
+        # 6 位 RRGGBB 补不透明 alpha；8 位 AARRGGBB（如桌面小组件的半透明底）原样用，
+        # 否则会拼出 0xFFF21B1F27 这种"integer number too large"（真踩过）。
+        lit = '0x' + v if len(v) == 8 else '0xFF' + v
+        L.append('    static final int %s = %s;' % (name, lit))
     L.append('')
     L.append('    private Palette() {}')
     L.append('}')
     L.append('')
     return '\n'.join(L)
+
+
+def theme_xml(theme):
+    """由 ui/theme.json 生成 res/values/dsh_theme.xml（两个 App 逐字节相同）。
+
+    为什么要把主题也生成出来：窗口自身的背景色、状态栏、导航栏、滚动到头的边缘辉光、对话框底色，
+    都不是"页面里哪一个 View"能管的。平台默认主题的窗口底色是 #303030 那一类灰 —— 内容比屏幕短、
+    或者滚到底时，露出来的就是它（用户 2026-09-27 报的"底下一大块灰褐色"正是这个）。
+    现在这些颜色全部钉死在同一个 BG 上，两个 App 用同一份文件，结构上不可能再漂。
+    """
+    c = theme['dark']
+    def argb(x):
+        v = c[x].lstrip('#').upper()
+        return '#' + v          # 6 位 RRGGBB 与 8 位 AARRGGBB 都原样（后者自带透明度）
+    L = []
+    L.append('<?xml version="1.0" encoding="utf-8"?>')
+    L.append('<!--')
+    L.append('  GENERATED FILE — do not edit. Source: ui/theme.json, generator: tools/ui-controls.')
+    L.append('')
+    L.append('  Why generated: the window background, the status/navigation bars, the overscroll edge glow and')
+    L.append('  the dialog background are not owned by any View in the page. With a platform theme they fall')
+    L.append('  back to the framework\'s own greys, which is exactly what showed up as a grey block below the')
+    L.append('  content (user report 2026-09-27). Every one of them is pinned to the same palette here, and')
+    L.append('  both apps get a byte-identical copy of this file.')
+    L.append('-->')
+    L.append('<resources>')
+    L.append('    <color name="dsh_bg">%s</color>' % argb('BG'))
+    L.append('    <color name="dsh_card">%s</color>' % argb('CARD'))
+    L.append('    <color name="dsh_accent">%s</color>' % argb('ACCENT'))
+    L.append('    <color name="dsh_divider">%s</color>' % argb('DIVIDER'))
+    L.append('    <color name="dsh_fg">%s</color>' % argb('FG'))
+    L.append('    <color name="dsh_dim">%s</color>' % argb('DIM'))
+    L.append('    <color name="dsh_widget_bg">%s</color>' % argb('WIDGET_BG'))
+    L.append('')
+    L.append('    <style name="DshTheme" parent="%s">' % theme['androidThemeParent'])
+    L.append('        <item name="android:windowBackground">@color/dsh_bg</item>')
+    L.append('        <item name="android:colorBackground">@color/dsh_bg</item>')
+    L.append('        <item name="android:statusBarColor">@color/dsh_bg</item>')
+    L.append('        <item name="android:navigationBarColor">@color/dsh_bg</item>')
+    L.append('        <item name="android:colorEdgeEffect">@color/dsh_accent</item>')
+    L.append('        <item name="android:alertDialogTheme">%s</item>' % theme['androidDialogTheme'])
+    L.append('        <!-- 开关的滑块/进度条/对话框按钮：平台默认强调色是青色，跟这套蓝不是一个产品 -->')
+    L.append('        <item name="android:colorAccent">@color/dsh_accent</item>')
+    L.append('        <item name="android:colorControlActivated">@color/dsh_accent</item>')
+    L.append('    </style>')
+    L.append('')
+    L.append('    <!-- 对话框：底色改成页面里的卡片色（平台默认是 #424242 那一类灰）。')
+    L.append('         **不动 windowBackground** —— 圆角与内边距是平台那份背景给的，换成纯色会画出一个')
+    L.append('         方角底色压在圆角下面（深色页面上看不出，换浅色就会露）。 -->')
+    L.append('    <style name="DshDialog" parent="%s">' % theme['androidDialogParent'])
+    L.append('        <item name="android:colorBackground">@color/dsh_card</item>')
+    L.append('        <item name="android:colorBackgroundFloating">@color/dsh_card</item>')
+    L.append('    </style>')
+    L.append('</resources>')
+    L.append('')
+    return '\n'.join(L)
+
+
+def shape_xml(kind, theme):
+    """生成 res/drawable/{box,btn,btn_danger}.xml —— 控件形状的颜色也来自 ui/theme.json。
+
+    以前这 10 个色值手写在 XML 里，没有任何检查盯着它们，跟 Palette 悄悄漂（box 是 #0F141A，
+    而 Palette.CARD 是 #161B22 —— 同一套界面两套"卡片色"）。值保持不变，只是搬了个家。
+    """
+    c = theme['dark']
+    def a(x):
+        return '#' + c[x].lstrip('#').upper()
+    head = ('<?xml version="1.0" encoding="utf-8"?>\n'
+            '<!-- GENERATED FILE — do not edit. Source: ui/theme.json, generator: tools/ui-controls. -->\n')
+    if kind == 'box':
+        return (head + '<shape xmlns:android="http://schemas.android.com/apk/res/android">\n'
+                '    <solid android:color="%s"/>\n'
+                '    <corners android:radius="10dp"/>\n'
+                '    <stroke android:width="1dp" android:color="%s"/>\n'
+                '</shape>\n') % (a('BOX'), a('BOX_BORDER'))
+    if kind == 'btn':
+        return (head + '<selector xmlns:android="http://schemas.android.com/apk/res/android">\n'
+                '    <item android:state_pressed="true"><shape><solid android:color="%s"/><corners android:radius="10dp"/><stroke android:width="1dp" android:color="%s"/></shape></item>\n'
+                '    <item android:state_enabled="false"><shape><solid android:color="%s"/><corners android:radius="10dp"/><stroke android:width="1dp" android:color="%s"/></shape></item>\n'
+                '    <item><shape><solid android:color="%s"/><corners android:radius="10dp"/><stroke android:width="1dp" android:color="%s"/></shape></item>\n'
+                '</selector>\n') % (a('BTN_PRESSED'), a('BTN_PRESSED_BORDER'), a('DISABLED_BG'),
+                                     a('DIVIDER'), a('BTN_BG'), a('BTN_BORDER'))
+    return (head + '<selector xmlns:android="http://schemas.android.com/apk/res/android">\n'
+            '    <item android:state_pressed="true"><shape><solid android:color="%s"/><corners android:radius="10dp"/><stroke android:width="1dp" android:color="%s"/></shape></item>\n'
+            '    <item android:state_enabled="false"><shape><solid android:color="%s"/><corners android:radius="10dp"/><stroke android:width="1dp" android:color="%s"/></shape></item>\n'
+            '    <item><shape><solid android:color="%s"/><corners android:radius="10dp"/><stroke android:width="1dp" android:color="%s"/></shape></item>\n'
+            '</selector>\n') % (a('DANGER_PRESSED'), a('DANGER_PRESSED_BORDER'), a('DISABLED_BG'),
+                                 a('DIVIDER'), a('DANGER_BG'), a('DANGER_BORDER'))
 
 
 def targets(data):
@@ -254,6 +353,11 @@ def targets(data):
         (BRIDGE_JAVA, java_file('bridge', 'UiControls', data, 'bridge'), 'bridge  UiControls.java'),
         (CONSOLE_PALETTE, palette_file('console', theme), 'console Palette.java'),
         (BRIDGE_PALETTE, palette_file('bridge', theme), 'bridge  Palette.java'),
+        (CONSOLE_THEME_XML, theme_xml(theme), 'console dsh_theme.xml'),
+        (BRIDGE_THEME_XML, theme_xml(theme), 'bridge  dsh_theme.xml'),
+        (CONSOLE_BOX, shape_xml('box', theme), 'console drawable/box.xml'),
+        (CONSOLE_BTN, shape_xml('btn', theme), 'console drawable/btn.xml'),
+        (CONSOLE_BTN_DANGER, shape_xml('danger', theme), 'console drawable/btn_danger.xml'),
     ]
 
 

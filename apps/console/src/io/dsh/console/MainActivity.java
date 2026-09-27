@@ -241,6 +241,11 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         int p = dp(14); root.setPadding(p, p, p, p);
         root.setBackgroundColor(Palette.BG);
+        // 每一层都刷同一个底色：窗口（@style/DshTheme 的 windowBackground）→ page → ScrollView → root。
+        // 内容比屏幕短、或者滚到底时，露出来的就是这几层里没刷的那一层 —— 用户 2026-09-27 看到的
+        // "底下一大块灰褐色"就是平台主题的 windowBackground 灰。现在四层同色，怎么滚都不会断层。
+        sc.setBackgroundColor(Palette.BG);
+        sc.setFillViewport(true);
         sc.addView(root);
         // ── Title row (title + version; the version is visible at a glance so an old build is obvious) ──
         LinearLayout titleRow = new LinearLayout(this);
