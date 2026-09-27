@@ -459,7 +459,7 @@ else
   CAPS=$(timeout 12 "$HOME_DIR/.local/bin/droid-sock" caps 2>/dev/null || true)
   if printf '%s' "$CAPS" | grep -q '"stop_is_durable"'; then
     # ── **default path** since v1.8 (widget 2 takes it by default): a soft stop must not self-recover and a wake must return at once ──
-    rec PASS "bridge capability probe" "v1.8: $(printf '%s' "$CAPS" | grep -oE '"ver": *"[^"]*"') soft stop is durable (no self-recovery) + sleep is still available"
+    rec PASS "bridge capability probe" "durable soft stop (a feature introduced in bridge v1.8) + sleep still available; the bridge reports $(printf '%s' "$CAPS" | grep -oE '"ver": *"[^"]*"')"
     if timeout 15 "$HOME_DIR/.local/bin/droid-sock" stop >/dev/null 2>&1; then
       sleep 2
       if (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null; then
