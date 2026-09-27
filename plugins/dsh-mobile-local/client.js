@@ -26,6 +26,7 @@ window.__ModuleLoader__.load({
         { id: '6_hard-restart-dsh', cat: 'Start / Stop', label: 'Hard restart', icon: '⛔', hint: 'Restart after kill -9', danger: true },
         { id: '2_shutdown-dsh', cat: 'Start / Stop', label: 'Stop DSH', icon: '■', hint: 'Stops the service and closes the browser', danger: true },
         { id: '8_enable-wireless-adb', cat: 'Channels (adb and bridge separate)', label: 'Connect adb', icon: '⚡', hint: 'Wireless debugging only (needs working Wi-Fi)' },
+        { id: 'adb_ensure', cat: 'Channels (adb and bridge separate)', label: 'Repair adb channel', icon: '🔌', hint: 'adb only: Wi-Fi state → Wireless debugging switch (borrowed through the bridge for that one setting) → port → connect → verify; names the step that failed' },
         { id: 'bridge_wake', cat: 'Channels (adb and bridge separate)', label: 'Wake bridge', icon: '🌉', hint: 'Accessibility loopback only, no network needed' },
         { id: 'bridge_status', cat: 'Channels (adb and bridge separate)', label: 'Bridge status', icon: '🔎', hint: 'Bridge only: port / response / version' },
         { id: '10_net-fix', cat: 'Channels (adb and bridge separate)', label: 'Network first aid', icon: '🩺', hint: 'One tap when foreign sites die: decides whether the core stopped or the config went bad, then repairs' },

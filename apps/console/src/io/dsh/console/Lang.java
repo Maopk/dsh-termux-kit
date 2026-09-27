@@ -100,6 +100,7 @@ final class Lang {
         ZH.put("Every run is recorded in the log: sent, callback, exit code, raw output.", "每次执行都记在「日志」里：发送、回传、退出码、原始输出。");
         ZH.put("Failed to start the Termux command: ", "启动 Termux 命令失败：");
         ZH.put("For when you need both channels: adb first, then the bridge; a failure names the channel it came from", "两条通道都要时用：先 adb，再桥；哪条失败会说哪条");
+        ZH.put("Full check: Wi-Fi state → Wireless debugging switch (borrowed through the bridge) → port → connect → verify; says which step failed", "完整自检：Wi-Fi 状态 → 无线调试开关（这一步借桥来写）→ 端口 → 连接 → 复核；失败时明确说卡在哪一步");
         ZH.put("Hard restart", "硬重启");
         ZH.put("Language", "语言");
         ZH.put("Log", "日志");
@@ -127,6 +128,7 @@ final class Lang {
         ZH.put("Reading authorization state…", "正在读取授权状态…");
         ZH.put("Reading status…", "正在读取状态…");
         ZH.put("Refresh status", "刷新状态");
+        ZH.put("Repair adb channel", "修复 adb 通道");
         ZH.put("Restarts after SIGTERM; drops the current web session", "SIGTERM 后重启，会断开当前网页会话");
         ZH.put("Restarts after a -9 kill; drops the current web session", "-9 强杀后重启，会断开当前网页会话");
         ZH.put("Restore everything (adb + bridge)", "全部恢复（adb + 桥）");

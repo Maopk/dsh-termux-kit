@@ -17,14 +17,24 @@
 #   退出码: 0 可用 · 3 Wi-Fi 没开（只有你能开）· 4 无线调试开关写不进去 · 1 找不到 adbd 端口
 set -u
 SOCK="$HOME/.local/bin/droid-sock"
-QUIET=0; PIN=1
-for a in "$@"; do case "$a" in --quiet) QUIET=1 ;; --no-pin) PIN=0 ;; esac; done
+QUIET=0; PIN=1; DRY=0
+for a in "$@"; do case "$a" in --quiet) QUIET=1 ;; --no-pin) PIN=0 ;; --dry-run) DRY=1 ;; esac; done
 T0=$(date +%s)
 
 log()  { [ "$QUIET" = 1 ] || printf '%s\n' "$*"; }
 ok()   { printf '✔ %s\n' "$*"; }
 warn() { printf '⚠ %s\n' "$*"; }
 bad()  { printf '✘ %s\n' "$*" >&2; }
+
+# tasksd appends --dry-run to virtual tasks, and a dry run must not touch anything (the web panel's
+# rehearsal button would otherwise really flip the wireless-debugging switch and reconnect adb).
+if [ "$DRY" = 1 ]; then
+  printf '· [dry] would: check adb → wake the bridge if needed → read wifi_on/online/adb_wifi\n'
+  printf '· [dry]        → write adb_wifi_enabled through the bridge → find the port (5555/mDNS/scan)\n'
+  printf '· [dry]        → adb connect → verify with a real `adb shell` → pin 5555\n'
+  ok "(dry-run)"
+  exit 0
+fi
 
 adb_() { adb ${DROID_SERIAL:+-s $DROID_SERIAL} "$@"; }
 

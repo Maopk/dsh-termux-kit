@@ -70,6 +70,11 @@ ALLOWED = {
 VIRTUAL = {
     'bridge_wake':   [os.path.join(HOME, '.local/bin/dsh-bridge'), 'wake'],
     'bridge_status': [os.path.join(HOME, '.local/bin/dsh-bridge'), 'status'],
+    # adb is the other channel, so it gets its own button instead of being folded into the bridge's:
+    # Wi-Fi dropping makes Android clear the Wireless-debugging switch and the port changes after a
+    # reboot, so "connect" alone is not enough to keep it usable. droid-ensure does the whole ladder
+    # and names the rung that failed (Wi-Fi off / switch will not stick / no adbd port / connect).
+    'adb_ensure':    [os.path.join(HOME, '.local/bin/droid-ensure')],
 }
 AUTH_HELPER = os.path.join(HOME, '.local/bin/dsh-auth-pass')
 # These change the running state (they drop the current session), so the frontend must confirm first

@@ -54,6 +54,14 @@ final class Tasks {
 
         // ── Channels ───────────────────────────────────────────────────
         new T("8_enable-wireless-adb", LINK, "Connect adb", "Wireless debugging only: set the switch → find the port → adb connect (needs working Wi-Fi)", false, null, 220),
+        // adb breaks on its own: Wi-Fi dropping makes Android clear the Wireless-debugging switch and the port
+        // changes after a reboot, so "connect" alone does not keep it usable. This one walks the whole ladder
+        // (Wi-Fi state → that switch, borrowed through the **bridge** → port → connect → verify) and names the
+        // rung that failed. It is a button of its own instead of part of the bridge's, because the two channels
+        // must stay separable: when it fails you need to know it was adb, not the bridge.
+        // Absolute path for the same reason as bridge_wake below (RUN_COMMAND's PATH has no ~/.local/bin).
+        new T("adb_ensure", LINK, "Repair adb channel", "Full check: Wi-Fi state → Wireless debugging switch (borrowed through the bridge) → port → connect → verify; says which step failed", false,
+                TermuxRunner.HOME + "/.local/bin/droid-ensure", 180),
         // ⚠ These two must use **absolute paths**: RUN_COMMAND goes through `bash -lc`, and its measured
         //   PATH is only /data/data/com.termux/files/usr/bin:. — no ~/.local/bin, so when they were
         //   written as a bare `dsh-bridge wake` both returned exit=127 (command not found).
