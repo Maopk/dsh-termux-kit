@@ -56,7 +56,18 @@ import java.util.List;
  *   · The log is never blank: with no entries it says exactly where to tap.
  */
 public class MainActivity extends Activity {
-    private static final String VER = "v1.8";
+    /**
+     * The version shown in the title bar and the log header, read from the package manager.
+     *
+     * ⚠ This used to be the literal "v1.8" and was forgotten on the next bump: the installed
+     * package said 1.9 while the app itself still displayed v1.8 (caught on the device
+     * 2026-09-27, with the 1.9 APK already installed and verified). A displayed version that
+     * disagrees with the installed one is exactly the kind of claim this project must not
+     * make, so it is resolved at runtime instead — the same thing the Bridge app does.
+     * `getPackageManager()` needs a Context, so this is filled in onCreate and only ever
+     * degrades to "?".
+     */
+    private String ver = "?";
     private static final int TIMEOUT_S = 45;
     private static final int MAX_HISTORY = 60;
 
@@ -192,6 +203,8 @@ public class MainActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         Lang.init(this);   // persisted choice (the app cannot read ~/.dsh-lang; it writes it through Termux)
+        try { ver = "v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+        catch (Throwable t) { ver = "?"; }   // never claim a version we could not read
         askTermuxLang();   // the file is the source of truth; only Termux can read it
         ScrollView sc = new ScrollView(this);
         LinearLayout root = new LinearLayout(this);
@@ -209,7 +222,7 @@ public class MainActivity extends Activity {
         t.setTextColor(Color.parseColor("#E6EDF3"));
         titleRow.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         TextView vt = new TextView(this);
-        vt.setText(VER); vt.setTextSize(12); vt.setTextColor(Color.parseColor("#58A6FF"));
+        vt.setText(ver); vt.setTextSize(12); vt.setTextColor(Color.parseColor("#58A6FF"));
         vt.setPadding(0, 0, 0, dp(3));
         titleRow.addView(vt);
         root.addView(titleRow);
@@ -364,7 +377,7 @@ public class MainActivity extends Activity {
     /** Log body: the header states the entry count and purpose; with no entries it gives guidance (never blank). */
     private String logText() {
         StringBuilder sb = new StringBuilder();
-        sb.append(Lang.t("DSH Console ")).append(VER)
+        sb.append(Lang.t("DSH Console ")).append(ver)
           .append("　").append(history.size()).append(Lang.t(" entries (keeps up to ")).append(MAX_HISTORY).append(")\n");
         sb.append("──────────────────────────\n");
         if (history.isEmpty()) {

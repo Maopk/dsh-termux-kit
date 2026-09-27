@@ -14,7 +14,13 @@ set -u
 HOME_DIR="/data/data/com.termux/files/home"
 SOCK="$HOME_DIR/.local/bin/droid-sock"
 HELPER="$HOME_DIR/.local/bin/dsh-auth-pass"
-TMP_APK="/storage/emulated/0/Download/.dsh-install-tmp.apk"
+# 临时副本：把源文件名净化成 ASCII 后**每个 APK 用不同的名字**。
+#   ⚠ 两个坑都是实测踩出来的（2026-09-27）：
+#   ① 不能以点开头：vivo 安装器对 `.dsh-install-tmp.apk` 直接弹「安装包不存在」，
+#      同一份文件换成非隐藏名就能正常打开。
+#   ② 不能所有 APK 共用一个固定名：安装器界面会被复用，第二次 `am start` 打开新包时
+#      屏幕上仍是**上一个包**的页面（实测装完控制台再装桥，页面还写着「DSH Console（1.9）」，
+#      于是桥被误判成"已安装相同版本"）。
 DRY=0; VERIFY=0; APK=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -27,6 +33,16 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$APK" ] || { printf 'Usage: dsh-install-apk <apk path> [--verify] [--dry-run]\n' >&2; exit 2; }
 [ -f "$APK" ] || { printf 'APK not found: %s\n' "$APK" >&2; exit 4; }
+
+# One temp path **per APK**: the installer activity gets reused, so a shared fixed name makes
+# the second run display the *previous* package (it then looks like "same version installed"
+# for an APK that was never opened). The name is sanitised to ASCII because the source path
+# may contain Chinese, which is the reason this copy exists at all.
+safe_tmp() {
+  local b; b=$(printf '%s' "$(basename "$1")" | tr -c 'A-Za-z0-9._-' '_')
+  printf '/storage/emulated/0/Download/dsh-install-%s' "$b"
+}
+TMP_APK=$(safe_tmp "$APK")
 
 log()  { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*"; }
 step() { printf '\n▶ %s\n' "$*"; }
@@ -77,8 +93,17 @@ else
   cp -f "$APK" "$TMP_APK" || { bad "copy failed"; exit 1; }
   timeout 25 am start -a android.intent.action.VIEW -d "file://$TMP_APK" \
     -t application/vnd.android.package-archive >/dev/null 2>&1
-  sleep 4
-  ok "asked the installer to open it"
+  # Wait for the installer to be **actually in front**, don't sleep a fixed 4s.
+  # Why: am start returns as soon as the intent is dispatched; on this phone the installer
+  # window can take ~10s to come up (measured 2026-09-27: the old `sleep 4` let every later
+  # tap land on whatever was on screen before — the taps "had no reaction" and the wizard was
+  # reported as unreachable, while the installer was in fact arriving normally).
+  UP=0
+  for i in $(seq 1 20); do
+    sleep 1
+    if "$SOCK" cur 2>/dev/null | grep -qE 'packageinstaller|permissioncontroller|vivo.*install'; then UP=$i; break; fi
+  done
+  [ "$UP" != 0 ] && ok "installer is in front (took ${UP}s)" || { bad "the installer never came to the front within 20s"; exit 4; }
 fi
 
 # ── one-time install permission ──
@@ -152,6 +177,13 @@ PYX
     if [ "$(cur_pkg)" = "com.android.systemui" ] || ui | grep -q "安全验证"; then GOT=1; ok "the verification dialog appeared (tapped $pt)"; break; fi
     warn "no reaction at $pt; trying the next one"
   done
+  if [ "$GOT" != 1 ] && ui | grep -q "已安装相同版本"; then
+    # Not a failure: this page means the APK is already installed, which is exactly the goal.
+    # Measured 2026-09-27: re-running the tool after a successful install lands here, and the
+    # old code reported it as "could not bring up 安全验证".
+    ok "the 「same version already installed」 page is up → already installed, nothing to do"
+    rm -f "$TMP_APK"; exit 0
+  fi
   [ "$GOT" = 1 ] || { bad "could not bring up 「安全验证」 (did the installer screen change?)"; rm -f "$TMP_APK"; exit 1; }
 fi
 
