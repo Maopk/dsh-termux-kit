@@ -24,7 +24,7 @@ if [ "$DRY" != 1 ]; then
   if boot_lock_acquire; then
     trap 'boot_lock_release' EXIT
   else
-    bad "Another start/restart is already in progress (lock held by pid $(boot_lock_owner))"
+    badf "Another start/restart is already in progress (lock held by pid %s)" "$(boot_lock_owner)"
     printf "$(dsh_msg '   Wait for it to finish before tapping again; if you are sure nothing is running, delete %s\n')" "$BOOT_LOCK_DIR"
     die "A startup is already running (double-tap protection)"
   fi
@@ -41,7 +41,7 @@ for pat in "bin.js web" "md_cg" "dsh-termux-runtime" "dsh web"; do
   for p in $P; do kill -9 "$p" 2>/dev/null && K=$((K+1)); done
   sleep 0.3
 done
-ok "Force-killed $K processes"
+okf "Force-killed %s processes" "$K"
 if [ "$DRY" = 1 ]; then printf '   · [dry] skip the leftover check (dry-run really kills nothing)\n'; elif [ -n "$(pids_of 'bin.js web')" ]; then die "dsh web is still left over: $(pids_of 'bin.js web')"; else ok "Confirmed: no leftover dsh web"; fi
 
 step "②·b Clear the orphan credentials write lock (the inevitable result of -9; while it is there nothing can ever start)"
@@ -58,16 +58,16 @@ fi
 
 step "③ State backup"
 if [ "$DO_BAK" = 1 ] && [ -x "$HOME_DIR/.local/bin/dsh-backup" ]; then
-  [ "$DRY" = 1 ] && printf '   · [dry] dsh-backup\n' || { OUT=$("$HOME_DIR/.local/bin/dsh-backup" 2>&1 | tail -1); ok "${OUT:-backed up}"; }
+  [ "$DRY" = 1 ] && printf '   · [dry] dsh-backup\n' || { OUT=$("$HOME_DIR/.local/bin/dsh-backup" 2>&1 | tail -1); okf "%s" "${OUT:-backed up}"; }
 else warn "Skipping backup"; fi
 
 step "④ Log rotation"
-rotate_log "$LOG" 2; run ": > '$LOG'"; ok "Boot log reset"
+rotate_logf "%s" "$LOG" 2; runf ": > '%s'" "$LOG"; ok "Boot log reset"
 
-step "⑤ Wait for port $DSH_PORT to be released"
+stepf "⑤ Wait for port %s to be released" "$DSH_PORT"
 if [ "$DRY" = 1 ]; then printf '   · [dry] skipped (dry-run really kills nothing)\n'; elif ! wait_port_free "$DSH_PORT" 15; then
   warn "Port is still in use, trying to force it free"
-  run "fuser -k '$DSH_PORT'/tcp 2>/dev/null || true"; sleep 1
+  runf "fuser -k '%s'/tcp 2>/dev/null || true" "$DSH_PORT"; sleep 1
   port_open "$DSH_PORT" && die "Port $DSH_PORT cannot be released" || ok "Force-released"
 else ok "Port is free"; fi
 
@@ -98,7 +98,7 @@ if [ "$DRY" = 1 ]; then printf '   · [dry] setsid nohup dsh web --port %s >> %s
 elif boot_lock_acquire; then
   trap 'boot_lock_release' EXIT; ok "Boot lock acquired"
 else
-  bad "Another startup is already in progress (pid $(boot_lock_owner)), wait for it to finish"; die "A startup is already running"
+  badf "Another startup is already in progress (pid %s), wait for it to finish" "$(boot_lock_owner)"; die "A startup is already running"
 fi
 
 step "⑧ Readiness check (wait for the token line + 200 after redirects, no longer port-only)"

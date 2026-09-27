@@ -45,7 +45,7 @@ start_core() {
       timeout 20 "$SOCK" tap 814 694 >/dev/null 2>&1
       for i in 1 2 3 4 5 6; do
         sleep 2
-        if port_open "$SOCKS_PORT"; then ok "core started (port ${SOCKS_PORT} is up)"; return 0; fi
+        if port_open "$SOCKS_PORT"; then okf "core started (port %s is up)" "${SOCKS_PORT}"; return 0; fi
       done
       bad "the core did not come up — open Clash and turn the switch on by hand"; return 1 ;;
     *运行中*|*已转发*) ok "core was already running"; return 0 ;;
@@ -65,12 +65,12 @@ update_subscription() {
   for i in 1 2 3 4 5 6 7 8; do
     sleep 4
     local c; c=$(curl -s -o /dev/null -m 8 -w '%{http_code}' -x "$PROXY" https://github.com/ 2>/dev/null)
-    if [ "$c" = "200" ]; then ok "proxy is healthy again (github 200 after $((i*4))s)"; return 0; fi
+    if [ "$c" = "200" ]; then okf "proxy is healthy again (github 200 after %ss)" "$((i*4))"; return 0; fi
   done
   bad "still not reachable after updating — read the Clash log (Logs) for dns resolve errors"; return 1
 }
 
-step "① is the Clash core there (mixed port ${SOCKS_PORT})"
+stepf "① is the Clash core there (mixed port %s)" "${SOCKS_PORT}"
 if port_open "$SOCKS_PORT"; then ok "port is listening — core is running"
 else
   bad "port is not listening — the core is stopped"
@@ -84,7 +84,7 @@ fi
 
 step "② direct domestic link and DNS hijack are healthy"
 C=$(curl -s -o /dev/null -m 8 -w '%{http_code}' https://www.baidu.com 2>/dev/null)
-[ "$C" = 200 ] && ok "baidu 200 (direct link + DNS hijack fine)" || { bad "baidu $C — the phone itself has no network?"; FAIL=1; }
+[ "$C" = 200 ] && ok "baidu 200 (direct link + DNS hijack fine)" || { badf "baidu %s — the phone itself has no network?" "$C"; FAIL=1; }
 
 step "③ can traffic go through a node (proxy)"
 C1=$(curl -s -o /dev/null -m 12 -w '%{http_code}' -x "$PROXY" http://www.gstatic.com/generate_204 2>/dev/null)
@@ -129,7 +129,7 @@ else
       printf '        (tapping 更新 alone does nothing; measured: the core must actually restart)\n'
       FAIL=1 ;;
     "") warn "unresolvable (maybe excluded by the filter → mihomo resolves it internally, which is usually **normal**)" ;;
-    *)  ok "resolved to a real IP ($IP), not fake-ip" ;;
+    *)  okf "resolved to a real IP (%s), not fake-ip" "$IP" ;;
   esac
 fi
 

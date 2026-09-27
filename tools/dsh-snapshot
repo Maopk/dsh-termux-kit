@@ -54,7 +54,7 @@ human() { numfmt --to=iec "$1" 2>/dev/null || echo "$1 B"; }
 verify() {
   local f="$1"
   [ -f "$f" ] || { echo "   ✘ file does not exist: $f"; return 1; }
-  say "verifying $(basename "$f") ($(human "$(stat -c%s "$f")"))…"
+  sayf "verifying %s" "$(basename "$f") ($(human "$(stat -c%s "$f")"))…"
   # zstd -t decompresses the whole stream and checks CRC/length: truncation or corruption always gives non-zero
   if ! "$ZSTD" -t "$f" >/dev/null 2>&1; then
     echo "   ✘ integrity check failed (the compressed stream is truncated or corrupt)"; return 1
@@ -120,8 +120,8 @@ EXCLUDES=(
 [ "$WITH_STORE" = 1 ] || EXCLUDES+=("--exclude=home/.local/share/pnpm")
 
 say "① packing (zstd -T0 -3; about 3.9GB of source, a few minutes)"
-say "   output: $ARCHIVE"
-say "   pnpm store: $([ "$WITH_STORE" = 1 ] && echo 'included' || echo 'excluded (--with-store includes it)')"
+sayf "   output: %s" "$ARCHIVE"
+sayf "   pnpm store: %s" "$([ "$WITH_STORE" = 1 ] && echo 'included' || echo 'excluded (--with-store includes it)')"
 
 cd / || exit 1
 # record owner/group as 0: the Termux UID is assigned at install time, and recording 0 lets the current UID unpack it after a phone swap
@@ -157,13 +157,13 @@ mv -f "$PART" "$ARCHIVE"
 say "② verify (read it all back; zstd checks the CRC)"
 verify "$ARCHIVE" || { echo "✘ verification failed → deleting this untrustworthy archive"; rm -f "$ARCHIVE"; exit 1; }
 
-say "③ retention (full snapshots keep only the newest $KEEP)"
+sayf "③ retention (full snapshots keep only the newest %s)" "$KEEP"
 ls -1t "$OUT"/dsh-full-*.tar.zst 2>/dev/null | tail -n +$((KEEP+1)) | while read -r f; do
-  rm -f "$f" && say "   deleting old snapshot $(basename "$f")"
+  rm -f "$f" && sayf "   deleting old snapshot %s" "$(basename "$f")"
 done
 
 SZ=$(stat -c%s "$ARCHIVE")
-say "④ done in $(( $(date +%s) - T0 ))s"
+sayf "④ done in %ss" "$(( $(date +%s) - T0 ))"
 echo
 echo "   snapshot: $ARCHIVE"
 echo "   size: $(human "$SZ") (about 3.9GB of source data)"

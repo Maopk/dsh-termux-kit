@@ -12,7 +12,7 @@ cd "$SHARED" 2>/dev/null || cd "$HOME_DIR"
 
 step "① adb channel"
 if adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q .; then
-  ok "Connected: $(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')"
+  okf "Connected: %s" "$(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')"
 else
   warn "Not connected → calling \"8_enable-wireless-adb\" first (it flips the switch on automatically when online)"
   if [ -x "$SELF_DIR/8_enable-wireless-adb.sh" ]; then
@@ -28,7 +28,7 @@ else
       fi
     fi
     if adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q .; then
-      ok "Connected: $(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')"
+      okf "Connected: %s" "$(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')"
     else
       bad "adb still cannot connect: make sure Wi-Fi is connected + the bridge app has been granted WRITE_SECURE_SETTINGS"
     fi

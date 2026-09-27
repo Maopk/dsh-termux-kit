@@ -48,7 +48,7 @@ discover_pwa() {
 try_pwa() {
   [ -z "$1" ] && return 1
   start_activity "$1" || return 1
-  say "✔ opened in the standalone DSH window ($1${SERIAL:+ · via adb})"
+  sayf "✔ opened in the standalone DSH window ($1%s)" "${SERIAL:+ · via adb}"
   return 0
 }
 

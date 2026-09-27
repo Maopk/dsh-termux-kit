@@ -19,7 +19,7 @@ if [ "$DRY" != 1 ]; then
   if boot_lock_acquire; then
     trap 'boot_lock_release' EXIT
   else
-    bad "Another start/restart is already in progress (lock held by pid $(boot_lock_owner))"
+    badf "Another start/restart is already in progress (lock held by pid %s)" "$(boot_lock_owner)"
     printf "$(dsh_msg '   Wait for it to finish before tapping again; if you are sure nothing is running, delete %s\n')" "$BOOT_LOCK_DIR"
     die "A startup is already running (double-tap protection)"
   fi
@@ -30,7 +30,7 @@ if [ -z "$(pids_of 'bin.js web')" ]; then
   ok "Nothing was running, going straight to startup"
 else
   T=$(date +%s)
-  kill_wait "bin.js web" 15 TERM && ok "Exited gracefully ($(( $(date +%s) - T ))s)" || {
+  kill_wait "bin.js web" 15 TERM && okf "Exited gracefully (%ss)" "$(( $(date +%s) - T ))" || {
     bad "Still alive after 15s — **soft restart abandoned**, no forced kill was performed"
     printf "$(dsh_msg '   Use the widget "6_hard-restart-dsh" instead (it force-kills with -9)\n')"
     printf "$(dsh_msg '   Current processes: %s\n')" "$(pids_of 'bin.js web')"
@@ -40,13 +40,13 @@ fi
 
 step "② State backup"
 if [ "$DO_BAK" = 1 ] && [ -x "$HOME_DIR/.local/bin/dsh-backup" ]; then
-  [ "$DRY" = 1 ] && printf '   · [dry] dsh-backup\n' || { OUT=$("$HOME_DIR/.local/bin/dsh-backup" 2>&1 | tail -1); ok "${OUT:-backed up}"; }
+  [ "$DRY" = 1 ] && printf '   · [dry] dsh-backup\n' || { OUT=$("$HOME_DIR/.local/bin/dsh-backup" 2>&1 | tail -1); okf "%s" "${OUT:-backed up}"; }
 else warn "Skipping backup"; fi
 
 step "③ Log rotation"
-rotate_log "$LOG" 2; run ": > '$LOG'"; ok "Boot log reset"
+rotate_logf "%s" "$LOG" 2; runf ": > '%s'" "$LOG"; ok "Boot log reset"
 
-step "④ Wait for port $DSH_PORT to be released"
+stepf "④ Wait for port %s to be released" "$DSH_PORT"
 if [ "$DRY" = 1 ]; then printf '   · [dry] skipped (dry-run did not really stop the process)\n'; else
 wait_port_free "$DSH_PORT" 15 && ok "Port is free" || die "Port is still in use, soft restart aborted"; fi
 

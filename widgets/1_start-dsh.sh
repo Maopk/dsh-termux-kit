@@ -27,14 +27,14 @@ URLFILE="${DSH_URL_FILE:-$HOME_DIR/.dsh-url}"
 
 open_browser() {   # $1=url
   [ "$OPEN" = 1 ] || { warn "Not opening the browser, as requested"; return 0; }
-  if [ -x "$OPENER" ]; then run "'$OPENER' '$1' >/dev/null 2>&1"; else run "termux-open-url '$1'"; fi
+  if [ -x "$OPENER" ]; then runf "'%s' '$1' >/dev/null 2>&1" "$OPENER"; else run "termux-open-url '$1'"; fi
 }
 
 # Also restore the AI channels (a failure here does not affect the startup itself)
 restore_channels() {
   step "Restore the AI control channels (a failure does not affect startup)"
 if [ "$DRY" = 1 ]; then printf '   · [dry] start the task executor dsh-tasksd (for the web buttons)\n'; ok "(dry-run)"
-elif tasksd_ensure; then ok "Task executor on 127.0.0.1:$TASKSD_PORT (the web buttons at the bottom right now work)"
+elif tasksd_ensure; then okf "Task executor on 127.0.0.1:%s (the web buttons at the bottom right now work)" "$TASKSD_PORT"
 else warn "Task executor did not start (the web buttons will report that no token can be read)"; fi
   if [ -x "$HOME_DIR/.local/bin/droid" ]; then
     if [ "$DRY" = 1 ]; then printf '   · [dry] droid conn\n'; ok "(dry-run)"
@@ -56,9 +56,9 @@ if need termux-wake-lock; then
   else warn "Could not get the wakelock"; fi
 else warn "No termux-wake-lock command"; fi
 
-step "② Check whether something already serves $DSH_PORT"
+stepf "② Check whether something already serves %s" "$DSH_PORT"
 if port_open "$DSH_PORT"; then
-  ok "A service is already on $DSH_PORT"
+  okf "A service is already on %s" "$DSH_PORT"
   printf "$(dsh_msg '   · If the page says "cannot read": pull to refresh first (the browser login cookie survives a reboot, no need for a new URL)\n')"
 
   step "③ Get a **truly usable** auth URL (a stale token gives 401, a half-start gives 404, neither can be opened directly)"
@@ -67,10 +67,10 @@ if port_open "$DSH_PORT"; then
   if [ -n "$C" ] && url_ready "$C"; then
     U="$C"; ok "The cached auth URL still works"
   elif [ -n "$C" ]; then
-    warn "The cached auth URL no longer works (a token left by an old instance, HTTP $(url_code "$C"))"
+    warnf "The cached auth URL no longer works (a token left by an old instance, HTTP %s" "$(url_code "$C"))"
   fi
   if [ -z "$U" ]; then
-    C=$(token_from_log "$LOG")
+    C=$(token_from_logf "%s" "$LOG")
     if [ -n "$C" ] && url_ready "$C"; then
       U="$C"; printf '%s\n' "$U" > "$URLFILE"; ok "Took the auth URL of the current instance from the boot log and wrote it back to .dsh-url"
     fi
@@ -90,10 +90,10 @@ step "③ Boot mutex (keeps a double tap from starting two instances that fight 
 if [ "$DRY" = 1 ]; then
   printf "$(dsh_msg '   · [dry] mkdir %s\n')" "$BOOT_LOCK_DIR"; ok "(dry-run)"
 elif boot_lock_acquire; then
-  ok "Boot lock acquired ($BOOT_LOCK_DIR)"
+  okf "Boot lock acquired (%s)" "$BOOT_LOCK_DIR"
   trap 'boot_lock_release' EXIT
 else
-  bad "Another startup is already in progress (lock held by pid $(boot_lock_owner))"
+  badf "Another startup is already in progress (lock held by pid %s)" "$(boot_lock_owner)"
   printf "$(dsh_msg '   Wait for it to finish before tapping this widget again; if you are sure nothing is starting, delete %s\n')" "$BOOT_LOCK_DIR"
   die "A startup is already running"
 fi
@@ -108,7 +108,7 @@ case "$rc" in
 esac
 
 step "⑤ Reset the boot log (the token is taken from this log only)"
-rotate_log "$LOG" 2
+rotate_logf "%s" "$LOG" 2
 dsh_log_reset "$LOG"
 ok "Boot log reset"
 

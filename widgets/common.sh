@@ -178,14 +178,14 @@ dsh_start_and_wait() {   # $1=log $2=timeout seconds
   # The boot mutex lives here so every caller (widgets 1/4/6, dsh-restart) is protected automatically,
   # so a new entry point cannot forget the lock and bring back "two taps → two instances fight over the write lock → one crashes".
   if ! boot_lock_acquire; then
-    bad "Another startup is already in progress (lock held by pid $(boot_lock_owner)) — wait for it to finish, do not tap twice"
+    badf "Another startup is already in progress (lock held by pid %s) — wait for it to finish, do not tap twice" "$(boot_lock_owner)"
     return 3
   fi
   clear_orphan_cred_lock; rc=$?
   [ "$rc" = 0 ] && ok "Cleared the stale credentials write lock (startup is bound to fail while it is there)"
   [ "$rc" = 1 ] && warn "Credentials write lock is held (an instance is running), left untouched"
   pid=$(dsh_start "$f") || { bad "The dsh web process did not start"; tail -6 "$f" 2>/dev/null | sed 's/^/     /'; return 1; }
-  ok "Process started (pid $pid)"
+  okf "Process started (pid %s)" "$pid"
   U=$(wait_dsh_ready "$t" "$f" "$pid"); rc=$?
   case "$rc" in
     0) printf '%s\n' "$U" > "${DSH_URL_FILE:-$HOME_DIR/.dsh-url}"
@@ -193,7 +193,7 @@ dsh_start_and_wait() {   # $1=log $2=timeout seconds
        printf '   · %s\n' "$U"; return 0 ;;
     2) bad "The process exited during startup (most likely the plugin tree failed to load)"
        tail -10 "$f" 2>/dev/null | sed 's/^/     /'; return 2 ;;
-    *) bad "No usable auth URL within ${t}s"
+    *) badf "No usable auth URL within %ss" "$t"
        tail -10 "$f" 2>/dev/null | sed 's/^/     /'; return 1 ;;
   esac
 }
@@ -264,7 +264,7 @@ rotate_log() {  # $1=file $2=keep MB (default 2)
   local sz=$(( $(stat -c%s "$f" 2>/dev/null || echo 0) / 1048576 ))
   [ "$sz" -lt "$mb" ] && return 0
   run "mv -f '$f' '$f.bak' && : > '$f'"
-  ok "Log rotated: $(basename "$f") (${sz}MB → .bak)"
+  okf "Log rotated: %s (%sMB → .bak)" "$(basename "$f")" "$sz"
 }
 
 # ---- Common paths ----

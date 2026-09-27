@@ -63,7 +63,7 @@ if [ "$WIFI_ON" = "0" ] && [ "$FORCE" = 0 ]; then
     [ "$DRY" = 1 ] && break
     N2=$(timeout 12 "$SOCK" netstate 2>/dev/null || true)
     W=$(printf '%s' "$N2" | grep -oE '"wifi_on": *-?[0-9]+' | grep -oE '\-?[0-9]+$')
-    [ "$W" = "1" ] && { ok "Wi-Fi is on (waited ${i}s), carrying on"; break; }
+    [ "$W" = "1" ] && { okf "Wi-Fi is on (waited %ss), carrying on" "${i}"; break; }
     sleep 1
   done
   if [ "$DRY" != 1 ] && [ "$W" != "1" ]; then
@@ -80,7 +80,7 @@ else
   if [ "$DRY" = 1 ]; then printf '   · [dry] %s adbwifi 1\n' "$SOCK"
   else
     R=$($SOCK adbwifi 1 2>&1 | tail -1); echo "   $R"
-    case "$R" in *'"adb_wifi": 1'*) ok "Switch set to 1" ;; *) warn "Write result unclear: $R" ;; esac
+    case "$R" in *'"adb_wifi": 1'*) ok "Switch set to 1" ;; *) warnf "Write result unclear: %s" "$R" ;; esac
   fi
 fi
 
@@ -97,7 +97,7 @@ if [ "$DRY" != 1 ]; then
   done
   O4=$(printf '%s' "${N4:-}" | grep -oE '"online": *(true|false)' | grep -oE '(true|false)$')
   if [ "$A4" != "1" ]; then
-    step "③·check: the switch did not stick (adb_wifi=${A4:-?})"
+    stepf "③·check: the switch did not stick (adb_wifi=%s)" "${A4:-?}"
     bad "The setting was cleared back to 0 after being written — writing Settings.Global alone is not enough to start adbd"
     if [ "$O4" = "true" ]; then
       printf "$(dsh_msg '   The network works (online=true) → **not a network problem**: this OS build only honors the manual switch-on under Developer options → Wireless debugging\n')"
@@ -129,7 +129,7 @@ else
   done
   fi
   if [ -n "$CANDS" ]; then :
-  elif [ -n "$PORT" ]; then ok "mDNS found port $PORT"; CANDS="$PORT"
+  elif [ -n "$PORT" ]; then okf "mDNS found port %s" "$PORT"; CANDS="$PORT"
   else
     warn "mDNS found nothing (it is useless without a network) → scanning the local ports instead"
     SCAN=$(python3 - <<'PYEOF' 2>/dev/null
@@ -146,20 +146,20 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=500) as ex:
 print(' '.join(str(x) for x in found))
 PYEOF
 )
-    [ -n "$SCAN" ] && { ok "Local scan found candidate ports: $SCAN"; CANDS="$SCAN"; } || warn "The local scan found no listening port either (adbd did not start)"
+    [ -n "$SCAN" ] && { okf "Local scan found candidate ports: %s" "$SCAN"; CANDS="$SCAN"; } || warn "The local scan found no listening port either (adbd did not start)"
   fi
 fi
 
 step "⑤ Connect adb"
 if adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q .; then
-  ok "adb connected: $(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')"
+  okf "adb connected: %s" "$(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')"
 else
   CONNECTED=0
   for p in $CANDS 5555; do
     t="127.0.0.1:$p"
     [ "$DRY" = 1 ] && { printf '   · [dry] adb connect %s\n' "$t"; CONNECTED=1; break; }
     timeout 15 adb connect "$t" >/dev/null 2>&1
-    if adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q .; then ok "Connected to $t"; CONNECTED=1; break
+    if adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q .; then okf "Connected to %s" "$t"; CONNECTED=1; break
     else adb disconnect "$t" >/dev/null 2>&1; fi   # a port that is not adbd leaves a fake offline entry, so clean it up right away
   done
   if [ "$CONNECTED" != 1 ]; then
@@ -181,7 +181,7 @@ else
       bad "The switch is 1, but nothing is listening for adbd → the framework was not really started"
       printf "$(dsh_msg '   What to do: Developer options → Wireless debugging → turn it on by hand once (after that this widget can keep it up automatically)\n')"
     else
-      bad "Prerequisites still unmet (wifi_on=$W3 online=$O3 adb_wifi=$A3)"
+      badf "Prerequisites still unmet (wifi_on=%s online=%s adb_wifi=%s)" "$W3" "$O3" "$A3"
     fi
     exit 1
   fi

@@ -22,15 +22,15 @@ fi
 
 step "② Revoke the token"
 if [ -f "$HOME_DIR/.dsh-bridge-token" ]; then
-  run "mv -f '$HOME_DIR/.dsh-bridge-token' '$HOME_DIR/.dsh-bridge-token.revoked-$(date +%s)'"
+  runf "mv -f '%s/.dsh-bridge-token' '%s/.dsh-bridge-token.revoked-%s'" "$HOME_DIR" "$HOME_DIR" "$(date +%s)"
   ok "Token revoked (renamed and kept for the record)"
 else
   ok "No token file, nothing to revoke"
 fi
 
 step "③ Empty the shared-dir command channel (AutoX bridge / page remote control)"
-run ": > '$SHARED/dsh-droid/cmd.json' 2>/dev/null || true"
-run ": > '$HOME_DIR/.dsh-look-cmd.json' 2>/dev/null || true"
+runf ": > '%s/dsh-droid/cmd.json' 2>/dev/null || true" "$SHARED"
+runf ": > '%s/.dsh-look-cmd.json' 2>/dev/null || true" "$HOME_DIR"
 ok "Command files emptied"
 
 step "④ Cut adb wireless debugging (the strongest channel of all)"
@@ -52,7 +52,7 @@ for pat in "auto-look.sh" "droid-hub" "dsh-control" "dsh-eval" "pair-now" "deep-
     kill "$pid" 2>/dev/null && K=$((K+1))
   done
 done
-ok "Killed $K related processes"
+okf "Killed %s related processes" "$K"
 
 step "⑥ Open the accessibility settings page so you can confirm at a glance"
 if [ "$DRY" = 1 ]; then printf '   · [dry] am start accessibility settings\n'; else am start -a android.settings.ACCESSIBILITY_SETTINGS >/dev/null 2>&1; fi

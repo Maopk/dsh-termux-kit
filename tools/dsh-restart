@@ -21,11 +21,11 @@ if [ "$WAKELOCK" = 1 ] && need termux-wake-lock; then termux-wake-lock 2>/dev/nu
 
 # ── ① is the service still alive? Tell a stuck page from a dead service──
 if port_open "$DSH_PORT"; then
-  U=$(token_from_log "$LOG" 2>/dev/null)
+  U=$(token_from_logf "%s" "$LOG" 2>/dev/null)
   if [ -n "$U" ] && url_ready "$U"; then
     ok "DSH is alive and the auth URL is valid (HTTP 200)"
   else
-    warn "DSH is alive ($DSH_PORT listening), but I do not have the token for this run"
+    warnf "DSH is alive (%s listening), but I do not have the token for this run" "$DSH_PORT"
     printf '   (the token is random per process and never written to disk: for an instance you started by hand with dsh web, the token exists only in that terminal)\n'
   fi
   printf '\n   [Do not restart yet] that cannot-read-after-redirect is usually one of these:\n'
@@ -46,8 +46,8 @@ fi
 step "① end the DSH processes (matched only by 'bin.js web'; other node processes untouched)"
 if [ -n "$(dsh_pids)" ]; then
   P=$(dsh_pids | tr '\n' ' ')
-  kill_wait 'bin[.]js web' 10 TERM && ok "exited gracefully (pid $P)" \
-    || { kill_wait 'bin[.]js web' 5 KILL >/dev/null; ok "force-killed (only DSH itself, pid $P)"; }
+  kill_wait 'bin[.]js web' 10 TERM && okf "exited gracefully (pid %s)" "$P" \
+    || { kill_wait 'bin[.]js web' 5 KILL >/dev/null; okf "force-killed (only DSH itself, pid %s)" "$P"; }
 else
   ok "no DSH process (you may have killed it already)"
 fi
@@ -63,11 +63,11 @@ case "$rc" in
 esac
 
 step "③ keep the previous URL in .dsh-url (saved before the log is cleared)"
-CUR=$(token_from_log "$LOG" 2>/dev/null)
+CUR=$(token_from_logf "%s" "$LOG" 2>/dev/null)
 [ -n "$CUR" ] && { printf '%s\n' "$CUR" > "$HOME_DIR/.dsh-url"; ok "archived"; } || warn "no token line in the log"
 
 step "④ start and wait for **real readiness** (token line + following the redirect to 200)"
-rotate_log "$LOG" 2
+rotate_logf "%s" "$LOG" 2
 dsh_log_reset "$LOG"
 if dsh_start_and_wait "$LOG" 120; then
   ok "start complete"

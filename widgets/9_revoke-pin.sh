@@ -17,7 +17,7 @@ PASSFILE="$HOME_DIR/.dsh-auth-pass"
 step "① Current grant state (only presence and permissions are checked; the PIN is never shown)"
 if [ "$DRY" = 1 ]; then printf '   · [dry] %s status\n' "$HELPER"; ok "(dry-run)"
 elif [ -x "$HELPER" ]; then "$HELPER" status || true
-else warn "$HELPER not found"; fi
+else warnf "%s not found" "$HELPER"; fi
 
 step "② Revoke (overwrite first, then delete)"
 if [ "$DRY" = 1 ]; then printf '   · [dry] %s revoke\n' "$HELPER"; ok "(dry-run)"
@@ -31,7 +31,7 @@ if [ "$DRY" = 1 ]; then printf '   · [dry] re-check that %s does not exist\n' "
 elif [ -f "$PASSFILE" ]; then
   die "Re-check failed: $PASSFILE is still there, the revoke did not take effect"
 else
-  ok "Deleted and confirmed: $PASSFILE does not exist → the AI can never use that PIN to pass any verification again"
+  okf "Deleted and confirmed: %s does not exist → the AI can never use that PIN to pass any verification again" "$PASSFILE"
 fi
 
 printf "$(dsh_msg '\n   To restore: hand over the 6 digits again (or flip the switch under "Maintenance" in the Console back on); if you would rather not, use your fingerprint.\n')"

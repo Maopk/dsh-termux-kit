@@ -27,7 +27,7 @@ if [ "$DRY" != 1 ]; then
   if boot_lock_acquire; then
     trap 'boot_lock_release' EXIT
   else
-    bad "Another start/restart is already in progress (lock held by pid $(boot_lock_owner))"
+    badf "Another start/restart is already in progress (lock held by pid %s)" "$(boot_lock_owner)"
     printf "$(dsh_msg '   Wait for it to finish before tapping again; if you are sure nothing is running, delete %s\n')" "$BOOT_LOCK_DIR"
     die "A startup is already running (double-tap protection)"
   fi
@@ -46,21 +46,21 @@ if [ -n "$(pids_of 'md_cg')" ]; then kill_wait "md_cg" 5 KILL >/dev/null; ok "md
 step "③ State backup"
 if [ "$DO_BAK" = 1 ] && [ -x "$HOME_DIR/.local/bin/dsh-backup" ]; then
   if [ "$DRY" = 1 ]; then printf '   · [dry] dsh-backup\n'; else
-    OUT=$("$HOME_DIR/.local/bin/dsh-backup" 2>&1 | tail -1); ok "${OUT:-backed up}"
+    OUT=$("$HOME_DIR/.local/bin/dsh-backup" 2>&1 | tail -1); okf "%s" "${OUT:-backed up}"
   fi
 else
   warn "Skipping backup"
 fi
 
 step "④ Log rotation (archive the auth URL into .dsh-url first, then clear the log)"
-CUR=$(token_from_log "$LOG" 2>/dev/null)
+CUR=$(token_from_logf "%s" "$LOG" 2>/dev/null)
 [ -n "$CUR" ] && { printf '%s\n' "$CUR" > "$HOME_DIR/.dsh-url"; ok "Auth URL archived to .dsh-url"; } \
               || warn "No token line in the log (this instance may not have been started by this widget)"
-rotate_log "$(dsh_log)" 2
+rotate_logf "%s" "$(dsh_log)" 2
 dsh_log_reset "$(dsh_log)"
 ok "Boot log reset"
 
-step "⑤ Wait for port $DSH_PORT to be released (up to 15s)"
+stepf "⑤ Wait for port %s to be released (up to 15s)" "$DSH_PORT"
 if [ "$DRY" = 1 ]; then printf '   · [dry] skipped (dry-run did not really stop the process, so the port will not be released)\n'; else
 wait_port_free "$DSH_PORT" 15 && ok "Port released" || { bad "Port is still in use"; need fuser && fuser -k "$DSH_PORT"/tcp 2>/dev/null; sleep 1; port_open "$DSH_PORT" && die "Port is still in use" || ok "Force-released"; }; fi
 
@@ -145,7 +145,7 @@ if [ "$KEEP_TERMUX" = 0 ]; then
   if [ "$DRY" = 1 ]; then printf '   · [dry] kill the Termux app process (cmdline=com.termux)\n'
   else
     TPID=$(for p in /proc/[0-9]*; do c=$(tr -d '\0' < "$p/cmdline" 2>/dev/null); [ "$c" = "com.termux" ] && basename "$p"; done | head -1)
-    if [ -n "$TPID" ]; then kill -9 "$TPID" 2>/dev/null && ok "Termux app process killed (pid $TPID)"; else warn "No Termux app process found"; fi
+    if [ -n "$TPID" ]; then kill -9 "$TPID" 2>/dev/null && okf "Termux app process killed (pid %s)" "$TPID"; else warn "No Termux app process found"; fi
   fi
 else
   ok "Termux kept (default): the Console app stays available; DSH/bridge/task executor are all stopped, so it barely uses power"
