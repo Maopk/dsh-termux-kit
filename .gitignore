@@ -16,3 +16,20 @@ __pycache__/
 .dsh-tasks-token
 .dsh-install-pass
 .git-credentials
+
+# CONTRIBUTING §八 要求的（2026-09-27 补齐）
+# 依赖与产物
+node_modules/
+Download/
+备份/
+backup/
+build/
+# 临时与轮换
+*.bak
+*.tmp
+*.part
+*.orig
+*.rej
+# 系统垃圾
+.DS_Store
+Thumbs.db

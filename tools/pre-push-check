@@ -1,0 +1,123 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# install: runtime
+# pre-push-check —— CONTRIBUTING.md 第三节那张"推仓库前强制自检清单"的脚本化版本。
+#
+# 为什么要有它：清单写在文档里就等于"看心情"；2026-09-27 那几轮的教训都是同一个形状 ——
+# 规矩写下来了，但没人（包括我）在动手前逐条跑。所以把能自动判的 9 条做成脚本，
+# 剩下 3 条（pull --rebase / 自检套件整跑 / 面板与 APK 的生效方式）如实标成"要你手动或联网"。
+#
+# Usage:
+#   tools/pre-push-check            逐条打勾（⚠ 只是提醒，不判失败）
+#   tools/pre-push-check --strict   把 ⚠ 也当失败（真要 push 之前用这个）
+set -u
+ROOT="${DSH_KIT_REPO:-$HOME/dsh-termux-kit}"
+STRICT=0; [ "${1:-}" = "--strict" ] && STRICT=1
+cd "$ROOT" || { echo "✘ 找不到仓库：$ROOT" >&2; exit 2; }
+
+pass=0; fail=0; warn=0
+ok()   { printf '  [✔] %-2s %s\n' "$1" "$2"; pass=$((pass+1)); }
+no()   { printf '  [✘] %-2s %s\n' "$1" "$2"; fail=$((fail+1)); }
+warn_(){ printf '  [⚠] %-2s %s\n' "$1" "$2"; warn=$((warn+1)); }
+note() { printf '       %s\n' "$1"; }
+
+echo "推仓库前自检 —— $ROOT"
+echo
+
+# 1) 工作区干净
+if [ -z "$(git status --porcelain)" ]; then ok 1 "git status 干净"
+else no 1 "还有未提交/未跟踪的东西："; git status --short | head -8 | sed 's/^/       /'; fi
+
+# 2) 敏感信息扫描
+if [ -x tools/check-no-secrets.sh ]; then
+  if out=$(bash tools/check-no-secrets.sh "$ROOT" 2>&1); then ok 2 "本机凭据没泄进仓库（check-no-secrets）"
+  else no 2 "check-no-secrets 报警："; echo "$out" | grep -E '^✘' | head -5 | sed 's/^/       /'; fi
+else warn_ 2 "没有 tools/check-no-secrets.sh，跳过"; fi
+# 改动文件里再扫一遍常见敏感词（只扫 git 认识的文件，跳过大文件）
+hits=$(git ls-files -m -o --exclude-standard 2>/dev/null | grep -vE '\.(apk|png|jpg|jpeg|gz|zst|zip)$' \
+  | xargs -r grep -lIiE '(api[_-]?key|secret|passwd|password|token)[[:space:]]*[=:][[:space:]]*[A-Za-z0-9_\-]{12,}' 2>/dev/null | grep -v '^tools/check-no-secrets.sh$' | head -5)
+if [ -n "$hits" ]; then no 2 "改动文件里出现疑似明文凭据："; echo "$hits" | sed 's/^/       /'; fi
+
+# 3) README 同步（改了功能/UI 却没动 README = 提醒）
+changed=$(git status --porcelain | awk '{print $2}')
+if echo "$changed" | grep -qE '^(apps/|plugins/|ui/|widgets/|tools/)' && ! echo "$changed" | grep -q '^README'; then
+  warn_ 3 "改了功能/UI 代码但 README 没动 —— 逐条过 CONTRIBUTING §四 那 8 项了吗？"
+else ok 3 "README 与本次改动的关系已确认"; fi
+
+# 4) CHANGELOG 有本次条目
+head_txt=$(head -40 CHANGELOG.md 2>/dev/null || true)
+if echo "$head_txt" | grep -qE '^## \[[Uu]nreleased\]|^## \[?[0-9]+\.[0-9]+\.[0-9]+'; then
+  if echo "$head_txt" | grep -qE '新增|修复|变更|移除'; then ok 4 "CHANGELOG 顶部有本次条目（新格式）"
+  else warn_ 4 "CHANGELOG 顶部条目是旧格式（散文）；新条目请按 §六 的 新增/修复/变更/移除 写"; fi
+else no 4 "CHANGELOG.md 顶部没有 [Unreleased] 或版本条目"; fi
+
+# 5) docs/ 同步
+if echo "$changed" | grep -qE '^(apps/|plugins/|ui/)' && ! echo "$changed" | grep -q '^docs/'; then
+  warn_ 5 "改了 App/插件/UI 但 docs/ 没动 —— 相关文档跟上了吗？"
+else ok 5 "docs/ 与本次改动的关系已确认"; fi
+
+# 6) 运维笔记已追加（两份）
+a=0; b=0
+[ -n "$(git status --porcelain docs/DSH运维笔记.md)" ] && a=1
+[ -n "$(diff -q docs/DSH运维笔记.md "$HOME/DSH运维笔记.md" 2>/dev/null)" ] && b=1
+if [ "$a" = 1 ]; then ok 6 "仓库版运维笔记有新增"
+else warn_ 6 "docs/DSH运维笔记.md 没有变化 —— 这次改动记了吗？"; fi
+if [ "$b" = 1 ]; then warn_ 6.1 "本地 ~/DSH运维笔记.md 与仓库版不一致（push 前要合并成一致）"; fi
+
+# 7) 版本号：改了 App 就得顶版本
+v_now=$(python3 -c "import json;print(json.load(open('ui/controls.json'))['appVersions'])" 2>/dev/null || echo '?')
+if echo "$changed" | grep -qE '^apps/'; then
+  if echo "$changed" | grep -qE '^(ui/controls\.json|apps/.*AndroidManifest\.xml)'; then ok 7 "改了 App 且版本号相关文件也在改动里：$v_now"
+  else no 7 "改了 apps/ 但没动 ui/controls.json 或 AndroidManifest.xml —— 版本号没顶？"; fi
+else ok 7 "本次没改 App，版本号无需变动（当前 $v_now）"; fi
+
+# 8) 最近一条 commit 的格式
+msg=$(git log -1 --pretty=%s 2>/dev/null || echo '')
+if echo "$msg" | grep -qE '^(feat|fix|ui|docs|chore|refactor|perf|test): .+'; then ok 8 "commit 格式合规：$msg"
+else no 8 "最近一条 commit 不符合 <类型>: <总结> 规范：$msg"; fi
+
+# 9) .gitignore 覆盖
+miss=""
+for pat in 'node_modules/' '*.log' '*.bak' '*.tmp' 'Download/' '备份/' '*.part' '.DS_Store' 'Thumbs.db' '*.jks'; do
+  grep -qF -- "$pat" .gitignore 2>/dev/null || miss="$miss $pat"
+done
+if [ -z "$miss" ]; then ok 9 ".gitignore 覆盖了 §八 要求的模式"
+else no 9 ".gitignore 缺：$miss"; fi
+
+# 10) pull --rebase（要联网，脚本不代做）
+if git remote get-url origin >/dev/null 2>&1; then
+  ahead=$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo '?')
+  if [ "$ahead" = "?" ]; then warn_ 10 "还没 fetch 过远端，无法判断领先几个 commit —— push 前记得 git pull --rebase"
+  elif [ "$ahead" = "0" ]; then ok 10 "与远端同步（0 个待推 commit）"
+  else warn_ 10 "本地领先远端 $ahead 个 commit —— push 前先 git pull --rebase"; fi
+else warn_ 10 "没有 origin 远端"; fi
+
+# 11) 自检套件（跑得快的那些；selftest.sh 全量会在手机上压负载，交给清单手动那一条）
+g_fail=""
+for t in "python3 tools/ui-controls check" "python3 tools/i18n-table check" "./tools/check-task-ids" "python3 tools/i18n-audit --quiet" "./tools/install-tools --check"; do
+  if ! $t >/dev/null 2>&1; then g_fail="${g_fail:+$g_fail · }$t"; fi
+done
+if [ -z "$g_fail" ]; then ok 11 "快速门禁全绿（ui-controls / i18n-table / task-ids / i18n-audit / install-tools）"
+else no 11 "这些没过：$g_fail"; fi
+for a in console bridge; do
+  if [ -f "$HOME/dsh-$([ "$a" = console ] && echo console || echo bridge)/build/dsh-$a.apk" ]; then
+    ./tools/app-verify "$a" >/dev/null 2>&1 || no 11 "app-verify $a 不过（包与源码不一致，或版本号撞了）"
+  fi
+done
+
+# 12) 生效方式提醒
+if echo "$changed" | grep -q '^plugins/dsh-mobile-local/client\.js'; then
+  warn_ 12 "面板改动：记得 pnpm install + 刷新页面（不用重启 DSH）"
+fi
+if echo "$changed" | grep -qE '^apps/'; then
+  warn_ 12 "APK 改动：必须重新编译（bash apps/*/build.sh），装到手机才算生效"
+fi
+[ -z "$changed" ] && ok 12 "本次没有需要重新生效的产物"
+
+echo
+echo "  通过 $pass · 失败 $fail · 提醒 $warn"
+if [ "$fail" -gt 0 ] || { [ "$STRICT" = 1 ] && [ "$warn" -gt 0 ]; }; then
+  echo "  ❌ 有没打勾的项 —— 按 CONTRIBUTING §三：停下，问用户。"
+  exit 1
+fi
+echo "  ✅ 清单全过（⚠ 项请自己确认一遍）"
+exit 0

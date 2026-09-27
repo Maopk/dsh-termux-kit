@@ -1,0 +1,252 @@
+# 仓库操作守则 + 运维笔记习惯
+
+> **动手前先读一遍这份文件。** 它管的是"怎么改这个仓库"，不是"这个仓库是什么"（那在 [README.zh-CN.md](README.zh-CN.md)）。
+> 每次改动、每次跑命令、每次推仓库，都按这里写的做。
+
+---
+
+## 一、核心原则
+
+1. **文档和代码同步**：改了功能就改文档，不许"下次一起改"。
+2. **记录先于推送**：没写运维笔记、没更新 CHANGELOG 的改动，不许 push。
+3. **可回退**：每次 push 前确保远端 commit 是干净的、可 `git revert` 的。
+4. **单一数据源**：所有 UI 文案 / 分类 / 控件 id 从 `ui/controls.json` 生成，颜色与主题从 `ui/theme.json` 生成，
+   翻译从 `i18n/zh.json` 生成 —— 不许在各处硬编码（这三个生成链都有门禁，见 [§十一](#十一本仓库的门禁现成的别重造)）。
+
+---
+
+## 二、每次开发 / 执行命令必须做的记录（最重要）
+
+**每次改代码、跑诊断、修问题、动配置，都要在运维笔记里追加一条。**
+
+格式：
+
+```
+YYYY-MM-DD HH:MM · <一句话标题>
+
+做了什么：<动作>
+为什么：<触发原因>
+结果：<成功/失败 + 关键证据>
+下一步：<如果没完，写清卡在哪>
+```
+
+**判定标准**：一件事只要动了文件、跑了命令、改了配置，就要有记录。
+哪怕最后失败回滚了，也要记"试过 X，没用，回滚"。
+
+**位置**（两份都要写，保持一字不差）：
+- 仓库内：`docs/DSH运维笔记.md`
+- 本地：`~/DSH运维笔记.md`
+- 每次 push 时把本地新增段落合并进仓库版本
+
+**结构**：分类索引 + **最新在上**。新记录写在开头的「〇、最近改动记录」小节里，老的分节（一、二、三…）保留原样。
+
+**踩过的坑必须写"根因"和"怎么避免"**，不要只写"试了 X 失败了"。
+（例子见 `docs/DSH运维笔记.md` 里那条"一点开插件就消失"：根因是 helper 写在模块作用域却读组件变量，
+避免办法是加了 `tools/panel-render-test` 渲染测试台并接进门禁。）
+
+---
+
+## 三、推仓库前的强制自检清单（每次 push 前逐条勾）
+
+```
+[ ] 1. git status 干净，没有未跟踪的临时文件
+[ ] 2. 敏感信息扫描通过（见第七节）
+[ ] 3. README / 项目介绍已同步本次改动
+[ ] 4. CHANGELOG.md 已加新条目
+[ ] 5. docs/ 里的相关文档已同步
+[ ] 6. 运维笔记已追加本次记录（两份）
+[ ] 7. 版本号已按规则 bump（见第六节）
+[ ] 8. commit message 符合格式（见第五节）
+[ ] 9. .gitignore 已覆盖本次产生的临时文件
+[ ] 10. git pull --rebase 无冲突
+[ ] 11. 自检套件全绿
+[ ] 12. 面板插件改动只需 pnpm install + 刷新；APK 改动要重新编译
+```
+
+**任何一条打不了勾，停下，问用户。**
+
+前 11 条里有 9 条已经脚本化，直接跑：
+
+```bash
+tools/pre-push-check          # 逐条打勾；标注哪些是"需要你手动/联网"的
+tools/pre-push-check --strict # 把 ⚠（提醒类）也当失败，用于真的要推之前
+```
+
+---
+
+## 四、README / 项目介绍的持续更新
+
+README 是长期维护的唯一对外入口，**每次功能变化都要检查这几块**：
+
+1. **一句话项目介绍**：是否还准确？功能范围变了要改。
+2. **功能清单**：新增/删除的功能要同步（本仓库＝[README.zh-CN.md](README.zh-CN.md) 的"包含什么"表格 + 各 App 小节）。
+3. **截图**：UI 改了要换新图（旧图比没图更糟）。**本仓库目前没有截图**，UI 定稿后再补，别放半成品。
+4. **快速开始**：安装步骤、依赖、首次运行命令（`README.zh-CN.md` 的"安装"一节）。
+5. **目录结构**：新增顶层目录要补说明（`apps/ widgets/ tools/ plugins/ ui/ i18n/ tests/ docs/ dist/`）。
+6. **FAQ / 已知问题**：踩过的坑、系统限制（vivo 后台冻结、无障碍被回收、无线调试依赖 Wi-Fi…）要写进来，
+   别让后来者重复踩 —— 现在放在"已知限制"一节。
+7. **更新日志入口**：指向 [CHANGELOG.md](CHANGELOG.md)。
+8. **许可证与致谢**：引用了别人代码要注明（本仓库 MIT，见 [LICENSE](LICENSE)）。
+
+**判断标准**：一个陌生人只看 README 能不能跑起来。跑不起来就是 README 没写够。
+**不是"想起来才更新"——每次 push 前对照上面 8 条逐项过一遍。**
+
+---
+
+## 五、commit message 规范
+
+```
+<类型>: <一句话总结>
+
+<可选正文：分点列出具体改动>
+
+<可选 footer：关联 issue / 破坏性变更>
+```
+
+**类型**：`feat` 新功能 · `fix` 修 bug · `ui` 纯 UI 改动 · `docs` 只改文档 · `chore` 构建/依赖/杂项 ·
+`refactor` 重构不改行为 · `perf` 性能 · `test` 测试
+
+示例：
+
+```
+ui: 统一三处面板分类与说明，修复 i18n 漏 key
+
+· 清 i18n 遗留 key（channels ×3 / auto / Wi-Fi off…）
+· 控制台与桥统一为主题（默认深色，同一份 ui/theme.json）
+· 分类标题旁条目数改为动态计算，不再写死
+· 密码使用权副标题删除技术细节
+```
+
+**禁忌**：`update`、`fix bug`、`改了一下` 这类无信息 commit。
+`tools/pre-push-check` 会检查最近一条 commit 的类型前缀。
+
+---
+
+## 六、CHANGELOG + 版本号规则
+
+### CHANGELOG
+
+每次 push 前在 `CHANGELOG.md` 顶部追加（未发布的先放 `## [Unreleased]`）：
+
+```
+## [x.y.z] - YYYY-MM-DD
+
+新增
+· …
+
+修复
+· …
+
+变更
+· …
+
+移除
+· …
+```
+
+格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，用中文写。
+> 2026-09-27 之前的条目是"日期 + 散文"的旧格式，作为历史保留，不再改写；**新条目一律按上面这个格式**。
+
+### 版本号
+
+- 三处（**控制台 / 桥 / 面板**）各自独立版本号，不要强行同步。
+- 语义化 `x.y.z`：`x` 破坏性改动或大重构 · `y` 新功能 · `z` 修 bug / UI 微调。
+- **每次 push 都至少 bump 一位 `z`**，除非是纯文档 commit。
+- 版本号出现在三处并必须一致：
+  1. `ui/controls.json` 的 `appVersions`（面板的 `UI_VERSION` 也从这里生成）；
+  2. `apps/console/AndroidManifest.xml` / `apps/bridge/AndroidManifest.xml` 的 `versionName`（`versionCode` 同步 +1）；
+  3. CHANGELOG 的标题。
+- **一个版本号只能对应一份内容**：`tools/app-verify` 会检查 `dist/` 里有没有"同版本但内容不同"的包，
+  有就报错。改了东西没顶版本号 = 别人不知道手机上装的是哪一份（2026-09-27 真踩过）。
+
+---
+
+## 七、敏感信息扫描（push 前必做）
+
+```bash
+tools/check-no-secrets.sh        # 本机真实凭据是否泄进仓库（桥 token / 面板 token / 6 位密码）
+tools/pre-push-check             # 顺带扫改动文件里的 key/token/password/手机号/内网 IP
+```
+
+在改动文件里 grep：API Key / token / secret / password / 密码 / 手机号 / 真实姓名 / 设备 ID / IMEI /
+内网 IP / 路径里的用户名 / 截图里的敏感信息（通知栏、聊天记录）。
+
+**特查这几处**：截图文件、日志文件、`ui/controls.json`、`CHANGELOG.md`、commit message、运维笔记。
+
+有命中就停下，报告给用户，等确认再继续。
+（已知边界：`~/.dsh-auth-pass` 是**600 的 6 位数字**，脚本只做"内容是否出现"的全文比对；
+删掉文件不等于擦除 —— 见运维笔记"撤销≠擦除"那条。）
+
+---
+
+## 八、不推的东西
+
+`.gitignore` 必须覆盖：
+
+- `node_modules/`
+- `*.log`、`*.bak`、`*.tmp`
+- `Download/`、`backup/`、`备份/`
+- `~/.dsh/` 相关本地状态
+- 截图产出的原始 PNG（要放 README 先压缩 + 检查敏感信息）
+- `*.part`、`.DS_Store`、`Thumbs.db`
+- 任何含明文凭据的文件
+
+`tools/pre-push-check` 会逐条核对 `.gitignore` 里这些模式在不在。
+
+---
+
+## 九、push 流程
+
+1. 走完第三节自检清单（`tools/pre-push-check --strict`）
+2. `git pull --rebase` 同步远端
+3. `git add <明确文件>`（**不要 `git add .`**，容易带进垃圾）
+4. `git commit`（按第五节格式）
+5. `git push`（本仓库用 `dsh-gh push`，token 在 `~/.dsh-gh-token`(600)，不写进 `.git/config`）
+6. **推送后报告**：commit hash、push 结果、远端最新 commit、受影响文件清单
+7. 在运维笔记追加一条"推送记录"：时间、commit、改动摘要
+
+> ⚠️ 本仓库的远端是 `Maopk/dsh-termux-kit`。**没有用户明确说"推"，就不要 push**；
+> 本地提交与推送是两件事，报告时必须分清（本地文件 / 本地提交 / 已推送到远端）。
+
+---
+
+## 十、日常习惯总结（背下来）
+
+1. **动手前**：先读一遍这份守则。
+2. **动手时**：每做一件事，就在运维笔记里记一条（时间 + 动作 + 原因 + 结果 + 证据）。
+3. **动手后**：跑自检；对照 README 八项、CHANGELOG、版本号、敏感信息扫描。
+4. **push 前**：逐条勾第三节清单（`tools/pre-push-check --strict`）。
+5. **push 后**：报告 + 追加推送记录。
+
+**没有记录的工作 = 没做的工作。** 因为过三天你自己都不记得当时为什么那么改。
+
+---
+
+## 十一、本仓库的门禁（现成的，别重造）
+
+一句话：**它们不是"建议"，是出包/提交前的硬门禁**，不过就不许出包。
+
+| 门禁 | 管什么 | 跑法 |
+|---|---|---|
+| `tools/ui-controls check` | 三处 UI（控制台/桥/面板）与 `ui/controls.json`、`ui/theme.json` 一致（含色板、主题资源、形状 drawable） | 出包前自动跑（两个 `build.sh` 里） |
+| `tools/i18n-table check` | 四个生成目标（bash 表 + 两个 `Lang.java` + 面板 `UI_TEXT`）与 `i18n/zh.json` 一致 | 同上 |
+| `tools/i18n-audit` | 文案/主题/色板/状态口径 + **面板渲染测试台** + 单一数据源（条目数、灯色、开关、语言） | 同上，也可单独跑 |
+| `tools/app-verify console\|bridge` | 打开**编好的 APK**核对：版本、主题、翻译表真的在包里；**版本号唯一性** | 出包后 |
+| `tools/panel-render-test` | 真跑三遍面板渲染，抓"一点开就消失"这类运行时错误 | `i18n-audit` 里 |
+| `tools/check-task-ids` | 任务 id 在四个地方（tasksd 白名单 / 控制台 / 面板 / 组件脚本）一致 | 自检 |
+| `tools/install-tools --check` | 仓库 `tools/` 与安装位 `~/.local/bin` 一致（防"我照着仓库推理、跑的是旧代码"） | 自检 |
+| `tools/check-no-secrets.sh` | 本机凭据没泄进仓库 | push 前 |
+| `tests/selftest.sh` | 93 项总自检（含沙箱冷启动；**会在手机上压负载**，忙的时候别整跑） | 手动 |
+| `tools/pre-push-check` | 第三节那份清单的脚本化版本 | push 前 |
+
+改完东西的最短路径：
+
+```bash
+# 面板改动（只需 pnpm install + 刷新页面，不用重启 DSH）
+tools/i18n-audit && cp plugins/dsh-mobile-local/client.js ~/.dsh/profiles/web/local/dsh-mobile-local/client.js
+( cd ~/.dsh/profiles/web && pnpm install --prefer-offline && ~/.local/bin/dsh-relink-bundles --check )
+
+# APK 改动（必须重新编译；build.sh 里已经内置前两个门禁）
+bash apps/console/build.sh && bash apps/bridge/build.sh
+tools/app-verify console && tools/app-verify bridge
+```

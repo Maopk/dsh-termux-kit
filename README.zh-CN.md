@@ -21,6 +21,7 @@
 | `ui/controls.json` | **三处 UI 的唯一文案源**：分类、控件名、一句话后果、危险标记、出现在哪几处。`tools/ui-controls` 生成页面插件的控件块和两个 App 的 `UiControls.java`；`ui-controls check`（逐个产物比 md5）已进自检 |
 | `tests/selftest.sh` | 自检套件：93 项（语法 → 预演 → 回归 → 真跑 → 沙箱冷启动 → 工具/UI 漂移） |
 | `docs/` | 运维笔记（每次踩坑的证据与复盘）+ 架构与数据流 |
+| `CONTRIBUTING.md` | **动手前先读**：仓库操作守则（每次改动都要记的运维笔记格式、push 前 12 条自检清单、commit / CHANGELOG / 版本号规则、敏感信息扫描、本仓库门禁一览）。`tools/pre-push-check` 是那张清单的脚本化版本 |
 | `dist/` | 已构建的 APK + SHA256 |
 
 ---

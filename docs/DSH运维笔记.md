@@ -2,6 +2,24 @@
 
 > 由 DSH 助手维护。记忆类插件（灵枢/Hindsight/Mnemon）已于 2026-09-25 卸载后又装回，重要环境信息记录在此。
 
+## 〇、最近改动记录（时间倒序，最新在上）
+
+> 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
+> 旧的分类分节（一、二、三…）保留在下面，不再改写。
+
+2026-09-27 17:05 · 落成 CONTRIBUTING.md 操作守则 + 把清单脚本化
+
+做了什么：新增 `CONTRIBUTING.md`（用户给的仓库操作守则，路径与门禁按本仓库实际情况改写）；
+新增 `tools/pre-push-check`（第三节 12 条清单里能自动判的 9 条做成脚本，3 条如实标"手动/联网"）；
+`.gitignore` 按守则 §八 补齐（node_modules/、Download/、备份/、backup/、*.bak、*.tmp、*.orig、*.rej、.DS_Store、Thumbs.db）；
+CHANGELOG 顶部改用 Keep a Changelog 的新格式（`## [Unreleased]` + 新增/修复/变更/移除），旧条目作为历史保留；
+README 两份加了 CONTRIBUTING 的入口。
+为什么：用户给了明确的仓库操作守则，并要求落成 `CONTRIBUTING.md`、"每次操作前读一遍"。
+结果：✅ 守则落成；✅ `tools/pre-push-check` 可跑；⚠️ 发现两处**守则与现状不一致**，已在守则里如实标注：
+① 守则写"仓库内 docs/运维笔记.md"，本仓库实际是 `docs/DSH运维笔记.md`（已按实际写）；
+② 守则要求"最新在上"，而本文件历史上是追加在末尾（新增本「〇」节放在最前面，老分节不动）。
+下一步：push 前跑 `tools/pre-push-check --strict`；README §四 第 3 条（截图）目前是空的，UI 定稿后再补。
+
 ## 一、桌面小组件（Termux:Widget → `tasks/`，数字前缀决定显示顺序）
 
 | 条目 | 作用 |
