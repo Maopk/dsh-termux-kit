@@ -156,7 +156,11 @@ public class MainActivity extends Activity {
         // ── About: the project URL, and whether a newer release exists ──
         projBtn = new Button(this);
         projBtn.setAllCaps(false);   // 主题默认全大写，会把网址显示成 GITHUB.COM/…
-        projBtn.setText(Lang.t("Project page: ") + "github.com/Maopk/dsh-termux-kit");
+        projBtn.setText("github.com/Maopk/dsh-termux-kit");   // looks like a link, behaves like one
+        projBtn.setBackgroundColor(0x00000000);
+        projBtn.setTextColor(0xFF58A6FF);
+        projBtn.setPaintFlags(projBtn.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
+        projBtn.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
         projBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
@@ -172,7 +176,7 @@ public class MainActivity extends Activity {
         updateView.setPadding(0, (int) (6 * getResources().getDisplayMetrics().density), 0, 0);
         updateView.setTextColor(0xFF8B949E);
         updateView.setAllCaps(false);
-        updateView.setText(Lang.t("Version: ") + ver + Lang.t(" · checking for a newer release…"));
+        updateView.setText(Lang.t("Version ") + ver + Lang.t(" · checking for a newer release…"));
 
         Button panic = new Button(this);
         panic.setText(Lang.t(UiControls.get("bridge_panic").labelEn));
@@ -326,16 +330,16 @@ public class MainActivity extends Activity {
         if (updateView == null) return;
         if (err != null || latest == null) {
             // 说不清就说说不清 —— 不能显示成"已是最新"
-            updateView.setText(Lang.t("Version: ") + mine + Lang.t(" · could not check for updates now (no network?)"));
+            updateView.setText(Lang.t("Version ") + mine + Lang.t(" · could not check for updates now (no network?)"));
             updateView.setTextColor(0xFF8B949E);
             return;
         }
         if (isNewer(latest, mine)) {
-            updateView.setText(Lang.t("⬆ New release available: ") + "v" + latest
+            updateView.setText(Lang.t("Version ") + mine + " → " + Lang.t("latest in the repo ") + "v" + latest
                     + Lang.t(" (you have ") + mine + Lang.t(") · tap the project page to get it"));
             updateView.setTextColor(0xFFD29922);
         } else {
-            updateView.setText(Lang.t("Version: ") + mine + Lang.t(" · up to date (latest v") + latest + ")");
+            updateView.setText(Lang.t("Version ") + mine + Lang.t(" · up to date"));
             updateView.setTextColor(0xFF3FB950);
         }
     }
@@ -395,9 +399,9 @@ public class MainActivity extends Activity {
                 updateView, projBtn));
         root.addView(foldSection(root, "emergency", collapsed, sp, panic, hintOf("bridge_panic")));
 
-        root.addView(section(Lang.t("About this app")));
-        root.addView(desc);
-        root.addView(tokenView);
+        // About is folded away by default: it is a page of explanation, not something to scroll past every time.
+        root.addView(foldSection(root, "about", new java.util.HashSet<String>(java.util.Arrays.asList("about")),
+                getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE), desc, tokenView));
         applyDark(root);
         // Views with a deliberate colour re-apply it after the dark pass.
         stateView.setTextColor(DIM);
@@ -432,6 +436,7 @@ public class MainActivity extends Activity {
     }
 
     private String CatLabel(String catId, boolean shut) {
+        if ("about".equals(catId)) return (shut ? "▸ " : "▾ ") + Lang.t("About this app");
         return (shut ? "▸ " : "▾ ") + UiControls.catEn(catId);
     }
 
@@ -470,8 +475,12 @@ public class MainActivity extends Activity {
             b.setTextSize(12f);
             b.setAllCaps(false);
             boolean on = mode.equals(id);
-            b.setTextColor(on ? 0xFF0D1117 : 0xFF79C0FF);
-            b.setBackgroundColor(on ? 0xFF58A6FF : 0xFF161B22);
+            b.setText(on ? ("✓ " + names[i]) : names[i]);
+            b.setTextColor(on ? 0xFF58A6FF : 0xFF8B949E);
+            android.graphics.drawable.GradientDrawable gg = new android.graphics.drawable.GradientDrawable();
+            gg.setColor(0xFF161B22); gg.setCornerRadius(8 * getResources().getDisplayMetrics().density);
+            if (on) gg.setStroke((int) (2 * getResources().getDisplayMetrics().density), 0xFF58A6FF);
+            b.setBackground(gg);
             b.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) { Lang.setMode(MainActivity.this, id); recreate(); }
             });

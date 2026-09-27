@@ -455,6 +455,7 @@ declare -A DSH_ZH=(
   ['On = listening on 8788. Off = soft stop: the port closes but the process stays, so one broadcast brings it back.']='开=监听 8788 正常工作；关=软停（关端口、进程保留，一条广播就能唤回）。'
   ['On = soft-stops itself after N idle minutes (less exposure, less battery). Off = always listening.']='开=闲置 N 分钟后自动软停（少暴露、省电）；关=一直监听。'
   ['On = the AI may use your 6-digit lock-screen password to pass identity checks for you (installing packages, lifting settings restrictions, etc.); Off = revoked at once']='开 = AI 可用你的 6 位锁屏密码替你过系统身份验证（装包、解除设置限制等）；关 = 立刻收回'
+  ['On = the AI may use your 6-digit lock-screen password to pass system verification for you (installing packages, removing settings restrictions). Off = revoked at once. It is never used to unlock the phone and read content, to pay, or for anything unrelated to the task at hand.']='开 = AI 可动用你的 6 位密码替你过系统验证（装包、解除应用设置限制）；关 = 立刻收回。绝不用于解锁手机翻看内容、支付/免密、或与当次任务无关的场景。'
   ['On = the AI may use your 6-digit lock-screen password to pass system verification for you (installing packages, removing settings restrictions). Off = revoked at once. Never for unlocking the phone to read content, payments, or anything unrelated to the task at hand.']='开 = AI 可动用你的 6 位密码替你过系统验证（装包、解除应用设置限制）；关 = 立刻收回。绝不用于解锁手机翻看内容、支付/免密、或与当次任务无关的场景。'
   ['Open UI']='打开界面'
   ['Open Web UI']='打开 Web UI'

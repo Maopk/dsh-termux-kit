@@ -560,14 +560,14 @@
     {
       "id": "password-access",
       "kind": "switch",
-      "cat": "emergency",
+      "cat": "maintenance",
       "icon": "🔑",
       "label": {
         "en": "Password access",
         "zh": "密码使用权"
       },
       "hint": {
-        "en": "On = the AI may use your 6-digit lock-screen password to pass system verification for you (installing packages, removing settings restrictions). Off = revoked at once. Never for unlocking the phone to read content, payments, or anything unrelated to the task at hand.",
+        "en": "On = the AI may use your 6-digit lock-screen password to pass system verification for you (installing packages, removing settings restrictions). Off = revoked at once. It is never used to unlock the phone and read content, to pay, or for anything unrelated to the task at hand.",
         "zh": "开 = AI 可动用你的 6 位密码替你过系统验证（装包、解除应用设置限制）；关 = 立刻收回。绝不用于解锁手机翻看内容、支付/免密、或与当次任务无关的场景。"
       },
       "danger": true,

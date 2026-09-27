@@ -87,7 +87,6 @@ final class Lang {
         ZH.put("Cleanup", "清理");
         ZH.put("Clear", "清空");
         ZH.put("Close", "关闭");
-        ZH.put("Commands run through Termux (RUN_COMMAND channel); this app has no storage, network, or accessibility permission.\n", "命令经 Termux 执行（RUN_COMMAND 通道）；本 App 无存储/网络/无障碍权限。\n");
         ZH.put("Confirmation required: restart/shutdown drops the current web session, and a full stop of the bridge may need a manual open on this ROM.", "需要确认：重启/关闭会断开当前网页会话；真停桥在这台 ROM 上可能唤不回来，只能手动打开一次。");
         ZH.put("Connect adb", "连接 adb");
         ZH.put("Copy all", "全部复制");
@@ -101,7 +100,6 @@ final class Lang {
         ZH.put("Emergency", "紧急");
         ZH.put("Emergency stop", "紧急停止");
         ZH.put("English", "English");
-        ZH.put("Every run is recorded in the log: sent, callback, exit code, raw output.", "每次执行都记在「日志」里：发送、回传、退出码、原始输出。");
         ZH.put("Failed to start the Termux command: ", "启动 Termux 命令失败：");
         ZH.put("Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).", "四态由**一次 ping 的结果 + 状态记录**判定（不看时间）：运行中 / 刚断（可唤醒，一条广播就能拉回）/ 长时间未响应（进程自己没了，或端口在听却不应答 —— 唤醒可能有效，无效就手动打开一次「DSH 桥」）/ 未安装（这台机器上从没见过它是活的）。");
         ZH.put("Fully stop bridge", "真停桥");
@@ -128,7 +126,7 @@ final class Lang {
         ZH.put("OK", "好");
         ZH.put("On = DSH may drive the phone through this app (listening on 127.0.0.1:8788). Off = soft stop: the port closes, the process stays, and one broadcast brings it back.", "开 = 允许 DSH 通过本 App 操作手机（监听 127.0.0.1:8788）。关 = 软停：端口关闭、进程保留，一条广播就能拉回。");
         ZH.put("On = the AI may use your 6-digit lock-screen password to pass identity checks for you (installing packages, lifting settings restrictions, etc.); Off = revoked at once", "开 = AI 可用你的 6 位锁屏密码替你过系统身份验证（装包、解除设置限制等）；关 = 立刻收回");
-        ZH.put("On = the AI may use your 6-digit lock-screen password to pass system verification for you (installing packages, removing settings restrictions). Off = revoked at once. Never for unlocking the phone to read content, payments, or anything unrelated to the task at hand.", "开 = AI 可动用你的 6 位密码替你过系统验证（装包、解除应用设置限制）；关 = 立刻收回。绝不用于解锁手机翻看内容、支付/免密、或与当次任务无关的场景。");
+        ZH.put("On = the AI may use your 6-digit lock-screen password to pass system verification for you (installing packages, removing settings restrictions). Off = revoked at once. It is never used to unlock the phone and read content, to pay, or for anything unrelated to the task at hand.", "开 = AI 可动用你的 6 位密码替你过系统验证（装包、解除应用设置限制）；关 = 立刻收回。绝不用于解锁手机翻看内容、支付/免密、或与当次任务无关的场景。");
         ZH.put("Open UI", "打开界面");
         ZH.put("Opens github.com/Maopk/dsh-termux-kit - source, releases and docs.", "打开 github.com/Maopk/dsh-termux-kit —— 源码、发行版和文档。");
         ZH.put("Packs DSH state and verifies the archive; the result goes to Download/dsh/.", "打包 DSH 状态并校验归档；产物落 Download/dsh/。");
@@ -191,17 +189,12 @@ final class Lang {
         ZH.put("adb · wireless debugging, needs working Wi-Fi", "adb · 无线调试，需要可用 Wi-Fi");
         ZH.put("auto follows the system language", "auto 跟随系统语言");
         ZH.put("bridge · accessibility loopback, no network", "桥 · 无障碍回环，不需要网络");
-        ZH.put("just now", "刚刚");
         ZH.put("lifting app settings restrictions, sensitive confirmations in developer options… they all stop with you).\n", "解除应用设置限制、开发者选项里的敏感确认……都回到你自己手上）。\n");
         ZH.put("none", "无");
         ZH.put("not connected", "未连接");
-        ZH.put("port open but not answering", "端口开着但不应答");
-        ZH.put("port open but not ready", "端口开着但没就绪");
         ZH.put("running", "在跑");
-        ZH.put("running (HTTP ", "运行中（HTTP ");
         ZH.put("s (this one usually answers within ", " 秒（这条通常 ");
         ZH.put("s (usually ≤", "s（通常 ≤");
-        ZH.put("s ago", " 秒前");
         ZH.put("s)", "s）");
         ZH.put("s). Likely causes, most common first:", " 秒内回来）。最可能的原因，按概率排序：");
         ZH.put("stopped", "停了");
@@ -219,9 +212,6 @@ final class Lang {
         ZH.put("⚠ Termux (com.termux) not found; please install Termux first.", "⚠ 找不到 Termux（com.termux）；请先安装 Termux。");
         ZH.put("⬆ New release available: ", "⬆ 有新版本：");
         ZH.put("　(tap here for the log)", "　（点这里看日志）");
-        ZH.put("　Bridge ", "　桥 ");
-        ZH.put("　DSH ", "　DSH ");
-        ZH.put("　adb ", "　adb ");
         ZH.put("　waited ", "　已等待 ");
         ZH.put("　waited 0s", "　已等待 0s");
         ZH.put("　⚠ missing RUN_COMMAND permission", "　⚠ 缺少 RUN_COMMAND 权限");

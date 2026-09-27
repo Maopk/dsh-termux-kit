@@ -329,12 +329,6 @@ public class MainActivity extends Activity {
         lastLine.setOnClickListener(v -> openLog());
         root.addView(lastLine, llp);
 
-        TextView tip = new TextView(this);
-        tip.setTextSize(11); tip.setTextColor(Color.parseColor("#6E7681"));
-        tip.setPadding(0, dp(10), 0, 0);
-        tip.setText(Lang.t("Commands run through Termux (RUN_COMMAND channel); this app has no storage, network, or accessibility permission.\n")
-                + Lang.t("Every run is recorded in the log: sent, callback, exit code, raw output."));
-        root.addView(tip);
 
         setContentView(sc);
         registerReceiver(refresh, new IntentFilter("io.dsh.console.UI_REFRESH"),
@@ -849,15 +843,18 @@ public class MainActivity extends Activity {
                 if (L != null) { d = L.optString("dsh", "grey"); br = L.optString("bridge", "grey"); a = L.optString("adb", "grey"); }
                 JSONObject dj = o.optJSONObject("dsh"), bj = o.optJSONObject("bridge"), aj = o.optJSONObject("adb");
                 bjOut = bj;
-                detail = o.optString("ts", "");
-                if (dj != null) detail += Lang.t("　DSH ") + (dj.optBoolean("ok") ? Lang.t("running (HTTP ") + dj.optString("http") + Lang.t(")") : (dj.optBoolean("port") ? Lang.t("port open but not ready") : Lang.t("stopped")));
-                if (bj != null) detail += Lang.t("　Bridge ") + (bj.optBoolean("ok") ? "v" + bj.optString("ver") : (bj.optBoolean("port") ? Lang.t("port open but not answering") : Lang.t("none")));
+                // One line, at most three facts, no timestamps and no raw HTTP codes:
+                // "DSH 运行中 · 桥 v2.21 · adb 未连接（Wi-Fi 未连或无线调试未开）"
+                StringBuilder sb = new StringBuilder();
+                if (dj != null) sb.append("DSH ").append(Lang.t(dj.optBoolean("port") ? "running" : "stopped"));
+                if (bj != null) sb.append(" · ").append(bridgeStateText(bj));
                 if (aj != null) {
                     JSONArray ds = aj.optJSONArray("devices");
-                    detail += Lang.t("　adb ") + (ds != null && ds.length() > 0 ? ds.optString(0) : Lang.t("not connected"));
+                    boolean on = ds != null && ds.length() > 0;
+                    sb.append(" · adb ").append(on ? ds.optString(0) : Lang.t("not connected"));
+                    if (!on) sb.append(Lang.t(" (Wi-Fi off, or Wireless debugging not on)"));
                 }
-                long ago = (System.currentTimeMillis() - Last.statusAt(this)) / 1000;
-                detail += "　(" + (ago < 2 ? Lang.t("just now") : ago + Lang.t("s ago")) + ")";
+                detail = sb.toString();
             } catch (Throwable t) {
                     // Be honest: it is usually a truncated callback (cutting the status JSON from the tail removes its head)
                     detail = Lang.t("Status parse failed (callback may be truncated): ") + t.getMessage();
