@@ -28,6 +28,7 @@ window.__ModuleLoader__.load({
         { id: '8_enable-wireless-adb', cat: 'Channels (adb and bridge separate)', label: 'Connect adb', icon: '⚡', hint: 'Wireless debugging only (needs working Wi-Fi)' },
         { id: 'bridge_wake', cat: 'Channels (adb and bridge separate)', label: 'Wake bridge', icon: '🌉', hint: 'Accessibility loopback only, no network needed' },
         { id: 'bridge_status', cat: 'Channels (adb and bridge separate)', label: 'Bridge status', icon: '🔎', hint: 'Bridge only: port / response / version' },
+        { id: '10_net-fix', cat: 'Channels (adb and bridge separate)', label: 'Network first aid', icon: '🩺', hint: 'One tap when foreign sites die: decides whether the core stopped or the config went bad, then repairs' },
         { id: '7_reconnect-ai', cat: 'Channels (adb and bridge separate)', label: 'Restore all (adb + bridge)', icon: '🔗', hint: 'Use only when you need both' },
         { id: '3_backup-dsh', cat: 'Maintenance', label: 'Backup', icon: '💾', hint: 'Pack and verify the archive' },
         { id: '5_cleanup-dsh', cat: 'Maintenance', label: 'Cleanup', icon: '🧹', hint: 'Deletes only my artifacts' },

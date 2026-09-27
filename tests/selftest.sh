@@ -109,6 +109,15 @@ done
 PYC=$(python3 -m py_compile "$HOME_DIR/.local/bin/droid-sock" 2>&1)
 [ -z "$PYC" ] && rec PASS "droid-sock" "python compile OK" || rec FAIL "droid-sock" "python compile failed: $(printf '%s' "$PYC" | tail -1)"
 
+# Every surface that lists tasks must agree with dsh-tasksd's allowlist. Renaming the ids once
+# updated the allowlist and the app but not the DSH page panel, so every panel button failed with
+# "not in the whitelist" — a mismatch that stays invisible until a human presses the button.
+if IDCHK=$(python3 "$HOME_DIR/.local/bin/check-task-ids" 2>&1); then
+  rec PASS "task ids agree" "the page panel, the app and the widgets only send ids the allowlist accepts"
+else
+  rec FAIL "task ids agree" "$(printf '%s' "$IDCHK" | grep -E 'sends ids' | head -1)"
+fi
+
 # ── L2: --dry-run ──
 line "[L2] --dry-run full-flow rehearsal"
 for f in "$T"/*.sh; do

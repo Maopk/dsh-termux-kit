@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""check-task-ids — every place that lists tasks must agree with dsh-tasksd's allowlist.
+
+WHY
+---
+A task's id is written down in four independent places:
+
+    tools/dsh-tasksd                     ALLOWED / VIRTUAL  ← the only one that *enforces*
+    plugins/dsh-mobile-local/client.js   the DSH page panel's buttons
+    apps/console/.../Tasks.java          the Console app's buttons
+    widgets/<id>.sh                      the script itself
+
+Renaming the task ids to English updated the allowlist and the app, but **not** the page panel,
+which kept sending the old Chinese ids. tasksd rejected every one of them with
+`not in the whitelist: 2_关闭DSH` — the user hit it on the "Stop DSH" button, and in fact every
+button except the two bridge ones was dead. Nothing failed loudly at build time; the mismatch
+only surfaced when a human pressed a button.
+
+So: one command that compares the four lists. Run it from tests/selftest.sh and before a release.
+
+Usage: check-task-ids        exit 0 when they agree, 1 with the diff otherwise
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+HOME = os.path.expanduser('~')
+ROOT = os.path.join(HOME, 'dsh-termux-kit')
+
+
+def tasksd_ids():
+    """The enforced allowlist: parse tools/dsh-tasksd's ALLOWED and VIRTUAL dicts."""
+    src = open(os.path.join(ROOT, 'tools', 'dsh-tasksd'), encoding='utf-8').read()
+    allowed = set()
+    m = re.search(r'ALLOWED\s*=\s*\{(.*?)\}', src, re.S)
+    if m:
+        allowed |= set(re.findall(r"'([^']+)'", m.group(1)))
+    virtual = set()
+    m = re.search(r'VIRTUAL\s*=\s*\{(.*?)\n\}', src, re.S)
+    if m:
+        virtual |= set(re.findall(r"^\s*'([^']+)':", m.group(1), re.M))
+    return allowed, virtual
+
+
+def panel_ids():
+    p = os.path.join(ROOT, 'plugins', 'dsh-mobile-local', 'client.js')
+    src = open(p, encoding='utf-8').read()
+    return {i for i in re.findall(r"id: '([^']+)'", src) if i != 'dsh-mobile-local'}
+
+
+def console_ids():
+    p = os.path.join(ROOT, 'apps', 'console', 'src', 'io', 'dsh', 'console', 'Tasks.java')
+    src = open(p, encoding='utf-8').read()
+    return set(re.findall(r'new T\("([^"]+)"', src)) | set(re.findall(r'"(bridge_wake|bridge_status)"', src))
+
+
+def widget_ids():
+    d = os.path.join(ROOT, 'widgets')
+    return {f[:-3] for f in os.listdir(d) if re.match(r'^\d+_[a-z0-9-]+\.sh$', f)}
+
+
+def main():
+    allowed, virtual = tasksd_ids()
+    known = allowed | virtual
+    lists = {
+        'page panel  (plugins/dsh-mobile-local)': panel_ids(),
+        'console app (apps/console Tasks.java)': console_ids(),
+        'widgets     (widgets/*.sh)': widget_ids(),
+    }
+
+    # Legitimate exceptions, each with its reason. A check that cries wolf gets ignored, so
+    # anything intentionally outside the allowlist is named here rather than tolerated silently.
+    #   'open'      the Console's "Open Web UI" carries its own command and never calls tasksd
+    #   virtual ids bridge_wake / bridge_status have no script by design (tasksd runs the tool)
+    NOT_ROUTED = {'console app (apps/console Tasks.java)': {'open'}}
+    NO_SCRIPT = {'widgets     (widgets/*.sh)': virtual}
+    # Deliberately not a button in that surface:
+    DELIBERATE_GAP = {'console app (apps/console Tasks.java)': {
+        '9_revoke-pin': 'it is the password-rights switch there, not a task button',
+    }}
+
+    bad = 0
+    print(f'tasksd enforces {len(known)} ids: {sorted(known)}\n')
+    for name, ids in lists.items():
+        extra = sorted(ids - known - NOT_ROUTED.get(name, set()))
+        missing = sorted(known - ids - NO_SCRIPT.get(name, set()))
+        unexplained = [i for i in missing if i not in DELIBERATE_GAP.get(name, {})]
+        flag = '\u274c' if extra else ('\u26a0 ' if unexplained else '\u2705')
+        print(f'{flag} {name}: {len(ids)} ids')
+        if extra:
+            print(f'     \u274c sends ids tasksd rejects \u2192 the button fails with "not in the whitelist": {extra}')
+            bad += 1
+        for i in missing:
+            why = DELIBERATE_GAP.get(name, {}).get(i)
+            print(f'     \u00b7  no entry for {i}' + (f' \u2014 {why}' if why else ' (by design)'))
+    if bad:
+        print('\n\u274c a list disagrees with the allowlist \u2014 a button will fail when pressed')
+        return 1
+    print('\n\u2705 every list only sends ids the allowlist accepts')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
