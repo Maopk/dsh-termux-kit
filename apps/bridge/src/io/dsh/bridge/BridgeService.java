@@ -388,9 +388,13 @@ public class BridgeService extends AccessibilityService {
             android.content.SharedPreferences sp = getSharedPreferences(PREFS, MODE_PRIVATE);
             android.content.ContentResolver cr = getContentResolver();
             if (mode.equals("keep")) {
+                // ⚠ 幂等：已经 keep 过就不要再存一次 —— 再存存到的是"已经被改过的值"，
+                //   还原时就会把屏幕永久设成最大值（实测踩过：手动 keep 一次 + 装包工具又 keep 一次，
+                //   原值 60000 被覆盖成 2147483647）。原值只认第一次。
+                boolean alreadyKept = sp.getBoolean("screen_off_kept", false) || sp.getBoolean("stay_on_kept", false);
                 try {
                     int cur = android.provider.Settings.System.getInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT);
-                    sp.edit().putInt("screen_off_saved", cur).putBoolean("screen_off_kept", true).apply();
+                    if (!alreadyKept) sp.edit().putInt("screen_off_saved", cur).putBoolean("screen_off_kept", true).apply();
                     android.provider.Settings.System.putInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT, 2147483647);
                     d.put("method", "screen_off_timeout");
                     d.put("was", cur);
@@ -430,6 +434,19 @@ public class BridgeService extends AccessibilityService {
                     } catch (Throwable t) { /* nothing else to try */ }
                 }
                 d.put("restored_ok", did);
+                return d;
+            }
+            if (mode.startsWith("set:")) {
+                // 显式设成某个毫秒值 —— 用于把设置改回用户原来的样子（幂等/还原都救不了被覆盖过的原值）
+                int ms = Integer.parseInt(mode.substring(4));
+                try {
+                    android.provider.Settings.System.putInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT, ms);
+                    sp.edit().putBoolean("screen_off_kept", false).apply();
+                    d.put("set", ms);
+                    d.put("screen_off_timeout", android.provider.Settings.System.getInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT));
+                } catch (Throwable t) {
+                    throw new Exception("cannot set the screen timeout: " + t.getMessage());
+                }
                 return d;
             }
             // status

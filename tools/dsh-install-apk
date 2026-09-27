@@ -116,6 +116,25 @@ else
   [ "$UP" != 0 ] && ok "installer is in front (took ${UP}s)" || { bad "the installer never came to the front within 20s"; exit 4; }
 fi
 
+# ── wait for the page to finish rendering ──
+# 这个页面先显示「正在准备安装应用…」，那一行蓝色小字**还没进树也没画出来**。
+# 不等它，后面所有找蓝字/点蓝字的动作都是对着一屏没有链接的界面做的 ——
+# 表现就是"每个候选坐标点了都没反应"，而其实只是来早了（实测：这一步要 2 秒上下，
+# 但慢的时候十几秒，所以轮询而不是固定 sleep）。
+step "②·b wait for the installer page to finish preparing"
+if [ "$DRY" = 0 ]; then
+  R=0
+  for _ in $(seq 1 25); do
+    T=$(ui)
+    if printf '%s' "$T" | grep -qE '本次安装|您可授权|已安装相同版本'; then R=1; break; fi
+    # ⚠ 必须要求树非空：ui 转储偶尔返回空，而"空树里没有准备中字样"会被误判成"页面好了" ——
+    #   实测就是这样骗过一次，后面全程对着一屏还没画出来的界面找蓝字。
+    if [ -n "$(printf '%s' "$T" | tr -d '[:space:]')" ] && ! printf '%s' "$T" | grep -q '正在准备安装应用'; then R=1; break; fi
+    sleep 1
+  done
+  [ "$R" = 1 ] && ok "page is ready" || warn "the page still says 正在准备安装应用 after 25s; continuing anyway"
+fi
+
 # ── one-time install permission ──
 step "③ install-source permission (choose 「本次允许」; no long-term grant)"
 if [ "$DRY" = 1 ]; then printf '   · [dry] tap 「本次允许使用权限」\n'; ok "(dry-run)"

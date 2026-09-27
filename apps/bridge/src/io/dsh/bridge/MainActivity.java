@@ -124,6 +124,7 @@ public class MainActivity extends Activity {
 
         // ── About: the project URL, and whether a newer release exists ──
         projBtn = new Button(this);
+        projBtn.setAllCaps(false);   // 主题默认全大写，会把网址显示成 GITHUB.COM/…
         projBtn.setText(Lang.t("Project page: ") + "github.com/Maopk/dsh-termux-kit");
         projBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -139,6 +140,7 @@ public class MainActivity extends Activity {
         updateView.setTextSize(13f);
         updateView.setPadding(0, (int) (6 * getResources().getDisplayMetrics().density), 0, 0);
         updateView.setTextColor(0xFF8B949E);
+        updateView.setAllCaps(false);
         updateView.setText(Lang.t("Version: ") + ver + Lang.t(" · checking for a newer release…"));
 
         Button panic = new Button(this);

@@ -165,7 +165,12 @@ def main():
     elif k == 'stop':          # soft stop: closes only the port, accessibility stays (used to verify the broadcast wake)
         r = call({'action': 'stop'})
     elif k == 'screen':        # keep the screen awake before bridge work / restore it after
-        r = call({'action': 'screen', 'value': a[1] if len(a) > 1 else 'status'}, timeout=15)
+        # screen keep | restore | status | set:<毫秒>
+        # screen keep | restore | status | set <毫秒>   —— 桥那边认的是 'set:<毫秒>' 一个 token
+        _v = 'status'
+        if len(a) > 1 and a[1]:
+            _v = ('set:' + a[2]) if (a[1] == 'set' and len(a) > 2) else a[1]
+        r = call({'action': 'screen', 'value': _v}, timeout=15)
     elif k == 'panic':         # panic: close the port + disable accessibility
         r = call({'action': 'panic'})
     elif k == 'ui':

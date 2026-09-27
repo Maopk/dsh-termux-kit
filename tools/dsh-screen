@@ -18,7 +18,7 @@
 set -u
 SOCK="$HOME/.local/bin/droid-sock"
 
-r=$(timeout 20 "$SOCK" screen "${1:-status}" 2>&1) || { printf '✘ 桥没有应答（先 dsh-bridge wake）\n' >&2; exit 1; }
+r=$(timeout 20 "$SOCK" screen "${1:-status}" "${2:-}" 2>&1) || { printf '✘ 桥没有应答（先 dsh-bridge wake）\n' >&2; exit 1; }
 case "${1:-status}" in
   keep)
     if printf '%s' "$r" | grep -q '"kept": true'; then
@@ -39,6 +39,10 @@ case "${1:-status}" in
     else
       printf '⚠ 还原结果不明：%s\n' "$r" >&2; exit 1
     fi ;;
+  set)
+    ms="${2:-60000}"
+    if printf '%s' "$r" | grep -q '"set"'; then printf '✔ 息屏时间已设为 %s 毫秒\n' "$ms"
+    else printf '✘ 设置失败：%s\n' "$r" >&2; exit 1; fi ;;
   *)
     printf '%s\n' "$r"
     printf '%s' "$r" | grep -q '"kept": true' && printf '⚠ 现在处于「已 keep 未还原」状态，用完记得 dsh-screen restore\n'
