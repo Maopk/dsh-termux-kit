@@ -9,9 +9,9 @@
     "术语不翻译：adb / token / GitHub / Wi-Fi / DSH / APK / SHA256 / exit 保持原样。"
   ],
   "appVersions": {
-    "bridge": "2.20",
-    "console": "1.14",
-    "panel": "0.6"
+    "bridge": "2.21",
+    "console": "1.15",
+    "panel": "0.7"
   },
   "cats": [
     {
@@ -55,6 +55,114 @@
     }
   ],
   "controls": [
+    {
+      "id": "bridge_run",
+      "kind": "switch",
+      "cat": "channels",
+      "group": "bridge",
+      "icon": "🌉",
+      "label": {
+        "en": "Bridge running",
+        "zh": "桥运行中"
+      },
+      "hint": {
+        "en": "On = DSH may drive the phone through this app (listening on 127.0.0.1:8788). Off = soft stop: the port closes, the process stays, and one broadcast brings it back.",
+        "zh": "开 = 允许 DSH 通过本 App 操作手机（监听 127.0.0.1:8788）。关 = 软停：端口关闭、进程保留，一条广播就能拉回。"
+      },
+      "danger": false,
+      "surfaces": [
+        "panel",
+        "console",
+        "bridge"
+      ],
+      "on_task": "bridge_wake",
+      "off_task": "bridge_stop"
+    },
+    {
+      "id": "bridge_state_text",
+      "kind": "text",
+      "cat": "channels",
+      "group": "bridge",
+      "icon": "·",
+      "label": {
+        "en": "Bridge state",
+        "zh": "桥状态"
+      },
+      "hint": {
+        "en": "Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).",
+        "zh": "四态由**一次 ping 的结果 + 状态记录**判定（不看时间）：运行中 / 刚断（可唤醒，一条广播就能拉回）/ 长时间未响应（进程自己没了，或端口在听却不应答 —— 唤醒可能有效，无效就手动打开一次「DSH 桥」）/ 未安装（这台机器上从没见过它是活的）。"
+      },
+      "danger": false,
+      "surfaces": [
+        "panel",
+        "console",
+        "bridge"
+      ]
+    },
+    {
+      "id": "bridge_wake",
+      "kind": "button",
+      "cat": "channels",
+      "group": "bridge",
+      "icon": "🌉",
+      "label": {
+        "en": "Wake bridge",
+        "zh": "唤醒桥"
+      },
+      "hint": {
+        "en": "Sends one token-carrying broadcast. Never takes your screen. Can take 20-40s if the process was reclaimed.",
+        "zh": "发一条带 token 的广播把它唤回，绝不抢你的屏幕。进程被回收时要 20-40 秒。"
+      },
+      "danger": false,
+      "surfaces": [
+        "panel",
+        "console",
+        "widget"
+      ],
+      "task": true
+    },
+    {
+      "id": "bridge_status",
+      "kind": "button",
+      "cat": "channels",
+      "group": "bridge",
+      "icon": "🔎",
+      "label": {
+        "en": "Bridge status",
+        "zh": "桥状态查询"
+      },
+      "hint": {
+        "en": "Read-only: is the port listening, does it really answer, version, paused flag.",
+        "zh": "只读：端口是否在听、是否真应答、版本、是否被暂停。"
+      },
+      "danger": false,
+      "surfaces": [
+        "panel",
+        "console"
+      ],
+      "task": true
+    },
+    {
+      "id": "7_reconnect-ai",
+      "kind": "button",
+      "cat": "channels",
+      "group": "bridge",
+      "icon": "🔗",
+      "label": {
+        "en": "Restore both channels",
+        "zh": "恢复全部通道"
+      },
+      "hint": {
+        "en": "adb first, then the bridge. Use only when you need both; a failure names the channel it came from.",
+        "zh": "先 adb 后桥。两条都要时才用；失败会说清是哪条通道。"
+      },
+      "danger": false,
+      "surfaces": [
+        "panel",
+        "console"
+      ],
+      "task": true
+    },
     {
       "id": "1_start-dsh",
       "kind": "button",
@@ -182,8 +290,7 @@
     {
       "id": "adb_lamp",
       "kind": "lamp",
-      "cat": "channels",
-      "group": "adb",
+      "cat": "statuslog",
       "icon": "●",
       "label": {
         "en": "adb",
@@ -200,118 +307,9 @@
       ]
     },
     {
-      "id": "bridge_run",
-      "kind": "switch",
-      "cat": "channels",
-      "group": "bridge",
-      "icon": "🌉",
-      "label": {
-        "en": "Bridge running",
-        "zh": "桥运行中"
-      },
-      "hint": {
-        "en": "On = listening on 8788. Off = soft stop: the port closes but the process stays, so one broadcast brings it back.",
-        "zh": "开=监听 8788 正常工作；关=软停（关端口、进程保留，一条广播就能唤回）。"
-      },
-      "danger": false,
-      "surfaces": [
-        "panel",
-        "console",
-        "bridge"
-      ],
-      "on_task": "bridge_wake",
-      "off_task": "bridge_stop"
-    },
-    {
-      "id": "bridge_state_text",
-      "kind": "text",
-      "cat": "channels",
-      "group": "bridge",
-      "icon": "·",
-      "label": {
-        "en": "Bridge state",
-        "zh": "桥状态"
-      },
-      "hint": {
-        "en": "Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).",
-        "zh": "四态由**一次 ping 的结果 + 状态记录**判定（不看时间）：运行中 / 刚断（可唤醒，一条广播就能拉回）/ 长时间未响应（进程自己没了，或端口在听却不应答 —— 唤醒可能有效，无效就手动打开一次「DSH 桥」）/ 未安装（这台机器上从没见过它是活的）。"
-      },
-      "danger": false,
-      "surfaces": [
-        "panel",
-        "console",
-        "bridge"
-      ]
-    },
-    {
-      "id": "bridge_wake",
-      "kind": "button",
-      "cat": "channels",
-      "group": "bridge",
-      "icon": "🌉",
-      "label": {
-        "en": "Wake bridge",
-        "zh": "唤醒桥"
-      },
-      "hint": {
-        "en": "Sends one token-carrying broadcast. Never takes your screen. Can take 20-40s if the process was reclaimed.",
-        "zh": "发一条带 token 的广播把它唤回，绝不抢你的屏幕。进程被回收时要 20-40 秒。"
-      },
-      "danger": false,
-      "surfaces": [
-        "panel",
-        "console",
-        "widget"
-      ],
-      "task": true
-    },
-    {
-      "id": "bridge_status",
-      "kind": "button",
-      "cat": "channels",
-      "group": "bridge",
-      "icon": "🔎",
-      "label": {
-        "en": "Bridge status",
-        "zh": "桥状态查询"
-      },
-      "hint": {
-        "en": "Read-only: is the port listening, does it really answer, version, paused flag.",
-        "zh": "只读：端口是否在听、是否真应答、版本、是否被暂停。"
-      },
-      "danger": false,
-      "surfaces": [
-        "panel",
-        "console"
-      ],
-      "task": true
-    },
-    {
-      "id": "7_reconnect-ai",
-      "kind": "button",
-      "cat": "channels",
-      "group": "bridge",
-      "icon": "🔗",
-      "label": {
-        "en": "Restore both channels",
-        "zh": "恢复全部通道"
-      },
-      "hint": {
-        "en": "adb first, then the bridge. Use only when you need both; a failure names the channel it came from.",
-        "zh": "先 adb 后桥。两条都要时才用；失败会说清是哪条通道。"
-      },
-      "danger": false,
-      "surfaces": [
-        "panel",
-        "console"
-      ],
-      "task": true
-    },
-    {
       "id": "10_net-fix",
       "kind": "button",
-      "cat": "channels",
-      "group": "bridge",
+      "cat": "maintenance",
       "icon": "🩺",
       "label": {
         "en": "Network first aid",
@@ -338,8 +336,8 @@
         "zh": "更新两个 App"
       },
       "hint": {
-        "en": "Downloads the latest console and bridge from the release, checks SHA256, then installs them.",
-        "zh": "从发行版下载控制台和桥、校验 SHA256 后安装。"
+        "en": "Downloads the two APKs from GitHub Releases, verifies SHA256, then installs them.",
+        "zh": "从 GitHub Releases 下载两个 APK，校验 SHA256 后安装。"
       },
       "danger": false,
       "surfaces": [
@@ -391,7 +389,7 @@
     {
       "id": "bridge_full_stop",
       "kind": "button",
-      "cat": "maintenance",
+      "cat": "channels",
       "icon": "⏻",
       "label": {
         "en": "Fully stop bridge",
@@ -407,7 +405,8 @@
         "console",
         "bridge"
       ],
-      "task": true
+      "task": true,
+      "group": "bridge"
     },
     {
       "id": "lang",

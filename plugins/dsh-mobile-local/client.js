@@ -18,27 +18,27 @@ window.__ModuleLoader__.load({
       const HOME = '/data/data/com.termux/files/home';
 
       // ── generated:controls (ui/controls.json) — do not edit by hand; run tools/ui-controls gen ──
-      const UI_VERSION = {"bridge": "2.20", "console": "1.14", "panel": "0.6"};
+      const UI_VERSION = {"bridge": "2.21", "console": "1.15", "panel": "0.7"};
       const UI_CATS = [{"id": "startstop", "en": "Start / Stop", "zh": "启动 / 停止"}, {"id": "channels", "en": "Channels (adb and bridge separate)", "zh": "通道（adb 与桥分开）"}, {"id": "maintenance", "en": "Maintenance", "zh": "维护"}, {"id": "emergency", "en": "Emergency", "zh": "紧急"}, {"id": "statuslog", "en": "Status / Log", "zh": "状态 / 日志"}];
       const UI_GROUPS = [{"id": "adb", "cat": "channels", "en": "adb · wireless debugging, needs working Wi-Fi", "zh": "adb · 无线调试，需要可用 Wi-Fi"}, {"id": "bridge", "cat": "channels", "en": "bridge · accessibility loopback, no network", "zh": "桥 · 无障碍回环，不需要网络"}];
       const UI_CONTROLS = [
+        {"id": "bridge_run", "kind": "switch", "cat": "channels", "group": "bridge", "icon": "🌉", "danger": false, "label": {"en": "Bridge running", "zh": "桥运行中"}, "hint": {"en": "On = DSH may drive the phone through this app (listening on 127.0.0.1:8788). Off = soft stop: the port closes, the process stays, and one broadcast brings it back.", "zh": "开 = 允许 DSH 通过本 App 操作手机（监听 127.0.0.1:8788）。关 = 软停：端口关闭、进程保留，一条广播就能拉回。"}, "surfaces": ["panel", "console", "bridge"]},
+        {"id": "bridge_state_text", "kind": "text", "cat": "channels", "group": "bridge", "icon": "·", "danger": false, "label": {"en": "Bridge state", "zh": "桥状态"}, "hint": {"en": "Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).", "zh": "四态由**一次 ping 的结果 + 状态记录**判定（不看时间）：运行中 / 刚断（可唤醒，一条广播就能拉回）/ 长时间未响应（进程自己没了，或端口在听却不应答 —— 唤醒可能有效，无效就手动打开一次「DSH 桥」）/ 未安装（这台机器上从没见过它是活的）。"}, "surfaces": ["panel", "console", "bridge"]},
+        {"id": "bridge_wake", "kind": "button", "cat": "channels", "group": "bridge", "icon": "🌉", "danger": false, "label": {"en": "Wake bridge", "zh": "唤醒桥"}, "hint": {"en": "Sends one token-carrying broadcast. Never takes your screen. Can take 20-40s if the process was reclaimed.", "zh": "发一条带 token 的广播把它唤回，绝不抢你的屏幕。进程被回收时要 20-40 秒。"}, "surfaces": ["panel", "console", "widget"]},
+        {"id": "bridge_status", "kind": "button", "cat": "channels", "group": "bridge", "icon": "🔎", "danger": false, "label": {"en": "Bridge status", "zh": "桥状态查询"}, "hint": {"en": "Read-only: is the port listening, does it really answer, version, paused flag.", "zh": "只读：端口是否在听、是否真应答、版本、是否被暂停。"}, "surfaces": ["panel", "console"]},
+        {"id": "7_reconnect-ai", "kind": "button", "cat": "channels", "group": "bridge", "icon": "🔗", "danger": false, "label": {"en": "Restore both channels", "zh": "恢复全部通道"}, "hint": {"en": "adb first, then the bridge. Use only when you need both; a failure names the channel it came from.", "zh": "先 adb 后桥。两条都要时才用；失败会说清是哪条通道。"}, "surfaces": ["panel", "console"]},
         {"id": "1_start-dsh", "kind": "button", "cat": "startstop", "group": "", "icon": "▶", "danger": false, "label": {"en": "Start DSH", "zh": "启动 DSH"}, "hint": {"en": "Starts DSH and opens the page; if it is already running it only opens the page.", "zh": "启动 DSH 并打开页面；已在运行则只打开页面。"}, "surfaces": ["panel", "console", "widget"]},
         {"id": "4_soft-restart-dsh", "kind": "button", "cat": "startstop", "group": "", "icon": "↻", "danger": true, "label": {"en": "Soft restart", "zh": "软重启"}, "hint": {"en": "Restarts the service with SIGTERM. Cost: drops the current web session.", "zh": "用 SIGTERM 重启服务。代价：会断开当前网页会话。"}, "surfaces": ["panel", "console"]},
         {"id": "6_hard-restart-dsh", "kind": "button", "cat": "startstop", "group": "", "icon": "⛔", "danger": true, "label": {"en": "Hard restart", "zh": "硬重启"}, "hint": {"en": "Restarts after a kill -9 and clears the orphan lock. Cost: drops the current web session.", "zh": "强杀后重启并清孤儿锁。代价：会断开当前网页会话。"}, "surfaces": ["panel", "console"]},
         {"id": "2_shutdown-dsh", "kind": "button", "cat": "startstop", "group": "", "icon": "■", "danger": true, "label": {"en": "Stop DSH", "zh": "关闭 DSH"}, "hint": {"en": "Stops DSH and closes the browser. The bridge is a separate channel and is left alone by default.", "zh": "关闭 DSH 并关浏览器。桥是另一条通道，默认不动它。"}, "surfaces": ["panel", "console"]},
         {"id": "adb_ensure", "kind": "button", "cat": "channels", "group": "adb", "icon": "🔌", "danger": false, "label": {"en": "Repair adb channel", "zh": "修复 adb 通道"}, "hint": {"en": "Wi-Fi state → Wireless debugging switch (written through the bridge) → port → connect → verify. Says which step failed.", "zh": "Wi-Fi 状态 → 无线调试开关（这一步借桥来写）→ 端口 → 连接 → 复核。卡在哪一步就说哪一步。"}, "surfaces": ["panel", "console"]},
         {"id": "8_enable-wireless-adb", "kind": "button", "cat": "channels", "group": "adb", "icon": "⚡", "danger": false, "label": {"en": "Connect adb", "zh": "连接 adb"}, "hint": {"en": "Wireless debugging only. Needs a real Wi-Fi network, not just the switch.", "zh": "只走无线调试。需要有真实可用的 Wi-Fi，不只是拨开关。"}, "surfaces": ["panel", "console", "widget"]},
-        {"id": "adb_lamp", "kind": "lamp", "cat": "channels", "group": "adb", "icon": "●", "danger": false, "label": {"en": "adb", "zh": "adb"}, "hint": {"en": "Green = usable, yellow = connecting, red = failed, grey = not connected (check Wi-Fi).", "zh": "绿=可用，黄=连接中，红=失败，灰=未连接（看 Wi-Fi）。"}, "surfaces": ["panel", "console"]},
-        {"id": "bridge_run", "kind": "switch", "cat": "channels", "group": "bridge", "icon": "🌉", "danger": false, "label": {"en": "Bridge running", "zh": "桥运行中"}, "hint": {"en": "On = listening on 8788. Off = soft stop: the port closes but the process stays, so one broadcast brings it back.", "zh": "开=监听 8788 正常工作；关=软停（关端口、进程保留，一条广播就能唤回）。"}, "surfaces": ["panel", "console", "bridge"]},
-        {"id": "bridge_state_text", "kind": "text", "cat": "channels", "group": "bridge", "icon": "·", "danger": false, "label": {"en": "Bridge state", "zh": "桥状态"}, "hint": {"en": "Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).", "zh": "四态由**一次 ping 的结果 + 状态记录**判定（不看时间）：运行中 / 刚断（可唤醒，一条广播就能拉回）/ 长时间未响应（进程自己没了，或端口在听却不应答 —— 唤醒可能有效，无效就手动打开一次「DSH 桥」）/ 未安装（这台机器上从没见过它是活的）。"}, "surfaces": ["panel", "console", "bridge"]},
-        {"id": "bridge_wake", "kind": "button", "cat": "channels", "group": "bridge", "icon": "🌉", "danger": false, "label": {"en": "Wake bridge", "zh": "唤醒桥"}, "hint": {"en": "Sends one token-carrying broadcast. Never takes your screen. Can take 20-40s if the process was reclaimed.", "zh": "发一条带 token 的广播把它唤回，绝不抢你的屏幕。进程被回收时要 20-40 秒。"}, "surfaces": ["panel", "console", "widget"]},
-        {"id": "bridge_status", "kind": "button", "cat": "channels", "group": "bridge", "icon": "🔎", "danger": false, "label": {"en": "Bridge status", "zh": "桥状态查询"}, "hint": {"en": "Read-only: is the port listening, does it really answer, version, paused flag.", "zh": "只读：端口是否在听、是否真应答、版本、是否被暂停。"}, "surfaces": ["panel", "console"]},
-        {"id": "7_reconnect-ai", "kind": "button", "cat": "channels", "group": "bridge", "icon": "🔗", "danger": false, "label": {"en": "Restore both channels", "zh": "恢复全部通道"}, "hint": {"en": "adb first, then the bridge. Use only when you need both; a failure names the channel it came from.", "zh": "先 adb 后桥。两条都要时才用；失败会说清是哪条通道。"}, "surfaces": ["panel", "console"]},
-        {"id": "10_net-fix", "kind": "button", "cat": "channels", "group": "bridge", "icon": "🩺", "danger": false, "label": {"en": "Network first aid", "zh": "网络急救"}, "hint": {"en": "When foreign sites die: decides whether the Clash core stopped or the config went bad, then repairs.", "zh": "外网全挂时用：先判 Clash 核心停了还是配置坏了，再修。"}, "surfaces": ["panel", "console"]},
-        {"id": "11_update-apps", "kind": "button", "cat": "maintenance", "group": "", "icon": "⬆", "danger": false, "label": {"en": "Update the two apps", "zh": "更新两个 App"}, "hint": {"en": "Downloads the latest console and bridge from the release, checks SHA256, then installs them.", "zh": "从发行版下载控制台和桥、校验 SHA256 后安装。"}, "surfaces": ["panel", "console"]},
+        {"id": "adb_lamp", "kind": "lamp", "cat": "statuslog", "group": "", "icon": "●", "danger": false, "label": {"en": "adb", "zh": "adb"}, "hint": {"en": "Green = usable, yellow = connecting, red = failed, grey = not connected (check Wi-Fi).", "zh": "绿=可用，黄=连接中，红=失败，灰=未连接（看 Wi-Fi）。"}, "surfaces": ["panel", "console"]},
+        {"id": "10_net-fix", "kind": "button", "cat": "maintenance", "group": "", "icon": "🩺", "danger": false, "label": {"en": "Network first aid", "zh": "网络急救"}, "hint": {"en": "When foreign sites die: decides whether the Clash core stopped or the config went bad, then repairs.", "zh": "外网全挂时用：先判 Clash 核心停了还是配置坏了，再修。"}, "surfaces": ["panel", "console"]},
+        {"id": "11_update-apps", "kind": "button", "cat": "maintenance", "group": "", "icon": "⬆", "danger": false, "label": {"en": "Update the two apps", "zh": "更新两个 App"}, "hint": {"en": "Downloads the two APKs from GitHub Releases, verifies SHA256, then installs them.", "zh": "从 GitHub Releases 下载两个 APK，校验 SHA256 后安装。"}, "surfaces": ["panel", "console"]},
         {"id": "3_backup-dsh", "kind": "button", "cat": "maintenance", "group": "", "icon": "💾", "danger": false, "label": {"en": "Backup", "zh": "备份"}, "hint": {"en": "Packs DSH state and verifies the archive; the result goes to Download/dsh/.", "zh": "打包 DSH 状态并校验归档；产物落 Download/dsh/。"}, "surfaces": ["panel", "console"]},
         {"id": "5_cleanup-dsh", "kind": "button", "cat": "maintenance", "group": "", "icon": "🧹", "danger": false, "label": {"en": "Cleanup", "zh": "清理"}, "hint": {"en": "Deletes only this kit's own artifacts. Your files are not touched.", "zh": "只删本工具自己的产物，不碰你的文件。"}, "surfaces": ["panel", "console"]},
-        {"id": "bridge_full_stop", "kind": "button", "cat": "maintenance", "group": "", "icon": "⏻", "danger": true, "label": {"en": "Fully stop bridge", "zh": "真停桥"}, "hint": {"en": "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.", "zh": "让 App 退出并解绑无障碍。这台 vivo 上可能唤不回来 —— 只能你手动打开「DSH 桥」。"}, "surfaces": ["panel", "console", "bridge"]},
+        {"id": "bridge_full_stop", "kind": "button", "cat": "channels", "group": "bridge", "icon": "⏻", "danger": true, "label": {"en": "Fully stop bridge", "zh": "真停桥"}, "hint": {"en": "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.", "zh": "让 App 退出并解绑无障碍。这台 vivo 上可能唤不回来 —— 只能你手动打开「DSH 桥」。"}, "surfaces": ["panel", "console", "bridge"]},
         {"id": "lang", "kind": "switch", "cat": "maintenance", "group": "", "icon": "🌐", "danger": false, "label": {"en": "Language", "zh": "语言"}, "hint": {"en": "System / Chinese / English. The widgets and the page panel follow this too.", "zh": "跟随系统 / 中文 / English。小组件和页面面板也跟着变。"}, "surfaces": ["panel", "console", "bridge"]},
         {"id": "project-page", "kind": "button", "cat": "maintenance", "group": "", "icon": "🔗", "danger": false, "label": {"en": "Project page", "zh": "项目主页"}, "hint": {"en": "Opens github.com/Maopk/dsh-termux-kit - source, releases and docs.", "zh": "打开 github.com/Maopk/dsh-termux-kit —— 源码、发行版和文档。"}, "surfaces": ["console", "bridge"]},
         {"id": "version-update", "kind": "text", "cat": "maintenance", "group": "", "icon": "·", "danger": false, "label": {"en": "Version", "zh": "版本"}, "hint": {"en": "Installed version and whether a newer release exists. If the check fails it says so instead of claiming it is up to date.", "zh": "已装版本 + 有没有新发行版。查不到就直说查不到，不谎报「已是最新」。"}, "surfaces": ["panel", "console", "bridge"]},
@@ -84,9 +84,9 @@ window.__ModuleLoader__.load({
 .mb-head { display: flex; align-items: center; gap: 8px; margin: 2px 2px 8px; }
 .mb-title { font-size: 14px; font-weight: 600; color: var(--dsw-alias-label-primary); flex: 1; }
 .mb-ver { font-size: 11px; color: var(--dsw-alias-label-tertiary, #999); }
-.mb-cat { margin: 14px 2px 6px; font-size: 12.5px; font-weight: 700; letter-spacing: .3px;
+.mb-cat { margin: 14px 2px 6px; font-size: 13.5px; cursor: pointer; -webkit-user-select: none; user-select: none; font-weight: 700; letter-spacing: .3px;
   color: var(--dsw-alias-brand-primary, #4c8dff); }
-.mb-sub { margin: 10px 2px 4px; font-size: 11.5px; font-weight: 600; color: var(--dsw-alias-label-secondary); }
+.mb-sub { margin: 10px 2px 4px; font-size: 13px; font-weight: 600; color: var(--dsw-alias-label-secondary); }
 .mb-list { display: flex; flex-direction: column; gap: 8px; }
 .mb-task { display: flex; align-items: flex-start; gap: 9px; width: 100%; min-height: 54px; padding: 9px 11px;
   border: 1px solid var(--dsw-alias-border-l1); border-radius: 11px; background: var(--dsw-alias-bg-layer-2);
@@ -95,12 +95,15 @@ window.__ModuleLoader__.load({
 .mb-task:active { transform: scale(.99); }
 .mb-task.danger { border-color: #e5484d; border-width: 1.5px; }
 .mb-task.armed { background: #e5484d; border-color: #e5484d; color: #fff; }
+/* Two danger levels: emergency = solid red (last resort); other dangerous = red outline */
+.mb-task.solid { background: #e5484d; border-color: #e5484d; color: #fff; }
+.mb-task.solid .mb-hint { color: rgba(255,255,255,.9); }
 .mb-task[disabled] { opacity: .5; }
 .mb-task[disabled] .mb-name { color: var(--dsw-alias-label-tertiary, #999); }
 .mb-ic { width: 20px; text-align: center; font-size: 15px; line-height: 20px; }
 .mb-txt { flex: 1; min-width: 0; }
 .mb-name { display: block; font-weight: 600; }
-.mb-hint { display: block; font-size: 11px; color: var(--dsw-alias-label-tertiary, #999); margin-top: 2px;
+.mb-hint { display: block; font-size: 13px; color: var(--dsw-alias-label-tertiary, #999); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mb-hint.open { white-space: normal; }
 .mb-task.armed .mb-hint { color: rgba(255,255,255,.9); }
@@ -123,7 +126,7 @@ window.__ModuleLoader__.load({
 .mb-switch.danger { border-color: #e5484d; border-width: 1.5px; }
 .mb-switch input { width: 22px; height: 22px; margin-top: 1px; flex: none; }
 .mb-switch[data-busy="1"] { opacity: .5; }
-.mb-state { font-size: 11.5px; color: var(--dsw-alias-label-tertiary, #999); margin-top: 2px; display: block; }
+.mb-state { font-size: 13px; color: var(--dsw-alias-label-tertiary, #999); margin-top: 2px; display: block; }
 .mb-text { font-size: 12px; color: var(--dsw-alias-label-secondary); padding: 2px 3px; }
 .mb-ask { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--dsw-alias-border-l1);
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px;
@@ -259,7 +262,7 @@ window.__ModuleLoader__.load({
         const tail = st.last === 'done' ? (lang === 'zh' ? '　上次 ✔' : '  last ✔')
           : (st.last ? (lang === 'zh' ? '　上次 ' + st.last : '  last ' + st.last) : '');
         return h('button', {
-          className: 'mb-task' + (c.danger ? ' danger' : '') + (isArmed ? ' armed' : ''),
+          className: 'mb-task' + (c.danger ? ' danger' : '') + (c.cat === 'emergency' ? ' solid' : '') + (isArmed ? ' armed' : ''),
           disabled: busy !== null && !isBusy,
           'aria-label': t(c.label) + (c.danger ? (lang === 'zh' ? '，危险操作' : ', dangerous') : ''),
           onClick: () => props.onFire(c),
@@ -275,18 +278,59 @@ window.__ModuleLoader__.load({
       }
 
       function SwitchRow(props) {
-        const { c, lang, on, busy, note } = props;
+        const { c, lang, on, busy, note, dot } = props;
         const t = (p) => (p && (lang === 'zh' ? p.zh : p.en)) || '';
-        return h('div', { className: 'mb-switch' + (c.danger ? ' danger' : ''), 'data-busy': busy ? '1' : '0' },
+        const press = useRef(0);
+        return h('div', {
+          className: 'mb-switch' + (c.danger ? ' danger' : ''),
+          'data-busy': busy ? '1' : '0',
+          // The long-press carries the on/off meaning; the visible subtitle stays the *current* state.
+          onContextMenu: (e) => { e.preventDefault(); props.onExplain(c); },
+          onTouchStart: () => { press.current = setTimeout(() => props.onExplain(c), 450); },
+          onTouchEnd: () => clearTimeout(press.current),
+          onTouchMove: () => clearTimeout(press.current),
+        },
           h('input', {
             type: 'checkbox', checked: !!on, disabled: !!busy,
             'aria-label': t(c.label) + (lang === 'zh' ? '，当前' : ', currently ') + (on ? (lang === 'zh' ? '已开启' : 'on') : (lang === 'zh' ? '已关闭' : 'off')),
             onChange: (e) => props.onToggle(e.target.checked),
           }),
           h('span', { className: 'mb-txt' },
-            h('span', { className: 'mb-name' }, (c.danger ? '⚠ ' : '') + t(c.label)),
-            note ? h('span', { className: 'mb-state' }, note) : null,
-            h('span', { className: 'mb-hint' + (props.open ? ' open' : '') }, t(c.hint))))
+            h('span', { className: 'mb-name' }, t(c.label),
+              h('i', { className: 'mb-dot ' + (dot || 'grey'), style: { marginLeft: '7px' } })),
+            note ? h('span', { className: 'mb-state' }, note) : null))
+      }
+
+      /** Language: three explicit choices; a cycling control hides which option you will land on. */
+      function LangRow(props) {
+        const { lang, mode, onPick } = props;
+        const items = [['auto', lang === 'zh' ? '跟随系统' : 'System'], ['zh', '中文'], ['en', 'English']];
+        return h('div', { className: 'mb-switch' },
+          h('span', { className: 'mb-txt' },
+            h('span', { className: 'mb-name' }, lang === 'zh' ? '语言' : 'Language'),
+            h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
+              items.map(([id, name]) => h('button', {
+                key: id, className: 'mb-btn-inline',
+                style: { borderColor: mode === id ? '#4c8dff' : undefined, color: mode === id ? '#4c8dff' : undefined, fontWeight: mode === id ? '700' : undefined },
+                onClick: () => onPick(id),
+              }, (mode === id ? '✓ ' : '') + name)))))
+      }
+
+      /** The full explanation as a dialog — for a switch (long-press) and for every dangerous button (tap). */
+      function HintDialog(props) {
+        const { c, lang, onClose, onConfirm, confirmLabel } = props;
+        const t = (p) => (p && (lang === 'zh' ? p.zh : p.en)) || '';
+        return h('div', null,
+          h('div', { className: 'mb-mask', onClick: onClose }),
+          h('div', { className: 'mb-sheet', onClick: (e) => e.stopPropagation() },
+            h('div', { className: 'mb-head' },
+              h('span', { className: 'mb-title' }, (c.danger ? '⚠ ' : '') + t(c.label)),
+              h('button', { className: 'mb-close', onClick: onClose }, lang === 'zh' ? '关闭' : 'Close')),
+            h('div', { className: 'mb-out', style: { maxHeight: '40vh' } }, t(c.hint)),
+            onConfirm ? h('div', { className: 'mb-ask' },
+              h('button', { className: 'mb-btn-inline', style: { borderColor: '#e5484d', color: '#e5484d' }, onClick: onConfirm },
+                confirmLabel || (lang === 'zh' ? '确认执行' : 'Confirm')),
+              h('button', { className: 'mb-btn-inline', onClick: onClose }, lang === 'zh' ? '取消' : 'Cancel')) : null))
       }
 
       function TaskSheet(props) {
@@ -304,6 +348,8 @@ window.__ModuleLoader__.load({
         const [err, setErr] = useState('');
         const [logOpen, setLogOpen] = useState(false);
         const [unread, setUnread] = useState(0);
+        // Collapsible sections: only 启动/停止 open by default (user's call).
+        const [collapsed, setCollapsed] = useState({ channels: true, maintenance: true, emergency: true, statuslog: true });
         const pressRef = useRef(0);
 
         const pushLog = useCallback((entry) => {
@@ -369,10 +415,15 @@ window.__ModuleLoader__.load({
           setBusy(null);
         }, [load, pushLog, lang]);
 
+        // Danger: the explanation opens on a *tap* (a long-press fights the system back gesture), and the
+        // confirm sits inside that dialog — one gesture, and the consequence is read before it happens.
         const onFire = useCallback((c) => {
-          if (c.danger && armed !== c.id) { setArmed(c.id); return; }
+          if (c.danger) { setAsk(c.id); return; }
           fireTask(c, c.id);
-        }, [armed, fireTask]);
+        }, [fireTask]);
+        const [ask, setAsk] = useState('');        // dangerous control awaiting confirm
+        const [hintId, setHintId] = useState('');  // pure explanation (switch long-press)
+        const showHint = useCallback((c) => setHintId(c.id), []);
 
         const onToggle = useCallback((c, on) => {
           const id = on ? c.on_task : c.off_task;
@@ -443,42 +494,12 @@ window.__ModuleLoader__.load({
         }
 
         // ── 状态 / 日志 ──
-        const statusSection = section('statuslog', h('div', null,
-          h('div', { className: 'mb-lamps' },
-            h(Lamp, { color: lampOf('dsh', status), text: t(ctl('lamp_dsh').label) + ' ' + (s.dsh && s.dsh.port ? (lang === 'zh' ? '运行中' : 'running') : (lang === 'zh' ? '未运行' : 'stopped')), aria: t(ctl('lamp_dsh').label) }),
-            h(Lamp, { color: lampOf('bridge', status), text: t(ctl('lamp_bridge').label) + ' ' + (s.bridge && s.bridge.ok ? (lang === 'zh' ? '运行中' : 'running') : (lang === 'zh' ? '未运行' : 'down')), aria: t(ctl('lamp_bridge').label) }),
-            h(Lamp, { color: lampOf('adb', status), text: (lang === 'zh' ? 'adb ' : 'adb ') + (((s.adb && s.adb.devices) || [])[0] || (lang === 'zh' ? '未连接' : 'not connected')), aria: 'adb' })),
-          h('div', { className: 'mb-list' },
-            h('button', {
-              className: 'mb-task', 'aria-label': t(ctl('status_refresh').label),
-              disabled: !!busy, onClick: refresh,
-              onContextMenu: (e) => { e.preventDefault(); setExpanded('status_refresh'); },
-            },
-              h('span', { className: 'mb-ic' }, ctl('status_refresh').icon),
-              h('span', { className: 'mb-txt' },
-                h('span', { className: 'mb-name' }, t(ctl('status_refresh').label) + (busy && busy.id === 'status_refresh' ? ' …' : '')),
-                h('span', { className: 'mb-hint' + (expanded === 'status_refresh' ? ' open' : '') }, t(ctl('status_refresh').hint)))),
-            h('button', {
-              className: 'mb-task', 'aria-label': t(ctl('log').label),
-              onClick: () => { setLogOpen(true); setUnread(0); },
-              onContextMenu: (e) => { e.preventDefault(); setExpanded('log'); },
-            },
-              h('span', { className: 'mb-ic' }, ctl('log').icon),
-              h('span', { className: 'mb-txt' },
-                h('span', { className: 'mb-name' }, t(ctl('log').label) + (unread ? '　(' + unread + ')' : '')),
-                h('span', { className: 'mb-hint' + (expanded === 'log' ? ' open' : '') }, t(ctl('log').hint))))))) 
-
-        // ── 启动 / 停止 ──
-        const startSection = section('startstop', h('div', { className: 'mb-list' },
-          ['1_start-dsh', '4_soft-restart-dsh', '6_hard-restart-dsh', '2_shutdown-dsh'].map((id) => renderButton(id))))
-
-        // ── 通道（adb 与桥分开）──
+        // Group name (the adb / bridge sub-headers inside Channels), per language, from the generated data.
         const g = (gid) => {
           const x = UI_GROUPS.filter((y) => y.id === gid)[0];
           return x ? (lang === 'zh' ? x.zh : x.en) : gid;
         };
-        // Four states, from **one ping plus the state note** — deliberately not from a timer
-        // (the user asked for exactly that). tasksd already reduced the signals to `state`.
+        // The bridge's four states, from **one ping plus the state note** — never from a timer.
         const brState = (() => {
           const b = s.bridge || {};
           switch (b.state) {
@@ -487,60 +508,75 @@ window.__ModuleLoader__.load({
             case 'frozen': return lang === 'zh' ? '长时间未响应（端口在听却不应答）' : 'long silent (bound but not answering)';
             case 'silent': return lang === 'zh' ? '长时间未响应' : 'long silent';
             case 'never': return lang === 'zh' ? '未安装' : 'not installed';
-            default: return lang === 'zh' ? '未知' : 'unknown';
+            default: return lang === 'zh' ? '状态查询失败' : 'status check failed';
           }
         })();
-        const channelsSection = section('channels', h('div', null,
-          h('div', { className: 'mb-sub' }, g('adb')),
-          h('div', { className: 'mb-lamps' },
-            h(Lamp, { color: lampOf('adb', status), text: (((s.adb && s.adb.devices) || [])[0] || (lang === 'zh' ? '未连接' : 'not connected')), aria: 'adb' })),
-          h('div', { className: 'mb-list' }, renderButton('adb_ensure'), renderButton('8_enable-wireless-adb')),
-          h('div', { className: 'mb-sub' }, g('bridge')),
-          h(SwitchRow, {
-            c: ctl('bridge_run'), lang: lang, busy: !!busy, on: !!(s.bridge && s.bridge.ok),
-            note: brState, open: expanded === 'bridge_run',
-            onToggle: (on) => onToggle(ctl('bridge_run'), on),
-          }),
-          h('div', { className: 'mb-list' },
-            renderButton('bridge_wake'), renderButton('bridge_status'),
-            renderButton('7_reconnect-ai'), renderButton('10_net-fix'))))
 
-        // ── 维护 ──
-        const maintSection = section('maintenance', h('div', null,
-          h('div', { className: 'mb-list' },
-            renderButton('11_update-apps'), renderButton('3_backup-dsh'), renderButton('5_cleanup-dsh'),
-            renderButton('bridge_full_stop')),
-          h('div', { className: 'mb-list', style: { marginTop: '8px' } },
-            h('div', { className: 'mb-text' }, t(ctl('lang').label) + ' · ' + t(ctl('lang').hint)),
-            h('div', { className: 'mb-close', style: { display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px' } },
-              ['auto', 'zh', 'en'].map((m) => h('button', {
-                key: m, className: 'mb-btn-inline', style: { borderColor: (props.langMode === m ? '#4c8dff' : undefined) },
-                onClick: () => props.onLang(m),
-              }, m === 'auto' ? (lang === 'zh' ? '跟随系统' : 'System') : (m === 'zh' ? '中文' : 'English')))),
-            h('div', { className: 'mb-text' }, t(ctl('version-update').label) + ' · v' + UI_VERSION.panel + ' · ' + UI_VERSION.console + ' / ' + UI_VERSION.bridge))))
+        // ── Sections ──
+        // Collapsible, and only the first one starts open: a phone panel that dumps 17 buttons on you
+        // is the thing the user complained about. Lamps render **only** in 状态/日志 (no duplicates).
+        const head = (catId) => h('div', {
+          className: 'mb-cat',
+          onClick: () => setCollapsed((cur) => { const n = Object.assign({}, cur); n[catId] = !n[catId]; return n; }),
+          'aria-expanded': !collapsed[catId],
+        }, (collapsed[catId] ? '▸ ' : '▾ ') + catName(catId) + (collapsed[catId] ? (lang === 'zh' ? '　' + countOf(catId) + ' 项' : '  ' + countOf(catId)) : ''));
 
-        // ── 紧急 ──
-        const authOn = !!(auth && auth.authorized);
-        const emergSection = section('emergency', h('div', null,
-          h(SwitchRow, {
-            c: ctl('password-access'), lang: lang, busy: !!busy, on: authOn,
-            note: auth ? (authOn ? (lang === 'zh' ? '已授权' : 'Authorized') : (lang === 'zh' ? '未授权' : 'Not authorized')) : (lang === 'zh' ? '读取中…' : 'Loading…'),
-            open: expanded === 'password-access',
-            onToggle: (on) => { setAuthArmed(on ? 'set' : 'revoke'); },
-          }),
-          authArmed === 'revoke' ? h('div', { className: 'mb-ask' },
-            h('span', null, lang === 'zh' ? '收回后 AI 再也用不了这个密码（装包会停在安全验证等你处理）。' : 'Once revoked the AI can no longer use this password (installing stops at the security check for you).'),
-            h('button', { className: 'mb-btn-inline', disabled: !!busy, onClick: doRevoke }, lang === 'zh' ? '确认收回' : 'Confirm revoke'),
-            h('button', { className: 'mb-btn-inline', disabled: !!busy, onClick: () => setAuthArmed('') }, lang === 'zh' ? '取消' : 'Cancel')) : null,
-          authArmed === 'set' ? h('div', { className: 'mb-ask' },
-            h('span', null, lang === 'zh' ? '输入 6 位锁屏密码（只写进 600 权限的文件，不进日志）：' : 'Enter the 6-digit lock-screen password (written only to the 600 file, never logged):'),
-            h('input', {
-              className: 'mb-pw', type: 'password', inputMode: 'numeric', maxLength: 6, value: pw,
-              onChange: (e) => setPw(String(e.target.value || '').replace(/\D/g, '').slice(0, 6)),
-            }),
-            h('button', { className: 'mb-btn-inline', disabled: !!busy || pw.length !== 6, onClick: doAuthorize }, lang === 'zh' ? '授权' : 'Authorize'),
-            h('button', { className: 'mb-btn-inline', disabled: !!busy, onClick: () => { setAuthArmed(''); setPw(''); } }, lang === 'zh' ? '取消' : 'Cancel')) : null,
-          h('div', { className: 'mb-list', style: { marginTop: '8px' } }, renderButton('0_emergency-stop'))))
+        function countOf(catId) { return UI_CONTROLS.filter((c) => c.cat === catId).length; }
+
+        const lampRow = () => h('div', { className: 'mb-lamps' },
+          h(Lamp, { color: lampOf('dsh', status), aria: t(ctl('lamp_dsh').label),
+            text: t(ctl('lamp_dsh').label) + ' ' + (s.dsh && s.dsh.port ? (lang === 'zh' ? '运行中' : 'running') : (lang === 'zh' ? '未运行' : 'stopped')) }),
+          h(Lamp, { color: lampOf('bridge', status), aria: t(ctl('lamp_bridge').label),
+            text: t(ctl('lamp_bridge').label) + ' ' + (s.bridge && s.bridge.ok ? (lang === 'zh' ? '运行中' : 'running') : (lang === 'zh' ? '未运行' : 'down')) }),
+          h(Lamp, { color: lampOf('adb', status), aria: 'adb',
+            text: 'adb ' + (((s.adb && s.adb.devices) || [])[0] || (lang === 'zh' ? '未连接' : 'not connected')) }));
+
+        const sections = UI_CATS.map((cat) => {
+          // Only what this surface declares: bridge-only controls (copy token, idle auto-stop, …) must
+          // not leak into the page panel — the data says which surface shows what.
+          const list = UI_CONTROLS.filter((c) => c.surfaces.indexOf('panel') >= 0 && c.cat === cat.id
+            && (c.kind !== 'lamp' || cat.id === 'statuslog'));
+          if (!list.length) return null;
+          const body = [];
+          if (!collapsed[cat.id]) {
+            let openGroup = '';
+            list.forEach((c) => {
+              if (c.group && c.group !== openGroup) { openGroup = c.group; body.push(h('div', { key: 'g' + c.group, className: 'mb-sub' }, g(c.group))); }
+              if (c.kind === 'lamp') { if (cat.id === 'statuslog' && !body.some((x) => x && x.key === 'lamps')) body.push(h('div', { key: 'lamps' }, lampRow())); return; }
+              if (c.kind === 'text') {
+                if (c.id === 'bridge_state_text') return;          // that state lives on the switch row
+                if (c.id === 'version-update') {
+                  body.push(h('div', { key: c.id, className: 'mb-text' }, '面板 v' + UI_VERSION.panel + ' · 控制台 v' + UI_VERSION.console + ' · 桥 v' + UI_VERSION.bridge));
+                  return;
+                }
+                body.push(h('div', { key: c.id, className: 'mb-text' }, t(c.hint)));
+                return;
+              }
+              if (c.kind === 'switch' && c.id === 'lang') {
+                body.push(h(LangRow, { key: c.id, lang: lang, mode: props.langMode, onPick: props.onLang }));
+                return;
+              }
+              if (c.kind === 'switch') {
+                const isBridge = c.id === 'bridge_run';
+                const authed = !!(auth && auth.authorized);
+                const note = isBridge ? brState : (auth ? (authed ? (lang === 'zh' ? '已授权' : 'authorized') : (lang === 'zh' ? '未授权' : 'not authorized')) : (lang === 'zh' ? '读取中…' : 'loading…'));
+                const dot = isBridge ? lampOf('bridge', status) : (authed ? 'green' : 'grey');
+                body.push(h(SwitchRow, {
+                  key: c.id, c: c, lang: lang, busy: !!busy, on: isBridge ? !!(s.bridge && s.bridge.ok) : authed,
+                  note: note, dot: dot, onExplain: showHint,
+                  onToggle: (on) => isBridge ? onToggle(c, on) : setAuthArmed(on ? 'set' : 'revoke'),
+                }));
+                return;
+              }
+              // button
+              body.push(h(Control, {
+                key: c.id, c: c, lang: lang, busy: busy, armed: armed, expanded: expanded, status: s,
+                onFire: onFire, onExpand: setExpanded, onPressStart: pressStart, onPressEnd: pressEnd,
+              }));
+            });
+          }
+          return h('div', { key: cat.id }, head(cat.id), h('div', null, body));
+        });
 
         const logSheet = logOpen ? h('div', null,
           h('div', { className: 'mb-mask', onClick: () => setLogOpen(false) }),
@@ -579,7 +615,15 @@ window.__ModuleLoader__.load({
               h('button', { className: 'mb-close', onClick: props.onClose }, lang === 'zh' ? '关闭' : 'Close')),
             busy ? h('div', { className: 'mb-busy' }, h('i', { className: 'mb-spin' }),
               (lang === 'zh' ? '正在跑：' : 'Running: ') + t((busy && ctl(busy.id) ? ctl(busy.id).label : { zh: '任务', en: 'task' })) + '　' + secs + 's') : null,
-            startSection, channelsSection, maintSection, emergSection, statusSection,
+            sections,
+            hintId && ctl(hintId) ? h(HintDialog, {
+              c: ctl(hintId), lang: lang, onClose: () => setHintId(''),
+            }) : null,
+            ask && ctl(ask) ? h(HintDialog, {
+              c: ctl(ask), lang: lang,
+              onClose: () => setAsk(''),
+              onConfirm: () => { const c = ctl(ask); setAsk(''); fireTask(c, c.id); },
+            }) : null,
             err ? h('div', { className: 'mb-out' }, '⚠ ' + err) : null,
             out ? h('div', { className: 'mb-out' }, out) : null,
             h('div', { className: 'mb-lamps', style: { marginTop: '10px' } },

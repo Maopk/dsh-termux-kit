@@ -97,7 +97,7 @@ final class Lang {
         ZH.put("DSH Console ", "DSH 控制台 ");
         ZH.put("DSH Console log", "DSH 控制台日志");
         ZH.put("Deletes only this kit's own artifacts. Your files are not touched.", "只删本工具自己的产物，不碰你的文件。");
-        ZH.put("Downloads the latest console and bridge from the release, checks SHA256, then installs them.", "从发行版下载控制台和桥、校验 SHA256 后安装。");
+        ZH.put("Downloads the two APKs from GitHub Releases, verifies SHA256, then installs them.", "从 GitHub Releases 下载两个 APK，校验 SHA256 后安装。");
         ZH.put("Emergency", "紧急");
         ZH.put("Emergency stop", "紧急停止");
         ZH.put("English", "English");
@@ -126,7 +126,7 @@ final class Lang {
         ZH.put("Now: authorized (the AI can pass identity checks for you)", "当前：已授权（AI 可代你过身份验证）");
         ZH.put("Now: not authorized (any password-protected check needs you in person)", "当前：未授权（任何需要密码的验证都要你本人）");
         ZH.put("OK", "好");
-        ZH.put("On = listening on 8788. Off = soft stop: the port closes but the process stays, so one broadcast brings it back.", "开=监听 8788 正常工作；关=软停（关端口、进程保留，一条广播就能唤回）。");
+        ZH.put("On = DSH may drive the phone through this app (listening on 127.0.0.1:8788). Off = soft stop: the port closes, the process stays, and one broadcast brings it back.", "开 = 允许 DSH 通过本 App 操作手机（监听 127.0.0.1:8788）。关 = 软停：端口关闭、进程保留，一条广播就能拉回。");
         ZH.put("On = the AI may use your 6-digit lock-screen password to pass identity checks for you (installing packages, lifting settings restrictions, etc.); Off = revoked at once", "开 = AI 可用你的 6 位锁屏密码替你过系统身份验证（装包、解除设置限制等）；关 = 立刻收回");
         ZH.put("On = the AI may use your 6-digit lock-screen password to pass system verification for you (installing packages, removing settings restrictions). Off = revoked at once. Never for unlocking the phone to read content, payments, or anything unrelated to the task at hand.", "开 = AI 可动用你的 6 位密码替你过系统验证（装包、解除应用设置限制）；关 = 立刻收回。绝不用于解锁手机翻看内容、支付/免密、或与当次任务无关的场景。");
         ZH.put("Open UI", "打开界面");

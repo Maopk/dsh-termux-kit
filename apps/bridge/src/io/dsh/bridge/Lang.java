@@ -29,6 +29,7 @@ final class Lang {
         ZH.put("   3. Emergency stop inside the DSH Bridge is running notification\n", "   3. 「DSH 桥正在运行」通知里的紧急停止\n");
         ZH.put("   4. The Termux home-screen widget item 0_emergency-stop", "   4. Termux 桌面组件里的 0_emergency-stop");
         ZH.put("   Tap ③ Open this app's notification settings below to enable it.", "   点下面的 ③ 打开本应用的通知设置即可启用。");
+        ZH.put("  (tap Copy token to copy it)", "  （点「复制 token」可取）");
         ZH.put("  v", "  v");
         ZH.put(" (you have ", "（你的是 ");
         ZH.put(" min", " 分钟");
@@ -63,7 +64,6 @@ final class Lang {
         ZH.put("DSH Bridge: ", "DSH 桥：");
         ZH.put("Emergency", "紧急");
         ZH.put("Emergency stop", "紧急停止");
-        ZH.put("Emergency stop (turn accessibility off now)", "紧急停止（立即关闭无障碍）");
         ZH.put("Emergency stop done; the accessibility service is off", "已紧急停止，无障碍服务已关闭");
         ZH.put("English", "English");
         ZH.put("Failed to open settings: ", "打开设置失败：");
@@ -87,7 +87,7 @@ final class Lang {
         ZH.put("No browser to open it with; the address is github.com/Maopk/dsh-termux-kit", "没有可用的浏览器；地址是 github.com/Maopk/dsh-termux-kit");
         ZH.put("Not listening", "未监听");
         ZH.put("Notification settings", "通知设置");
-        ZH.put("On = listening on 8788. Off = soft stop: the port closes but the process stays, so one broadcast brings it back.", "开=监听 8788 正常工作；关=软停（关端口、进程保留，一条广播就能唤回）。");
+        ZH.put("On = DSH may drive the phone through this app (listening on 127.0.0.1:8788). Off = soft stop: the port closes, the process stays, and one broadcast brings it back.", "开 = 允许 DSH 通过本 App 操作手机（监听 127.0.0.1:8788）。关 = 软停：端口关闭、进程保留，一条广播就能拉回。");
         ZH.put("On = soft-stops itself after N idle minutes (less exposure, less battery). Off = always listening.", "开=闲置 N 分钟后自动软停（少暴露、省电）；关=一直监听。");
         ZH.put("Open accessibility settings", "打开无障碍设置");
         ZH.put("Opens github.com/Maopk/dsh-termux-kit - source, releases and docs.", "打开 github.com/Maopk/dsh-termux-kit —— 源码、发行版和文档。");
@@ -127,9 +127,6 @@ final class Lang {
         ZH.put("stopped", "停了");
         ZH.put("token: ", "token：");
         ZH.put("volume-key emergency stop", "音量键紧急停止");
-        ZH.put("① Open accessibility settings", "① 打开无障碍设置");
-        ZH.put("② Refresh state / resume listening", "② 刷新状态 / 恢复监听");
-        ZH.put("③ Open this app's notification settings (so notification-bar emergency stop works)", "③ 打开本应用的通知设置（让通知栏里的紧急停止可用）");
         ZH.put("★ Emergency stop (any of the four):\n", "★ 紧急停止（四种方式任选）：\n");
         ZH.put("⚠️ Notification permission is off: the notification-bar emergency stop layer is currently dead.", "⚠️ 通知权限被关：通知栏里的那条紧急停止保险目前是失效的。");
         ZH.put("⬆ New release available: ", "⬆ 有新版本：");

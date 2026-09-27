@@ -96,6 +96,8 @@ public class MainActivity extends Activity {
     // Log panel: its own screen, no longer the permanent output box at the bottom
     private AlertDialog logDialog;
     private Switch bridgeSwitch;
+    /** Category ids the user collapsed; remembered across launches. */
+    private java.util.Set<String> collapsedCats = new java.util.HashSet<String>();
     private TextView bridgeStateView;
     /** Guards the switch against firing a task while render() is setting it from the status. */
     private boolean bridgeSwitchBusy;
@@ -220,6 +222,11 @@ public class MainActivity extends Activity {
         try { ver = "v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
         catch (Throwable t) { ver = "?"; }   // never claim a version we could not read
         askTermuxLang();   // the file is the source of truth; only Termux can read it
+        // Remembered folding: with no stored value, only Start/Stop starts open.
+        java.util.Set<String> stored = getSharedPreferences("dsh-console", MODE_PRIVATE)
+                .getStringSet("collapsed", null);
+        if (stored != null) collapsedCats = new java.util.HashSet<String>(stored);
+        else { collapsedCats.add("channels"); collapsedCats.add("maintenance"); collapsedCats.add("emergency"); collapsedCats.add("statuslog"); }
         ScrollView sc = new ScrollView(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -263,33 +270,51 @@ public class MainActivity extends Activity {
         for (String[] cat : UiControls.CATS) {
             List<UiControls.C> list = UiControls.ofCat(cat[0]);
             if (list.isEmpty()) continue;
-            root.addView(sectionHeader(Lang.t(cat[1])));
+            // Collapsible, and the choice is remembered (SharedPreferences "collapsed" set). First run:
+            // only Start/Stop is open — a phone screen should not open with 17 buttons at once.
+            final LinearLayout box = new LinearLayout(this);
+            box.setOrientation(LinearLayout.VERTICAL);
+            final String catId = cat[0];
+            final boolean[] collapsed = { collapsedCats.contains(catId) };
+            box.setVisibility(collapsed[0] ? View.GONE : View.VISIBLE);
+            final TextView head = sectionHeader((collapsed[0] ? "▸ " : "▾ ") + Lang.t(cat[1]));
+            head.setOnClickListener(v -> {
+                collapsed[0] = !collapsed[0];
+                box.setVisibility(collapsed[0] ? View.GONE : View.VISIBLE);
+                head.setText((collapsed[0] ? "▸ " : "▾ ") + Lang.t(cat[1]));
+                if (collapsed[0]) collapsedCats.add(catId); else collapsedCats.remove(catId);
+                getSharedPreferences("dsh-console", MODE_PRIVATE).edit()
+                        .putStringSet("collapsed", collapsedCats).apply();
+            });
+            root.addView(head);
+            root.addView(box);
+            final LinearLayout catRoot = box;   // the section's controls go in here
             String openGroup = "";
             for (UiControls.C ctrl : list) {
                 if (ctrl.group.length() > 0 && !ctrl.group.equals(openGroup)) {
                     openGroup = ctrl.group;
-                    root.addView(subHeader(Lang.t(UiControls.groupEn(openGroup))));
+                    catRoot.addView(subHeader(Lang.t(UiControls.groupEn(openGroup))));
                 }
                 if ("button".equals(ctrl.kind)) {
                     Button bt = controlButton(ctrl);
                     buttons.add(bt);
-                    root.addView(bt, wideLp());
+                    catRoot.addView(bt, wideLp());
                 } else if ("switch".equals(ctrl.kind)) {
-                    root.addView(switchRow(ctrl), wideLp());
+                    catRoot.addView(switchRow(ctrl), wideLp());
                 } else if ("lamp".equals(ctrl.kind)) {
                     if (lamps == null) {
                         lamps = new TextView(this);
                         lamps.setTextSize(15);
                         lamps.setPadding(0, dp(8), 0, dp(2));
-                        root.addView(lamps);
+                        catRoot.addView(lamps);
                         line = new TextView(this);
                         line.setTextSize(12);
                         line.setTextColor(Color.parseColor("#8B949E"));
                         line.setPadding(0, dp(4), 0, dp(8));
-                        root.addView(line);
+                        catRoot.addView(line);
                     }
                 } else if ("text".equals(ctrl.kind)) {
-                    root.addView(textRow(ctrl), wideLp());
+                    catRoot.addView(textRow(ctrl), wideLp());
                 }
             }
         }
@@ -955,13 +980,26 @@ public class MainActivity extends Activity {
     private Button controlButton(final UiControls.C ctrl) {
         String label = Lang.t(ctrl.labelEn);
         String sub = (ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.hintEn);
-        final Button bt = mkBtn(label + "\n" + sub, ctrl.danger, v -> fire(ctrl.id));
+        final Button bt = mkBtn(label + "\n" + sub, false, v -> fire(ctrl.id));
         bt.setTextSize(13);
         bt.setAllCaps(false);
         bt.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         bt.setPadding(dp(12), dp(9), dp(12), dp(9));
         bt.setMinHeight(dp(54));
         bt.setOnLongClickListener(v -> { showHint(ctrl); return true; });
+        if (ctrl.danger) {
+            // Two danger levels, visually different (user's call):
+            //   emergency = solid red on white text  -> the last resort
+            //   everything else dangerous = white background, red text and a red border -> serious but not final
+            if ("emergency".equals(ctrl.cat)) {
+                bt.setBackgroundColor(0xFFB3261E);
+                bt.setTextColor(0xFFFFFFFF);
+            } else {
+                bt.setBackgroundColor(0xFFFFFFFF);
+                bt.setTextColor(0xFFB3261E);
+                bt.setBackground(rounded(0xFFFFFFFF, 0xFFB3261E));
+            }
+        }
         if ("project-page".equals(ctrl.id)) {
             bt.setOnClickListener(v -> {
                 try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Maopk/dsh-termux-kit"))); }
@@ -969,6 +1007,15 @@ public class MainActivity extends Activity {
             });
         }
         return bt;
+    }
+
+    /** A rounded background with a 1.5dp border — enough to separate the two danger levels at a glance. */
+    private android.graphics.drawable.Drawable rounded(int fill, int stroke) {
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(fill);
+        g.setCornerRadius(dp(10));
+        g.setStroke(dp(2), stroke);
+        return g;
     }
 
     private void showHint(UiControls.C ctrl) {
@@ -1019,7 +1066,8 @@ public class MainActivity extends Activity {
 
     /** No confirm dialog for a switch flip: the switch itself is the confirmation (and it can be flipped back). */
     private void fireProgrammatic(String id) {
-        toast(Lang.t("Sent: ") + Lang.t(id));
+        UiControls.C c = UiControls.get(id);
+        toast(Lang.t("Sent: ") + Lang.t(c != null ? c.labelEn : id));
         sendTask(id);
     }
 

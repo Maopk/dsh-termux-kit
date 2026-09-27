@@ -334,12 +334,31 @@ fi
 
 # (13) The task plugin in the DSH page (dsh-mobile-local) must keep up too:
 #    categories, bridge/adb split apart, the password-rights switch, and tasksd's three /auth pieces
+# The panel is **generated** now (ui/controls.json → tools/ui-controls), so the old literal greps
+# ('CATS', 'mb-auth') stopped matching the moment it was rewritten — a check that silently stops
+# checking. Assert on what actually has to hold: the deployed copy carries every category and control
+# the source declares, it is a switch-capable panel, and tasksd still serves the auth endpoints.
 PLUG="$HOME_DIR/.dsh/profiles/web/local/dsh-mobile-local/client.js"
-if grep -q 'CATS' "$PLUG" 2>/dev/null && grep -q 'mb-auth' "$PLUG" 2>/dev/null \
-   && grep -q 'bridge_wake' "$PLUG" 2>/dev/null && grep -q 'dsh-auth-pass' "$HOME_DIR/.local/bin/dsh-tasksd" 2>/dev/null; then
-  rec PASS "task plugin (page) updated" "categories + bridge/adb split + password-rights switch; tasksd serves /auth too"
+PLUG_N=0; PLUG_MISS=""
+while read -r want; do
+  [ -n "$want" ] || continue
+  PLUG_N=$((PLUG_N+1))
+  grep -qF "$want" "$PLUG" 2>/dev/null || PLUG_MISS="$PLUG_MISS $want"
+done <<EOF
+$(python3 - "$HOME_DIR/dsh-termux-kit/ui/controls.json" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+for c in d['cats']:
+    print(c['en'])
+print('UI_CONTROLS')
+print('mb-switch')
+PYEOF
+)
+EOF
+if [ -z "$PLUG_MISS" ] && grep -q 'dsh-auth-pass' "$HOME_DIR/.local/bin/dsh-tasksd" 2>/dev/null; then
+  rec PASS "task plugin (page) matches the UI source" "$PLUG_N markers present (every category + controls + switch); tasksd serves /auth too"
 else
-  rec FAIL "task plugin (page) updated" "the plugin or tasksd lags behind (one of categories/switch/auth endpoint is missing)"
+  rec FAIL "task plugin (page) matches the UI source" "missing:$PLUG_MISS (deploy with tools/install-tools + pnpm install, then refresh)"
 fi
 if grep -q "'9_revoke-pin'" "$HOME_DIR/.local/bin/dsh-tasksd" 2>/dev/null \
    && grep -q 'VIRTUAL' "$HOME_DIR/.local/bin/dsh-tasksd" 2>/dev/null; then

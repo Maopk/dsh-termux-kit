@@ -12,7 +12,7 @@ import java.util.List;
  * still works; the Chinese side lives in i18n/zh.json, the kit's single translation source.
  */
 final class UiControls {
-    static final String VERSION = "2.20";
+    static final String VERSION = "2.21";
 
     static final class C {
         final String id, kind, cat, group, icon, labelEn, hintEn;
@@ -28,9 +28,9 @@ final class UiControls {
     static final String[][] GROUPS = { {"adb", "channels", "adb · wireless debugging, needs working Wi-Fi", "adb · 无线调试，需要可用 Wi-Fi"}, {"bridge", "channels", "bridge · accessibility loopback, no network", "桥 · 无障碍回环，不需要网络"} };
 
     static final C[] ALL = {
-        new C("bridge_run", "switch", "channels", "bridge", "🌉", "Bridge running", "On = listening on 8788. Off = soft stop: the port closes but the process stays, so one broadcast brings it back.", false),
+        new C("bridge_run", "switch", "channels", "bridge", "🌉", "Bridge running", "On = DSH may drive the phone through this app (listening on 127.0.0.1:8788). Off = soft stop: the port closes, the process stays, and one broadcast brings it back.", false),
         new C("bridge_state_text", "text", "channels", "bridge", "·", "Bridge state", "Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).", false),
-        new C("bridge_full_stop", "button", "maintenance", "", "⏻", "Fully stop bridge", "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.", true),
+        new C("bridge_full_stop", "button", "channels", "bridge", "⏻", "Fully stop bridge", "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.", true),
         new C("lang", "switch", "maintenance", "", "🌐", "Language", "System / Chinese / English. The widgets and the page panel follow this too.", false),
         new C("project-page", "button", "maintenance", "", "🔗", "Project page", "Opens github.com/Maopk/dsh-termux-kit - source, releases and docs.", false),
         new C("version-update", "text", "maintenance", "", "·", "Version", "Installed version and whether a newer release exists. If the check fails it says so instead of claiming it is up to date.", false),

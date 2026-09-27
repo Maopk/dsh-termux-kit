@@ -34,6 +34,25 @@ public class MainActivity extends Activity {
     private android.widget.Switch idleSwitch;
     private TextView bridgeState;
     private boolean runGuard, idleGuard;
+    /** Console palette, so the two apps stop looking like two different products. */
+    static final int BG = 0xFF0D1117, FG = 0xFFE6EDF3, DIM = 0xFF8B949E, LINK = 0xFF58A6FF, DANGER = 0xFFB3261E;
+    /** Views that carry a deliberate colour opt out of the dark pass. */
+    private void keepColor(View v) { v.setTag("keepcolor"); }
+    private void applyDark(View v) {
+        if ("keepcolor".equals(v.getTag())) return;
+        if (v instanceof android.widget.Button) {
+            v.setBackgroundColor(0xFF161B22);
+            ((android.widget.Button) v).setTextColor(FG);
+            ((android.widget.Button) v).setAllCaps(false);
+            ((android.widget.Button) v).setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
+        } else if (v instanceof TextView) {
+            ((TextView) v).setTextColor(FG);
+        }
+        if (v instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) applyDark(g.getChildAt(i));
+        }
+    }
     private Button langBtn;   // language switch: auto → 中文 → English
     private Button projBtn;   // 本项目的网址（点开就是仓库）
     private TextView updateView;   // 打开时自动查一次发行版，有新的就显示在这里
@@ -91,7 +110,7 @@ public class MainActivity extends Activity {
         });
 
         Button open = new Button(this);
-        open.setText(Lang.t("① Open accessibility settings"));
+        open.setText(Lang.t(UiControls.get("open-accessibility").labelEn));
         open.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
@@ -102,7 +121,7 @@ public class MainActivity extends Activity {
         });
 
         Button refresh = new Button(this);
-        refresh.setText(Lang.t("② Refresh state / resume listening"));
+        refresh.setText(Lang.t(UiControls.get("bridge_refresh").labelEn));
         refresh.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 BridgeService svc = BridgeService.INSTANCE;
@@ -156,7 +175,7 @@ public class MainActivity extends Activity {
         updateView.setText(Lang.t("Version: ") + ver + Lang.t(" · checking for a newer release…"));
 
         Button panic = new Button(this);
-        panic.setText(Lang.t("Emergency stop (turn accessibility off now)"));
+        panic.setText(Lang.t(UiControls.get("bridge_panic").labelEn));
         panic.setTextSize(17f);
         panic.setBackgroundColor(0xFFB3261E);
         panic.setTextColor(0xFFFFFFFF);
@@ -202,7 +221,7 @@ public class MainActivity extends Activity {
         warnView.setPadding(0, pad / 2, 0, 0);
 
         Button notif = new Button(this);
-        notif.setText(Lang.t("③ Open this app's notification settings (so notification-bar emergency stop works)"));
+        notif.setText(Lang.t(UiControls.get("open-notification").labelEn));
         notif.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
@@ -223,7 +242,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         setContentView(sv);
 
-        tokenView.setText(Lang.t("token: ") + token(this));
+        tokenView.setText(Lang.t("token: ") + "tok\u2022\u2022\u2022\u2022\u2022\u2022" + Lang.t("  (tap Copy token to copy it)"));
         requestNotifPermission();
         updateIdleBtn();
         updateState();
@@ -357,42 +376,63 @@ public class MainActivity extends Activity {
      *  look for), then setup ①②③, then behaviour, then emergency last but most prominent. */
     private void layoutAll(LinearLayout root, TextView title, TextView desc, TextView tokenView,
                            Button copy, Button open, Button refresh, Button notif, Button panic) {
-        // Sections come from the generated control source (ui/controls.json → UiControls.java), in the same
-        // order the console and the page panel use. Only bridge-side controls appear here.
+        root.setBackgroundColor(BG);
+        android.content.SharedPreferences sp = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE);
+        java.util.Set<String> collapsed = new java.util.HashSet<String>(sp.getStringSet("collapsed", java.util.Collections.<String>emptySet()));
+        if (!sp.contains("collapsed")) { collapsed.add("channels"); collapsed.add("maintenance"); collapsed.add("emergency"); }
         root.addView(title);
-        root.addView(stateView);                 // live status first: it is the thing you check
+        keepColor(title);
+        root.addView(stateView);
         root.addView(warnView);
+        keepColor(warnView);
 
-        root.addView(section(UiControls.catEn("channels")));
-        root.addView(sub(UiControls.groupEn("bridge")));
-        root.addView(runSwitch);
-        root.addView(bridgeState);
-        root.addView(hintOf("bridge_run"));
-
-        root.addView(section(UiControls.catEn("maintenance")));
-        root.addView(refresh);                   // bridge_refresh
-        root.addView(hintOf("bridge_refresh"));
-        root.addView(open);                      // open-accessibility
-        root.addView(hintOf("open-accessibility"));
-        root.addView(notif);                     // open-notification
-        root.addView(hintOf("open-notification"));
-        root.addView(copy);                      // copy-token
-        root.addView(hintOf("copy-token"));
-        root.addView(idleSwitch);
-        root.addView(hintOf("idle-auto-stop"));
-        root.addView(langRow());                 // lang: three explicit choices
-        root.addView(fullStopBtn());             // bridge_full_stop (danger, but Maintenance)
-        root.addView(hintOf("bridge_full_stop"));
-        root.addView(updateView);                // version-update
-        root.addView(projBtn);                   // project-page
-
-        root.addView(section(UiControls.catEn("emergency")));
-        root.addView(panic);                     // bridge_panic
-        root.addView(hintOf("bridge_panic"));
+        root.addView(foldSection(root, "channels", collapsed, sp,
+                runSwitch, bridgeState, hintOf("bridge_run")));
+        root.addView(foldSection(root, "maintenance", collapsed, sp,
+                refresh, hintOf("bridge_refresh"), open, hintOf("open-accessibility"),
+                notif, hintOf("open-notification"), copy, hintOf("copy-token"),
+                idleSwitch, hintOf("idle-auto-stop"), langRow(), fullStopBtn(), hintOf("bridge_full_stop"),
+                updateView, projBtn));
+        root.addView(foldSection(root, "emergency", collapsed, sp, panic, hintOf("bridge_panic")));
 
         root.addView(section(Lang.t("About this app")));
         root.addView(desc);
         root.addView(tokenView);
+        applyDark(root);
+        // Views with a deliberate colour re-apply it after the dark pass.
+        stateView.setTextColor(DIM);
+        warnView.setTextColor(DANGER);
+        bridgeState.setTextColor(DIM);
+        updateView.setTextColor(DIM);
+        tokenView.setTextColor(DIM);
+        desc.setTextColor(DIM);
+        projBtn.setTextColor(LINK);
+    }
+
+    /** A section header that folds its body; the choice is remembered across launches. */
+    private LinearLayout foldSection(LinearLayout root, String catId, java.util.Set<String> collapsed,
+                                     android.content.SharedPreferences sp, View... children) {
+        final LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        final boolean[] shut = { collapsed.contains(catId) };
+        box.setVisibility(shut[0] ? View.GONE : View.VISIBLE);
+        final TextView head = section(CatLabel(catId, shut[0]));
+        head.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                shut[0] = !shut[0];
+                box.setVisibility(shut[0] ? View.GONE : View.VISIBLE);
+                head.setText(CatLabel(catId, shut[0]));
+                if (shut[0]) collapsed.add(catId); else collapsed.remove(catId);
+                sp.edit().putStringSet("collapsed", collapsed).apply();
+            }
+        });
+        for (View c : children) if (c != null) box.addView(c);
+        root.addView(head);
+        return box;
+    }
+
+    private String CatLabel(String catId, boolean shut) {
+        return (shut ? "▸ " : "▾ ") + UiControls.catEn(catId);
     }
 
     /** A small grey consequence line under a control — every control carries one (spec §四). */
@@ -449,8 +489,12 @@ public class MainActivity extends Activity {
         Button b = new Button(this);
         b.setAllCaps(false);
         b.setText("⚠ " + Lang.t(c == null ? "Fully stop bridge" : c.labelEn));
-        b.setTextColor(0xFFFFFFFF);
-        b.setBackgroundColor(0xFFB3261E);
+        b.setTextColor(0xFFB3261E);
+        b.setTextSize(14f);
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(0xFFFFFFFF); g.setCornerRadius(10 * getResources().getDisplayMetrics().density);
+        g.setStroke((int) (2 * getResources().getDisplayMetrics().density), 0xFFB3261E);
+        b.setBackground(g);
         b.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 new android.app.AlertDialog.Builder(MainActivity.this)
