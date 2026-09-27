@@ -1094,6 +1094,17 @@ public class MainActivity extends Activity {
         return Palette.DIM;
     }
 
+    /** 危险项的 ⚠ 画成红色。用户 2026-09-27：去掉红边框之后，⚠ 是危险项**唯一**的视觉信号，
+     *  跟正文一个颜色等于没有提示。用 BAD（#F85149）而不是 DANGER（#B3261E）—— 后者在深色底上太暗。 */
+    private CharSequence warnMark(String text, boolean danger, int at) {
+        if (!danger) return text;
+        SpannableString sp = new SpannableString(text);
+        if (at >= 0 && at < text.length()) {
+            sp.setSpan(new ForegroundColorSpan(Palette.BAD), at, at + 1, 0);
+        }
+        return sp;
+    }
+
     private Button mkBtn(String text, boolean danger, View.OnClickListener l) {
         return mkBtn(text, danger, 0, l);
     }
@@ -1176,7 +1187,9 @@ public class MainActivity extends Activity {
     private Button controlButton(final UiControls.C ctrl) {
         String label = Lang.t(ctrl.labelEn);
         String sub = (ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.hintEn);
+        // ⚠ 落在第二行行首：偏移 = 名字长度 + 换行
         final Button bt = mkBtn(label + "\n" + sub, false, v -> fire(ctrl.id));
+        if (ctrl.danger) bt.setText(warnMark(label + "\n" + sub, true, label.length() + 1));
         bt.setTextSize(13);
         bt.setAllCaps(false);
         bt.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
@@ -1217,7 +1230,7 @@ public class MainActivity extends Activity {
 
     private void showHint(UiControls.C ctrl) {
         new AlertDialog.Builder(this)
-                .setTitle((ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.labelEn))
+                .setTitle(warnMark((ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.labelEn), ctrl.danger, 0))
                 .setMessage(Lang.t(ctrl.hintEn))
                 .setPositiveButton(Lang.t("OK"), null)
                 .show();
@@ -1284,7 +1297,7 @@ public class MainActivity extends Activity {
         t.setTextSize(11.5f);
         t.setTextColor(Palette.MUTED);
         t.setPadding(dp(2), dp(4), dp(2), dp(8));
-        t.setText((ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.hintEn));
+        t.setText(warnMark((ctrl.danger ? "⚠ " : "") + Lang.t(ctrl.hintEn), ctrl.danger, 0));
         return t;
     }
 

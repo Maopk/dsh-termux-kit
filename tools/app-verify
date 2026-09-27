@@ -166,7 +166,28 @@ def main():
     else:
         line('✔', 'Lang.java 里 %d 条中文**全部**在这个 APK 的 dex 里（翻译表是当前这一份）' % len(zh))
 
-    # ③ 指纹：和手机上的对拍用
+    # ③ 一个版本号只能对应一份内容（用户 2026-09-27 的批评："这几个版本都没有更新版本号"）——
+    #    改了东西却没顶版本号，dist/ 里就会出现两份同版本、不同字节的包，谁都不知道手机装的是哪一份。
+    ver_now = ver.group(1) if ver else '?'
+    dist = os.path.join(ROOT, 'dist')
+    clash = []
+    if os.path.isdir(dist):
+        for fn in sorted(os.listdir(dist)):
+            if not fn.endswith('.apk') or app not in fn:
+                continue
+            m = re.search(r'v?(\d+\.\d+)\.apk$', fn)
+            if not m or m.group(1) != ver_now:
+                continue
+            d = os.path.join(dist, fn)
+            if hashlib.md5(io.open(d, 'rb').read()).hexdigest() != hashlib.md5(io.open(apk, 'rb').read()).hexdigest():
+                clash.append(fn)
+    if clash:
+        line('✘', '版本号没变但内容变了：dist/%s 与这个包同为 v%s 却是两份不同的东西 —— '
+                  '顶一个版本号再出包（一次交付一个版本号）' % (', '.join(clash), ver_now))
+    else:
+        line('✔', '版本号 v%s 在 dist/ 里没有第二份不同内容的包' % ver_now)
+
+    # ④ 指纹：和手机上的对拍用
     apkmd5 = hashlib.md5(io.open(apk, 'rb').read()).hexdigest()
     line('✔', '指纹 apk md5 %s · classes.dex md5 %s' % (apkmd5[:16], dexmd5[:16]))
 

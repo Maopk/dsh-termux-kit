@@ -54,6 +54,8 @@ CONSOLE_BTN_DANGER = os.path.join(HOME, 'dsh-console', 'res', 'drawable', 'btn_d
 CONSOLE_THEME_XML = os.path.join(HOME, 'dsh-console', 'res', 'values', 'dsh_theme.xml')
 BRIDGE_THEME_XML = os.path.join(HOME, 'droid-bridge', 'res', 'values', 'dsh_theme.xml')
 ZH = os.path.join(ROOT, 'i18n', 'zh.json')
+THEME_BEGIN = '      // ── generated:theme (ui/theme.json) — do not edit by hand; run tools/ui-controls gen ──'
+THEME_END = '      // ── /generated:theme ──'
 BEGIN = '      // ── generated:controls (ui/controls.json) — do not edit by hand; run tools/ui-controls gen ──'
 END = '      // ── /generated:controls ──'
 
@@ -86,6 +88,18 @@ def js_block(data):
         }, ensure_ascii=False))
     out.append('      const UI_CONTROLS = [\n' + ',\n'.join(rows) + ',\n      ];')
     out.append(END)
+    return '\n'.join(out) + '\n'
+
+
+def js_theme(theme):
+    """面板也要同一份色板：它原来的危险红/强调蓝是另外一套（#e5484d / #4c8dff），
+    跟两个 App（#B3261E / #58A6FF）不是同一个产品。同样由 ui/theme.json 生成。"""
+    keys = ['BG', 'CARD', 'FG', 'DIM', 'MUTED', 'ACCENT', 'LINK', 'OK', 'WARN', 'BAD',
+            'DANGER', 'ON_DANGER', 'DIVIDER', 'BTN_BORDER']
+    out = [THEME_BEGIN]
+    out.append('      const UI_THEME = %s;' % json.dumps(
+        {k: theme['dark'][k] for k in keys if k in theme['dark']}, ensure_ascii=False))
+    out.append(THEME_END)
     return '\n'.join(out) + '\n'
 
 
@@ -347,6 +361,12 @@ def targets(data):
         new_panel = panel[:start] + block + panel[stop:]
     else:
         raise SystemExit('✘ client.js 里找不到 generated:controls 标记（先手工加一次标记再 gen）')
+    if THEME_BEGIN in new_panel and THEME_END in new_panel:
+        a = new_panel.index(THEME_BEGIN)
+        b = new_panel.index(THEME_END) + len(THEME_END) + 1
+        new_panel = new_panel[:a] + js_theme(theme) + new_panel[b:]
+    else:
+        raise SystemExit('✘ client.js 里找不到 generated:theme 标记（先手工加一次标记再 gen）')
     return [
         (PANEL, new_panel, 'panel  client.js'),
         (CONSOLE_JAVA, java_file('console', 'UiControls', data, 'console'), 'console UiControls.java'),

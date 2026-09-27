@@ -73,8 +73,12 @@ window.__ModuleLoader__.load({
       // 查不到就返回英文原文（同 Lang.t / dsh_msg 的"故意降级"）。
       const T = (en) => (lang === 'zh' ? (UI_TEXT[en] || en) : en);
 
+      // ── generated:theme (ui/theme.json) — do not edit by hand; run tools/ui-controls gen ──
+      const UI_THEME = {"BG": "#0D1117", "CARD": "#161B22", "FG": "#E6EDF3", "DIM": "#8B949E", "MUTED": "#6E7681", "ACCENT": "#58A6FF", "LINK": "#79C0FF", "OK": "#3FB950", "WARN": "#D29922", "BAD": "#F85149", "DANGER": "#B3261E", "ON_DANGER": "#FFFFFF", "DIVIDER": "#21262D", "BTN_BORDER": "#30363D"};
+      // ── /generated:theme ──
+
       // ── generated:controls (ui/controls.json) — do not edit by hand; run tools/ui-controls gen ──
-      const UI_VERSION = {"bridge": "2.22", "console": "1.16", "panel": "0.8"};
+      const UI_VERSION = {"bridge": "2.23", "console": "1.17", "panel": "0.9"};
       const UI_CATS = [{"id": "startstop", "en": "Start / Stop", "zh": "启动 / 停止"}, {"id": "channels", "en": "Channels (adb and bridge separate)", "zh": "通道（adb 与桥分开）"}, {"id": "maintenance", "en": "Maintenance", "zh": "维护"}, {"id": "security", "en": "Security", "zh": "安全"}, {"id": "settings", "en": "Settings", "zh": "设置"}, {"id": "emergency", "en": "Emergency", "zh": "紧急"}, {"id": "statuslog", "en": "Status / Log", "zh": "状态 / 日志"}, {"id": "about", "en": "About this app", "zh": "关于本应用"}];
       const UI_GROUPS = [{"id": "adb", "cat": "channels", "en": "adb · wireless debugging, needs working Wi-Fi", "zh": "adb · 无线调试，需要可用 Wi-Fi"}, {"id": "bridge", "cat": "channels", "en": "bridge · accessibility loopback, no network", "zh": "桥 · 无障碍回环，不需要网络"}, {"id": "danger", "cat": "channels", "en": "Danger zone · only you can undo it by hand", "zh": "危险操作 · 只能你手动恢复"}];
       const UI_CONTROLS = [
@@ -139,9 +143,10 @@ window.__ModuleLoader__.load({
 @keyframes mb-up { from { transform: translateY(24px); opacity: .6 } to { transform: none; opacity: 1 } }
 .mb-head { display: flex; align-items: center; gap: 8px; margin: 2px 2px 8px; }
 .mb-title { font-size: 14px; font-weight: 600; color: var(--dsw-alias-label-primary); flex: 1; }
-.mb-ver { font-size: 11px; color: var(--dsw-alias-label-tertiary, #999); }
+.mb-ver { font-size: 11px; color: var(--dsw-alias-label-tertiary, ${UI_THEME.DIM}); }
 .mb-cat { margin: 14px 2px 6px; font-size: 13.5px; cursor: pointer; -webkit-user-select: none; user-select: none; font-weight: 700; letter-spacing: .3px;
-  color: var(--dsw-alias-brand-primary, #4c8dff); }
+  color: var(--dsw-alias-brand-primary, ${UI_THEME.ACCENT}); }
+.mb-warn { color: ${UI_THEME.BAD}; font-weight: 700; }
 .mb-sub { margin: 10px 2px 4px; font-size: 13px; font-weight: 600; color: var(--dsw-alias-label-secondary); }
 .mb-list { display: flex; flex-direction: column; gap: 8px; }
 .mb-task { display: flex; align-items: flex-start; gap: 9px; width: 100%; min-height: 54px; padding: 9px 11px;
@@ -149,23 +154,23 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-label-primary); font-size: 13.5px; text-align: left; cursor: pointer;
   -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 .mb-task:active { transform: scale(.99); }
-.mb-task.danger { border-color: #e5484d; border-width: 1.5px; }
-.mb-task.armed { background: #e5484d; border-color: #e5484d; color: #fff; }
+.mb-task.danger { border-color: ${UI_THEME.DANGER}; border-width: 1.5px; }
+.mb-task.armed { background: ${UI_THEME.DANGER}; border-color: ${UI_THEME.DANGER}; color: #fff; }
 /* Two danger levels: emergency = solid red (last resort); other dangerous = red outline */
-.mb-task.solid { background: #e5484d; border-color: #e5484d; color: #fff; }
+.mb-task.solid { background: ${UI_THEME.DANGER}; border-color: ${UI_THEME.DANGER}; color: #fff; }
 .mb-task.solid .mb-hint { color: rgba(255,255,255,.9); }
 .mb-task[disabled] { opacity: .5; }
-.mb-task[disabled] .mb-name { color: var(--dsw-alias-label-tertiary, #999); }
+.mb-task[disabled] .mb-name { color: var(--dsw-alias-label-tertiary, ${UI_THEME.DIM}); }
 .mb-ic { width: 20px; text-align: center; font-size: 15px; line-height: 20px; }
 .mb-txt { flex: 1; min-width: 0; }
 .mb-name { display: block; font-weight: 600; }
-.mb-hint { display: block; font-size: 13px; color: var(--dsw-alias-label-tertiary, #999); margin-top: 2px;
+.mb-hint { display: block; font-size: 13px; color: var(--dsw-alias-label-tertiary, ${UI_THEME.DIM}); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mb-hint.open { white-space: normal; }
 .mb-task.armed .mb-hint { color: rgba(255,255,255,.9); }
 .mb-close { min-width: 42px; min-height: 42px; border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 10px; background: transparent; color: var(--dsw-alias-label-primary); font-size: 13px; cursor: pointer; }
-.mb-close.badge { border-color: #4c8dff; color: #4c8dff; font-weight: 700; }
+.mb-close.badge { border-color: ${UI_THEME.ACCENT}; color: ${UI_THEME.ACCENT}; font-weight: 700; }
 .mb-out { margin-top: 10px; padding: 9px 10px; border-radius: 10px; background: var(--dsw-alias-bg-layer-2);
   border: 1px solid var(--dsw-alias-border-l1); font-size: 11.5px; line-height: 1.5; white-space: pre-wrap;
   word-break: break-all; max-height: 32vh; overflow-y: auto; color: var(--dsw-alias-label-secondary);
@@ -173,16 +178,16 @@ window.__ModuleLoader__.load({
 .mb-lamps { display: flex; gap: 12px; flex-wrap: wrap; margin: 2px 2px 8px; font-size: 12px;
   color: var(--dsw-alias-label-secondary); }
 .mb-lamp { display: inline-flex; align-items: center; gap: 5px; }
-.mb-dot { width: 9px; height: 9px; border-radius: 5px; background: #8b949e; }
-.mb-dot.green { background: #2ecc71; } .mb-dot.yellow { background: #e3b341; }
-.mb-dot.red { background: #e5484d; } .mb-dot.grey { background: #8b949e; }
+.mb-dot { width: 9px; height: 9px; border-radius: 5px; background: ${UI_THEME.DIM}; }
+.mb-dot.green { background: ${UI_THEME.OK}; } .mb-dot.yellow { background: ${UI_THEME.WARN}; }
+.mb-dot.red { background: ${UI_THEME.BAD}; } .mb-dot.grey { background: ${UI_THEME.DIM}; }
 .mb-switch { display: flex; align-items: flex-start; gap: 9px; width: 100%; min-height: 54px; padding: 9px 11px;
   border: 1px solid var(--dsw-alias-border-l1); border-radius: 11px; background: var(--dsw-alias-bg-layer-2);
   box-sizing: border-box; }
-.mb-switch.danger { border-color: #e5484d; border-width: 1.5px; }
+.mb-switch.danger { border-color: ${UI_THEME.DANGER}; border-width: 1.5px; }
 .mb-switch input { width: 22px; height: 22px; margin-top: 1px; flex: none; }
 .mb-switch[data-busy="1"] { opacity: .5; }
-.mb-state { font-size: 13px; color: var(--dsw-alias-label-tertiary, #999); margin-top: 2px; display: block; }
+.mb-state { font-size: 13px; color: var(--dsw-alias-label-tertiary, ${UI_THEME.DIM}); margin-top: 2px; display: block; }
 .mb-text { font-size: 12px; color: var(--dsw-alias-label-secondary); padding: 2px 3px; }
 .mb-ask { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--dsw-alias-border-l1);
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px;
@@ -195,14 +200,14 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-label-primary); font-size: 12.5px; cursor: pointer; }
 .mb-btn-inline[disabled] { opacity: .5; }
 .mb-busy { display: flex; align-items: center; gap: 8px; margin: 4px 2px 2px; font-size: 12px;
-  color: var(--dsw-alias-brand-primary, #4c8dff); }
+  color: var(--dsw-alias-brand-primary, ${UI_THEME.ACCENT}); }
 .mb-spin { width: 14px; height: 14px; border-radius: 7px; border: 2px solid rgba(76,141,255,.3);
-  border-top-color: #4c8dff; animation: mb-spin .8s linear infinite; }
+  border-top-color: ${UI_THEME.ACCENT}; animation: mb-spin .8s linear infinite; }
 @keyframes mb-spin { to { transform: rotate(360deg) } }
 .mb-log { font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; max-height: 50vh;
   overflow-y: auto; -webkit-user-select: text; user-select: text; padding: 8px 10px; border-radius: 10px;
   background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l1); }
-.mb-log .who { color: #4c8dff; } .mb-log .auto { color: #8b949e; }
+.mb-log .who { color: ${UI_THEME.ACCENT}; } .mb-log .auto { color: ${UI_THEME.DIM}; }
 /* ── mobile touch tweaks (add-only, reversible any time: set enabled to false in ~/.dsh-mobile-ui.json) ── */
 @media (pointer: coarse) {
   header button, nav button, [class*="sidebarCol"] button { min-width: 42px; min-height: 42px; }
@@ -294,7 +299,8 @@ window.__ModuleLoader__.load({
         const isBusy = busy && busy.id === c.id;
         const isArmed = armed === c.id;
         const label = isArmed ? (T("Tap again to confirm")) : t(c.label);
-        const hint = (c.danger ? '⚠ ' : '') + t(c.hint);
+        // ⚠ 用危险红画出来（用户 2026-09-27：危险项现在只剩这一个视觉信号，不能跟正文一个颜色）
+        const hint = t(c.hint);
         const open = expanded === c.id;
         const st = (status && status.tasks && status.tasks[c.id]) || {};
         const tail = st.last === 'done' ? (T("  last ✔"))
@@ -312,7 +318,8 @@ window.__ModuleLoader__.load({
           h('span', { className: 'mb-ic' }, c.icon),
           h('span', { className: 'mb-txt' },
             h('span', { className: 'mb-name' }, isBusy ? t(c.label) + ' …' : label),
-            h('span', { className: 'mb-hint' + (open ? ' open' : '') }, hint + tail)))
+            h('span', { className: 'mb-hint' + (open ? ' open' : '') },
+              c.danger ? h('span', { className: 'mb-warn' }, '⚠ ') : null, hint, tail)))
       }
 
       function SwitchRow(props) {
@@ -349,7 +356,7 @@ window.__ModuleLoader__.load({
             h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
               items.map(([id, name]) => h('button', {
                 key: id, className: 'mb-btn-inline',
-                style: { borderColor: mode === id ? '#4c8dff' : undefined, color: mode === id ? '#4c8dff' : undefined, fontWeight: mode === id ? '700' : undefined },
+                style: { borderColor: mode === id ? UI_THEME.ACCENT : undefined, color: mode === id ? UI_THEME.ACCENT : undefined, fontWeight: mode === id ? '700' : undefined },
                 onClick: () => onPick(id),
               }, (mode === id ? '✓ ' : '') + name)))))
       }
@@ -362,11 +369,12 @@ window.__ModuleLoader__.load({
           h('div', { className: 'mb-mask', onClick: onClose }),
           h('div', { className: 'mb-sheet', onClick: (e) => e.stopPropagation() },
             h('div', { className: 'mb-head' },
-              h('span', { className: 'mb-title' }, (c.danger ? '⚠ ' : '') + t(c.label)),
+              h('span', { className: 'mb-title' },
+                c.danger ? h('span', { className: 'mb-warn' }, '⚠ ') : null, t(c.label)),
               h('button', { className: 'mb-close', onClick: onClose }, T("Close"))),
             h('div', { className: 'mb-out', style: { maxHeight: '40vh' } }, t(c.hint)),
             onConfirm ? h('div', { className: 'mb-ask' },
-              h('button', { className: 'mb-btn-inline', style: { borderColor: '#e5484d', color: '#e5484d' }, onClick: onConfirm },
+              h('button', { className: 'mb-btn-inline', style: { borderColor: UI_THEME.DANGER, color: UI_THEME.DANGER }, onClick: onConfirm },
                 confirmLabel || (T("Confirm"))),
               h('button', { className: 'mb-btn-inline', onClick: onClose }, T("Cancel"))) : null))
       }

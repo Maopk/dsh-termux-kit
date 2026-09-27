@@ -556,7 +556,15 @@ public class MainActivity extends Activity {
         TextView t = new HintLine(this);
         t.setTextSize(11.5f);
         t.setTextColor(Palette.MUTED);
-        t.setText(c == null ? "" : ((c.danger ? "⚠ " : "") + Lang.t(c.hintEn)));
+        // ⚠ 红色：危险项唯一的视觉信号（用户 2026-09-27）
+        String txt = c == null ? "" : ((c.danger ? "⚠ " : "") + Lang.t(c.hintEn));
+        if (c != null && c.danger) {
+            android.text.SpannableString sp = new android.text.SpannableString(txt);
+            sp.setSpan(new android.text.style.ForegroundColorSpan(Palette.BAD), 0, 1, 0);
+            t.setText(sp);
+        } else {
+            t.setText(txt);
+        }
         return t;
     }
 
