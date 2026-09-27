@@ -61,13 +61,27 @@ update_subscription() {
   if ! timeout 20 "$SOCK" ui 2>/dev/null | grep -q '更新\|Update'; then
     bad "the profile menu did not open (the layout may have changed) — update by hand: Profiles → ⋮ → Update"; return 1
   fi
-  timeout 20 "$SOCK" tap 814 2175 >/dev/null 2>&1                # Update
-  for i in 1 2 3 4 5 6 7 8; do
-    sleep 4
-    local c; c=$(curl -s -o /dev/null -m 8 -w '%{http_code}' -x "$PROXY" https://github.com/ 2>/dev/null)
-    if [ "$c" = "200" ]; then ok "proxy is healthy again (github 200 after $((i*4))s)"; return 0; fi
+  # 更新**重试 3 次**：最常见的失败是
+  #   `Get https://<订阅域名>/login?token=… net/http: TLS handshake timeout`
+  # 实测（2026-09-27）根因是**订阅域名也被 fake-ip 劫持**，取订阅的请求自己走了代理：
+  #   走 fake-ip/代理 → TCP 0.003s，**TLS 握手 5.75s**
+  #   用真实 IP 直连   → TCP 0.001s，**TLS 握手 0.81s**
+  # 多出来的 5 秒正好压在 Clash 内部超时上，所以"时好时坏"——多试一次往往就过了。
+  local attempt
+  for attempt in 1 2 3; do
+    timeout 20 "$SOCK" tap 814 2175 >/dev/null 2>&1              # Update
+    for i in 1 2 3 4 5 6 7 8; do
+      sleep 4
+      local c; c=$(curl -s -o /dev/null -m 8 -w '%{http_code}' -x "$PROXY" https://github.com/ 2>/dev/null)
+      if [ "$c" = "200" ]; then
+        if [ "$attempt" -gt 1 ]; then ok "proxy is healthy again (github 200 after $((i*4))s, on update attempt $attempt)"
+        else ok "proxy is healthy again (github 200 after $((i*4))s)"; fi
+        return 0
+      fi
+    done
+    [ "$attempt" -lt 3 ] && warn "update attempt $attempt had no effect; retrying (this failure is usually a TLS handshake timeout)"
   done
-  bad "still not reachable after updating — read the Clash log (Logs) for dns resolve errors"; return 1
+  bad "still not reachable after 3 update attempts — read the Clash log (Logs) for dns resolve errors"; return 1
 }
 
 step "① is the Clash core there (mixed port ${SOCKS_PORT})"

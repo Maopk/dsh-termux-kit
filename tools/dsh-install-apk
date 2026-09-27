@@ -142,18 +142,42 @@ if [ "$ALREADY" = 1 ]; then
   rm -f "$TMP_APK"; exit 0
 fi
 
-step "④ tap the blue 「…您可授权本次安装」 (the user's recipe: wait 5s, tap the recorded spot)"
+step "④ tap the blue 「…您可授权本次安装」 (wait for the page, then tap it)"
+# ⚠ 这个页面有**三个阶段**，5 秒时通常还在第一个（实测 2026-09-27 完整抓到）：
+#   ① 「超级守护正在深度检测…」+ 六条风险（恶意行为/财产安全/隐私安全/内容安全/服务异常/未成年人）
+#   ② 「超级守护已开启」+「正在准备安装应用…」
+#   ③ 才是有蓝色「…您可授权本次安装」的那一页
+# 所以"等 5 秒就点"会点到**上一屏**（甚至点到背后 Chrome 里的蓝色链接 —— 我记下的那个
+# 221,621 就是这么来的，用户说那次是他自己点的手）。正确顺序是：**先等到第③阶段**，
+# 拿到那段话所在的行，再**只在那一行附近**按颜色找蓝字。
 if [ "$DRY" = 1 ]; then
-  printf '   · [dry] sleep 5 → screenshot → find blue → tap ($LAST_XY if that fails)\n'; ok "(dry-run)"
+  printf '   · [dry] wait for the authorisation page → find blue in its band → tap\n'; ok "(dry-run)"
 else
-  sleep 5
-  XY=$(timeout 60 "$HOME_DIR/.local/bin/dsh-find-blue" 2>/dev/null | grep -oE '^[0-9]+,[0-9]+' | head -1)
-  if [ -n "$XY" ]; then ok "found the blue text at $XY"; else
-    XY="$LAST_XY"
-    [ -n "$XY" ] && warn "no blue found; falling back to the position that worked last time ($XY)"
+  BAND=""
+  for _ in $(seq 1 30); do
+    T=$(ui)
+    if printf '%s' "$T" | grep -q '已安装相同版本'; then
+      ok "the 「same version already installed」 page is up → nothing to install"
+      rm -f "$TMP_APK"; exit 0
+    fi
+    BAND=$(printf '%s' "$T" | awk 'index($0,"本次安装")>0 {
+              match($0,/\[[0-9]+,[0-9]+\]/);
+              if (RSTART>0) { split(substr($0,RSTART+1,RLENGTH-2),p,","); print p[2]; exit } }')
+    [ -n "$BAND" ] && break
+    sleep 2
+  done
+  if [ -z "$BAND" ]; then
+    bad "the authorisation page never appeared within 60s (still scanning? or the layout changed?)"
+    rm -f "$TMP_APK"; exit 1
   fi
+  ok "authorisation page is up (paragraph at y=$BAND)"
+  Y1=$((BAND-80)); Y2=$((BAND+80))
+  XY=$(timeout 60 "$HOME_DIR/.local/bin/dsh-find-blue" "$Y1" "$Y2" 2>/dev/null | grep -oE '^[0-9]+,[0-9]+' | head -1)
+  if [ -n "$XY" ]; then ok "blue text in that band: $XY"; else warn "no blue found in the band; trying the paragraph's own line"; fi
   GOT=0
-  for pt in $XY "261,1273" "277,1150" "1144,972"; do
+  # 首选是颜色找出来的那个点；兜底是"段落下方一行、靠左"——实测两套版面里蓝色小字都在
+  # 段落最后一行的左侧起（段落 y=1135 → 蓝字在 277,1150；段落 y=1255 → 蓝字在 261,1273）。
+  for pt in $XY "260,$((BAND+18))" "277,$((BAND+15))"; do
     [ -n "$pt" ] || continue
     tap_xy "$pt"
     for _ in $(seq 1 15); do
@@ -163,18 +187,13 @@ else
     done
     if [ "$GOT" = 1 ]; then
       ok "verification dialog appeared (tapped $pt)"
-      printf '%s\n' "$pt" > "$LAST_FILE"      # remember what worked: next time it is the first try
+      printf '%s\n' "$pt" > "$LAST_FILE"
       break
     fi
     warn "no reaction at $pt; trying the next one"
   done
-  if [ "$GOT" != 1 ]; then
-    ui | grep -q '已安装相同版本' && { ok "the same-version page is up → already installed"; rm -f "$TMP_APK"; exit 0; }
-    bad "could not bring up 「安全验证」 (did the installer screen change?)"; rm -f "$TMP_APK"; exit 1
-  fi
+  [ "$GOT" = 1 ] || { bad "could not bring up 「安全验证」"; rm -f "$TMP_APK"; exit 1; }
 fi
-
-# ── lockscreen password ──
 step "⑤ go through 「锁屏密码验证」 → the digit keypad"
 if [ "$DRY" = 1 ]; then printf '   · [dry] tap 「锁屏密码验证」 → press the 6 digits\n'; ok "(dry-run)"
 else
