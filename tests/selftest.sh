@@ -24,14 +24,19 @@ SAVED=0   # cleanup may restore only after this run really saved the log/URL
 export DSH_LANG_FILE="$TMPD/dsh-lang-selftest"
 printf 'en\n' > "$DSH_LANG_FILE"
 
-# ── the sandbox may only touch 8099, never the 8080 you are using ──
-# Why so precise: this used to be "kill any dsh process that was not in the pre-boot snapshot",
-# so if you restarted DSH while I was testing, the new instance was mistaken for the sandbox and killed.
+# ── the sandbox may only ever touch its own throwaway instance ──
+# Why the match is this precise, and why it is no longer just the port:
+#   · "kill any dsh process that was not in the pre-boot snapshot" mistook a DSH the user
+#     restarted during the run for the sandbox and killed it.
+#   · matching `--port 8099` alone is still not enough — the port is a convention, and if the
+#     real instance ever comes up on it, the user's own page is what gets killed.
+# So the sandbox is identified by the **sandbox patch file**, which nothing but this script uses.
+SANDBOX_PATCH="$HOME_DIR/.smoke/patch.yml"
 kill_sandbox() {
   local p
   for p in $(pgrep -f 'bin[.]js web' 2>/dev/null); do
     [ "$p" = "$$" ] && continue
-    if tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q -- '--port 8099'; then
+    if tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q -- "--patch $SANDBOX_PATCH"; then
       kill -9 "$p" 2>/dev/null && line "     (cleaned up sandbox process pid $p)"
     fi
   done

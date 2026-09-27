@@ -38,7 +38,27 @@ TASK_DIR = os.path.join(HOME, '.shortcuts', 'tasks')
 TOKEN_FILE = os.path.join(HOME, '.dsh-tasks-token')
 LOG = os.path.join(HOME, '.smoke', 'tasksd.log')
 PORT = 8787
-ORIGIN_OK = {'http://127.0.0.1:8080', 'http://localhost:8080'}
+# Which page origins may call us. This used to be a hard-coded
+# {'http://127.0.0.1:8080', 'http://localhost:8080'} — and when DSH came up on 8099 instead, the
+# browser blocked every request and the panel showed only "读状态失败：Failed to fetch"
+# (measured 2026-09-27). The port is not ours to pin down: DSH picks it at startup and the
+# sandbox instance uses a different one. Any **loopback** origin is accepted instead; a page
+# served from a real hostname still fails the check even if it resolves to 127.0.0.1
+# (DNS rebinding), and the token remains the actual authorisation.
+LOOPBACK_HOSTS = {'127.0.0.1', 'localhost', '::1', '[::1]'}
+
+
+def origin_ok(origin):
+    if not origin:
+        return False
+    try:
+        u = urlparse(origin)
+    except Exception:
+        return False
+    return u.scheme == 'http' and u.hostname in LOOPBACK_HOSTS
+
+
+
 # Whitelist: only these script names; everything else is refused (no paths, no arbitrary commands)
 ALLOWED = {
     '0_emergency-stop', '10_net-fix', '1_start-dsh', '2_shutdown-dsh', '3_backup-dsh', '4_soft-restart-dsh',
@@ -209,7 +229,7 @@ class H(BaseHTTPRequestHandler):
 
     def _cors(self):
         origin = self.headers.get('Origin', '')
-        if origin in ORIGIN_OK:
+        if origin_ok(origin):
             self.send_header('Access-Control-Allow-Origin', origin)
             self.send_header('Access-Control-Allow-Headers', 'content-type')
             self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
