@@ -7,6 +7,18 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-09-27 17:20 · 按新守则补两件：装新工具、把本地 commit 标题改成规范格式
+
+做了什么：① `tools/pre-push-check` 新增后忘记装 → 跑 `tools/install-tools` 装进 `~/.local/bin`（清单第 11 条当场抓出来的）；
+② 本次会话的 9 条本地 commit 标题**没有类型前缀**（`P0: …` / `修面板…`），按 §五 用
+`git filter-branch --msg-filter` 统一改写成 `fix/ui/docs/chore/refactor: …`；
+③ 清掉 filter-branch 留下的 `refs/original/` 备份引用并 expire reflog。
+为什么：守则第三节第 8 条（commit message 格式）与第 11 条（自检套件）在 `tools/pre-push-check` 里判失败 —— 规矩刚立就该先自己合规。
+结果：✅ 10 条 commit 全部带合规前缀（fix×4 / ui×2 / chore×2 / docs×1 / refactor×1）；
+✅ **只改了标题，代码内容一字未动**（这些提交全部未推送，`git status` 干净、树哈希不变）；
+✅ 工具安装位一致（`install-tools --check` → 一致 40 · 需同步 0）。
+下一步：push 前跑 `tools/pre-push-check --strict`；第 10 条（`git pull --rebase`）需要联网，脚本不代做。
+
 2026-09-27 17:05 · 落成 CONTRIBUTING.md 操作守则 + 把清单脚本化
 
 做了什么：新增 `CONTRIBUTING.md`（用户给的仓库操作守则，路径与门禁按本仓库实际情况改写）；
