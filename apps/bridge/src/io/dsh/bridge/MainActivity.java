@@ -28,10 +28,12 @@ public class MainActivity extends Activity {
     private TextView tokenView;
     private TextView warnView;
     private Button idleBtn;
+    private Button langBtn;   // language switch: auto → 中文 → English
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Lang.init(this);   // persisted choice; Termux can also push it in over the loopback socket
         ensureToken(this);
 
         LinearLayout root = new LinearLayout(this);
@@ -45,21 +47,21 @@ public class MainActivity extends Activity {
         try {
             ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
         } catch (Throwable t) { /* ignore */ }
-        title.setText("DSH Bridge  v" + ver);
+        title.setText(Lang.t("DSH Bridge") + "  v" + ver);
         title.setTextSize(22f);
         root.addView(title);
 
         TextView desc = new TextView(this);
-        desc.setText("v1.6 key change: switched to a **foreground service** to stay resident, so system/vendor battery savers cannot freeze it and lose contact.\n"
-                + "(new in v1.5: turns wireless debugging on automatically when online, used by widget 8)\n"
-                + "Lets the DSH inside Termux operate the phone for you (read screen / tap / swipe / type).\n"
-                + "The only permissions are accessibility and the local loopback port 127.0.0.1:8788; nothing is uploaded.\n\n"
-                + "★ Emergency stop (any of the four):\n"
-                + "   1. The red button below\n"
-                + "   2. Hold volume + and volume − together for 3 seconds\n"
-                + "   3. Emergency stop inside the DSH Bridge is running notification\n"
-                + "   4. The Termux home-screen widget item 0_紧急停止\n"
-                + "(Also: this app does not autostart; it will not come up by itself after a phone restart)");
+        desc.setText(Lang.t("v1.6 key change: switched to a **foreground service** to stay resident, so system/vendor battery savers cannot freeze it and lose contact.") + "\n"
+                + Lang.t("(new in v1.5: turns wireless debugging on automatically when online, used by widget 8)") + "\n"
+                + Lang.t("Lets the DSH inside Termux operate the phone for you (read screen / tap / swipe / type).\n")
+                + Lang.t("The only permissions are accessibility and the local loopback port 127.0.0.1:8788; nothing is uploaded.") + "\n\n"
+                + Lang.t("★ Emergency stop (any of the four):\n")
+                + Lang.t("   1. The red button below\n")
+                + Lang.t("   2. Hold volume + and volume − together for 3 seconds\n")
+                + Lang.t("   3. Emergency stop inside the DSH Bridge is running notification\n")
+                + Lang.t("   4. The Termux home-screen widget item 0_emergency-stop") + "\n"
+                + Lang.t("(Also: this app does not autostart; it will not come up by itself after a phone restart)"));
         desc.setTextSize(13f);
         desc.setPadding(0, pad / 2, 0, pad / 2);
         root.addView(desc);
@@ -70,31 +72,31 @@ public class MainActivity extends Activity {
         root.addView(tokenView);
 
         Button copy = new Button(this);
-        copy.setText("Copy token");
+        copy.setText(Lang.t("Copy token"));
         copy.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 android.content.ClipboardManager cm =
                         (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                 cm.setPrimaryClip(android.content.ClipData.newPlainText("token", token(MainActivity.this)));
-                toast("Token copied; you can paste it to DSH");
+                toast(Lang.t("Token copied; you can paste it to DSH"));
             }
         });
         root.addView(copy);
 
         Button open = new Button(this);
-        open.setText("① Open accessibility settings");
+        open.setText(Lang.t("① Open accessibility settings"));
         open.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
                     startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                } catch (Throwable t) { toast("Failed to open settings: " + t.getMessage()); }
+                } catch (Throwable t) { toast(Lang.t("Failed to open settings: ") + t.getMessage()); }
             }
         });
         root.addView(open);
 
         Button refresh = new Button(this);
-        refresh.setText("② Refresh state / resume listening");
+        refresh.setText(Lang.t("② Refresh state / resume listening"));
         refresh.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 BridgeService svc = BridgeService.INSTANCE;
@@ -110,8 +112,19 @@ public class MainActivity extends Activity {
         });
         root.addView(idleBtn);
 
+        langBtn = new Button(this);
+        langBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                String m = Lang.mode();
+                String next = m.equals("auto") ? "zh" : (m.equals("zh") ? "en" : "auto");
+                Lang.setMode(MainActivity.this, next);
+                recreate();   // redraw with the new language; the choice is persisted
+            }
+        });
+        root.addView(langBtn);
+
         Button panic = new Button(this);
-        panic.setText("Emergency stop (turn accessibility off now)");
+        panic.setText(Lang.t("Emergency stop (turn accessibility off now)"));
         panic.setTextSize(17f);
         panic.setBackgroundColor(0xFFB3261E);
         panic.setTextColor(0xFFFFFFFF);
@@ -122,9 +135,9 @@ public class MainActivity extends Activity {
                 BridgeService svc = BridgeService.INSTANCE;
                 if (svc != null) {
                     svc.panic("In-app button");
-                    toast("Emergency stop done; the accessibility service is off");
+                    toast(Lang.t("Emergency stop done; the accessibility service is off"));
                 } else {
-                    toast("The service is not running right now; to shut it down completely, turn DSH Bridge off in the system accessibility settings");
+                    toast(Lang.t("The service is not running right now; to shut it down completely, turn DSH Bridge off in the system accessibility settings"));
                 }
                 updateState();
             }
@@ -138,7 +151,7 @@ public class MainActivity extends Activity {
         root.addView(warnView);
 
         Button notif = new Button(this);
-        notif.setText("③ Open this app's notification settings (so notification-bar emergency stop works)");
+        notif.setText(Lang.t("③ Open this app's notification settings (so notification-bar emergency stop works)"));
         notif.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
@@ -146,7 +159,7 @@ public class MainActivity extends Activity {
                             .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName())
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(i);
-                } catch (Throwable t) { toast("Cannot open notification settings: " + t.getMessage()); }
+                } catch (Throwable t) { toast(Lang.t("Cannot open notification settings: ") + t.getMessage()); }
             }
         });
         root.addView(notif);
@@ -161,7 +174,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         setContentView(sv);
 
-        tokenView.setText("token: " + token(this));
+        tokenView.setText(Lang.t("token: ") + token(this));
         requestNotifPermission();
         updateIdleBtn();
         updateState();
@@ -179,10 +192,10 @@ public class MainActivity extends Activity {
     private void updateState() {
         boolean on = isAccessibilityEnabled(this);
         BridgeService svc = BridgeService.INSTANCE;
-        String listen = (svc != null && svc.isListening()) ? "Listening on 127.0.0.1:" + BridgeService.PORT : "Not listening";
-        stateView.setText("Accessibility: " + (on ? "on ✅" : "off ❌")
-                + "\nPort: " + listen
-                + (on ? "" : "\nTap ① Open accessibility settings and switch DSH Bridge on in the list"));
+        String listen = (svc != null && svc.isListening()) ? Lang.t("Listening on 127.0.0.1:") + BridgeService.PORT : Lang.t("Not listening");
+        stateView.setText(Lang.t("Accessibility: ") + (on ? Lang.t("on ✅") : Lang.t("off ❌"))
+                + "\n" + Lang.t("Port: ") + listen
+                + (on ? "" : Lang.t("\nTap ① Open accessibility settings and switch DSH Bridge on in the list")));
         boolean notifOk = true;
         try {
             android.app.NotificationManager nm =
@@ -191,15 +204,20 @@ public class MainActivity extends Activity {
         } catch (Throwable t) { notifOk = true; }
         if (warnView != null) {
             warnView.setText(notifOk ? ""
-                    : "⚠️ Notification permission is off: the notification-bar emergency stop layer is currently dead.\n"
-                      + "   Tap ③ Open this app's notification settings below to enable it.\n"
+                    : Lang.t("⚠️ Notification permission is off: the notification-bar emergency stop layer is currently dead.") + "\n"
+                      + Lang.t("   Tap ③ Open this app's notification settings below to enable it.") + "\n"
                       + "   (The volume-key gesture, the in-app red button and the Termux widget are unaffected)");
         }
     }
 
     private void updateIdleBtn() {
         int m = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE).getInt("idleMin", 30);
-        idleBtn.setText("Idle auto-stop: " + (m <= 0 ? "off (always listening)" : m + " min idle → stop") + " · tap to switch");
+        idleBtn.setText(Lang.t("Idle auto-stop: ") + (m <= 0 ? Lang.t("off (always listening)") : m + Lang.t(" min idle → stop")) + Lang.t(" · tap to switch"));
+        if (langBtn != null) {
+            String mo = Lang.mode();
+            String shown = mo.equals("auto") ? Lang.t("System") : (mo.equals("zh") ? Lang.t("Chinese") : "English");
+            langBtn.setText(Lang.t("Language: ") + shown + " · " + Lang.t("tap to switch"));
+        }
     }
 
     private void cycleIdle() {
@@ -207,7 +225,7 @@ public class MainActivity extends Activity {
         int next = (m == 30) ? 15 : (m == 15) ? 60 : (m == 60) ? 0 : 30;
         getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE).edit().putInt("idleMin", next).apply();
         updateIdleBtn();
-        toast(next <= 0 ? "Idle auto-stop is off" : "Auto-stop after " + next + " min idle");
+        toast(next <= 0 ? Lang.t("Idle auto-stop is off") : Lang.t("Auto-stop after ") + next + Lang.t(" min idle"));
     }
 
     private void requestNotifPermission() {

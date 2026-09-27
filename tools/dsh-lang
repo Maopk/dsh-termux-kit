@@ -23,7 +23,11 @@ case "${1:-get}" in
   mode) v=$(head -1 "$HOME_DIR/.dsh-lang" 2>/dev/null | tr -d '[:space:]'); echo "${v:-auto}" ;;
   set)
     v="${2:-}"
-    if dsh_lang_set "$v"; then printf 'language set to %s (effective: %s)\n' "$v" "$(dsh_lang)"
+    if dsh_lang_set "$v"; then
+      # Tell the bridge app too: it has no RUN_COMMAND permission, so it cannot read ~/.dsh-lang.
+      # --fast: never wake it just to pass a setting; if it is not listening, skip silently.
+      timeout 8 "$HOME_DIR/.local/bin/droid-sock" lang "$v" --fast >/dev/null 2>&1 || true
+      printf 'language set to %s (effective: %s)\n' "$v" "$(dsh_lang)"
     else printf '✘ usage: dsh-lang set zh|en|auto\n' >&2; exit 2; fi ;;
   list) printf 'auto zh en\n' ;;
   *) sed -n '2,15p' "$0"; exit 2 ;;

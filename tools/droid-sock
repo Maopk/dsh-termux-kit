@@ -181,6 +181,9 @@ def main():
                   'x2': int(a[3]), 'y2': int(a[4]), 'ms': int(a[5]) if len(a) > 5 else 300})
     elif k == 'text':
         r = call({'action': 'text', 'value': a[1] if len(a) > 1 else ''})
+    elif k == 'lang':
+        # Push the language into the bridge (it cannot read ~/.dsh-lang itself).
+        r = call({'action': 'lang', 'value': a[1] if len(a) > 1 else ''}, timeout=8)
     elif k == 'key':
         r = call({'action': 'key', 'value': a[1] if len(a) > 1 else 'back'})
     elif k == 'start':

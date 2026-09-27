@@ -115,23 +115,28 @@ else
     if [ -n "$SHOT" ]; then
       CANDS=$(python3 - "$SHOT" <<'PYX'
 import re, subprocess, sys
+# Several blue things can be on screen (an icon, a "details" link …). Collect every band's cluster and
+# order them by PIXEL COUNT, biggest first: measured 2026-09-27 the real link on the paragraph line had
+# 2080 blue pixels while a decorative icon had 892 — taking the first hit landed on the icon and failed.
 img = sys.argv[1]
-for y in (1240, 1160, 1080, 1300, 1000):
+found = []
+for y in (1240, 1180, 1120, 1060, 1300, 1000, 940, 880):
     out = subprocess.run(['magick', img, '-crop', '1440x120+0+%d' % y, '+repage', '-depth', '8', 'txt:-'],
                          capture_output=True, text=True).stdout
-    xs = []
+    pts = []
     for line in out.split('\n')[1:]:
         m = re.match(r'(\d+),(\d+): \((\d+),(\d+),(\d+)', line)
         if not m:
             continue
         x, yy, r, g, b = map(int, m.groups())
         if b > 150 and b - r > 40 and g > 80:
-            xs.append((x, yy + y))
-    if xs:
-        x1, x2 = min(p[0] for p in xs), max(p[0] for p in xs)
-        y1, y2 = min(p[1] for p in xs), max(p[1] for p in xs)
-        print("%d,%d" % ((x1 + x2) // 2, (y1 + y2) // 2))
-        break
+            pts.append((x, yy + y))
+    if len(pts) >= 60:                      # ignore stray antialiasing
+        x1, x2 = min(p[0] for p in pts), max(p[0] for p in pts)
+        y1, y2 = min(p[1] for p in pts), max(p[1] for p in pts)
+        found.append((len(pts), (x1 + x2) // 2, (y1 + y2) // 2))
+found.sort(reverse=True)
+print(' '.join('%d,%d' % (c[1], c[2]) for c in found))
 PYX
 )
       if [ -n "$CANDS" ]; then

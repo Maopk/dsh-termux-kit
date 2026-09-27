@@ -63,7 +63,7 @@ public class BridgeService extends AccessibilityService {
 
     /** Actions supported by this version (caps returns them verbatim so widgets need not guess the version) */
     public static final String[] ACTIONS = {
-        "ping", "caps", "cur", "netstate", "adbwifi", "stop", "sleep", "panic",
+        "ping", "caps", "cur", "netstate", "adbwifi", "stop", "sleep", "panic", "lang",
         "shot", "tap", "longpress", "swipe", "text", "key", "ui", "start"
     };
 
@@ -292,6 +292,13 @@ public class BridgeService extends AccessibilityService {
             d.put("sleep", true);         // supports a "real stop" (close port + stop foreground + disable accessibility, no self-recovery)
             d.put("wake_reauth", true);   // supports a token-carrying wake to re-authorize accessibility
             d.put("stop_is_durable", true); // after a soft stop the system rebind does **not** pull it back up (v1.8)
+            return d;
+        }
+
+        if (a.equals("lang")) {           // the Termux side pushes the language in (the bridge cannot read ~/.dsh-lang)
+            String lv = req.optString("value", "");
+            if (lv.equals("zh") || lv.equals("en") || lv.equals("auto")) Lang.setMode(this, lv);
+            d.put("lang", Lang.mode());
             return d;
         }
 
