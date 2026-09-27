@@ -71,6 +71,7 @@ Two more steps after installing:
 | `7_reconnect-ai` | Recovers adb and the bridge, and says clearly which of the two failed |
 | `8_enable-wireless-adb` | Semi-automatically enables Wireless debugging and connects adb (if Wi-Fi is off it opens the settings page, waits for your tap, then continues) |
 | `9_revoke-pin` | Revokes the “AI may use your lock-screen PIN for system verification” grant |
+| `10_net-fix` | One tap when foreign sites die: decides whether the Clash core is stopped or the generated config went bad, then repairs it (`clash-doctor --fix`) |
 | `0_emergency-stop` | One-tap kill switch: revokes all AI control (bridge, token, adb wireless debugging) |
 
 Every widget supports `--dry-run` (print only, execute nothing).
