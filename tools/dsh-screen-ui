@@ -1,25 +1,19 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# dsh-screen-ui —— 在「设置 → 显示 → 自动锁屏」里改那一项。**轻划一下就够了，不整屏大滑。**
+# dsh-screen-ui —— 在「设置 → 显示 → 自动锁屏」里改这一项（用户要的就是这个界面上的设置）
 #
-# 为什么在这个界面改，而不是直接写 Settings.System.SCREEN_OFF_TIMEOUT：
-#   写的是同一个值，但**用户看得见的只有这个界面**。程序改完又改回去，他任何时候去看都是原值，
-#   从他那侧只能得出"根本没生效"。就在这个界面改，他能亲眼看到。
+# 配方是用户教的，实测走通（2026-09-27）：
+#   「你进入那个设置界面，然后轻滑一下，然后识屏，你就能看到那个了」
 #
-# 用户给的原话（照做，别自作聪明）：
-#   「你要么滑到最上面，要么滑到最下面了，但是那个自动锁屏的选项是在中间，所以你每次都错过」
-#   「你只要轻划一下就能看」
-#   → 打开这一页后**最多轻划 2 下**（每下 300px），找到就点。
-#   → OCR 只认「自动锁」前缀：tesseract 把「自动锁屏」读成过「自动锁居」「自动锁愤」，认全名会漏；
-#     但也不能只认「锁」——「竖屏锁定」里也有一个锁。
+# 关键的两条（踩了很久才明白）：
+#   ① **列表页**：无障碍树给的是"内容坐标"，页面一滚它就不等于屏幕位置 —— 照它点会点到别处。
+#      所以列表页只信 **截图 + OCR（tesseract tsv 给屏幕像素）**；而且 tesseract 会把
+#      「自动锁屏」切成「自动」+「锁」两个词、还读成「自动锁居/自动锁愤」→ 必须**按行合并**再匹配「自动锁」。
+#   ② **弹窗**：弹窗不滚动，树里的坐标**就是准的**，而且每个选项都带文字（desc='1 分钟' 等）→
+#      弹窗里直接用树，比 OCR 稳得多。
 #
-# Usage: dsh-screen-ui 永不 | 1 分钟 | 30 分钟 | 15 秒 …
+# 另外：用户提醒过"别滑过头" —— 所以只轻滑 1 次（300px），找不到就再轻滑 1 次，最多 3 次。
 #
-# ⚠ 状态（2026-09-27，诚实标注）：**这条路我还没跑通过。**
-#   已经修对的地方：轻划方向、双向扫描、按行合并 OCR（tesseract 把「自动锁屏」切成
-#   「自动」+「锁」两个词，逐词匹配永远找不到）、"设置必须在前台"的前置检查。
-#   但实测仍没稳定找到那一行 —— 而且在人正用手机时（打游戏/聊天）截图经常根本不是设置页。
-#   **确定能用的是 `dsh-screen keep|restore`**（程序写同一个设置项，实测 keep 后 75 秒屏幕仍亮、
-#   restore 回到 60000）。要改这一项又不想赌 UI 的话，用那个；这个脚本留给"非要用界面"的场合。
+# Usage: dsh-screen-ui 永不 | 1 分钟 | 10 分钟 | 15 秒 …
 set -u
 SOCK="$HOME/.local/bin/droid-sock"
 IMG="$HOME/.smoke/scrui.png"
@@ -29,16 +23,16 @@ ok()   { printf '   ✔ %s\n' "$*"; }
 warn() { printf '   ⚠ %s\n' "$*"; }
 bad()  { printf '   ✘ %s\n' "$*" >&2; }
 
-# 截图 + OCR，返回匹配文字的**真实屏幕坐标** "x y 文字"
-# （tesseract tsv 给屏幕像素；无障碍树给"内容坐标"，滚动后和屏幕对不上 —— 这正是之前点空的原因）
-ocr_find() {
-  timeout 12 "$SOCK" cur 2>/dev/null | grep -q "com.android.settings" || return 1
+in_settings() { timeout 12 "$SOCK" cur 2>/dev/null | grep -q 'com.android.settings'; }
+
+# 截图 + OCR：按行合并词后匹配，返回该行的屏幕坐标 "x y"
+ocr_row() {
+  in_settings || return 1
   timeout 40 "$SOCK" shot "$IMG" >/dev/null 2>&1
   [ -s "$IMG" ] || return 1
   timeout 90 tesseract "$IMG" stdout -l chi_sim tsv 2>/dev/null | python3 -c '
 import sys, re
-rx = re.compile(sys.argv[1])
-words = []
+rx = re.compile(sys.argv[1]); words = []
 for line in sys.stdin:
     f = line.rstrip("\n").split("\t")
     if len(f) < 12: continue
@@ -47,102 +41,100 @@ for line in sys.stdin:
     t = f[11].strip()
     if conf < 20 or not t: continue
     words.append((int(f[6]), int(f[7]), int(f[8]), int(f[9]), t))
-# ⚠ 必须**按行合并**再匹配：tesseract 把「自动锁屏」切成「自动」和「锁」两个词
-#   （实测 conf 93/51），逐词匹配永远找不到「自动锁」。
 lines = {}
-for x, y, w, h, t in words:
-    key = None
-    for k in lines:
-        if abs(k - y) <= 40: key = k; break
-    if key is None: key = y; lines[key] = []
-    lines[key].append((x, y, w, h, t))
+for x, y, w, h, t in words:                      # 同一行的词并起来再匹配
+    k = next((k for k in lines if abs(k - y) <= 40), None)
+    if k is None: k = y; lines[k] = []
+    lines[k].append((x, y, w, h, t))
 best = None
 for k, ws in lines.items():
-    ws.sort()
-    text = "".join(w[4] for w in ws)
+    text = "".join(w[4] for w in sorted(ws))
     if not rx.search(text): continue
-    x = min(w[0] for w in ws); y = min(w[1] for w in ws)
-    if best is None or y < best[1]: best = (x + 60, y + 30, text)
+    y = min(w[1] for w in ws); h = max(w[3] for w in ws)
+    if best is None or y < best[0]: best = (y, y + h // 2, text)
 print("%d %d %s" % best if best else "")
 ' "$1"
 }
 
-# ⚠ 方向：手指**从下往上**划 = 内容往下走 = 露出**下面**的条目。
-#   我第一版写反了（720 1100 → 720 1400 是手指向下，内容往上走），于是越划离目标越远。
-light() { timeout 20 "$SOCK" swipe 720 1400 720 1100 220 >/dev/null 2>&1; sleep 1.2; }
+# 弹窗里按**文字**找选项（树里每个 RadioButton 都带 desc）
+tree_tap() {   # $1 = 选项文字
+  local y
+  y=$(timeout 25 "$SOCK" ui '' 80 2>/dev/null | awk -v w="$1" '
+    index($0, "desc=\x27" w "\x27") > 0 {
+      match($0, /\[[0-9]+,[0-9]+\]/);
+      if (RSTART > 0) { split(substr($0,RSTART+1,RLENGTH-2), p, ","); print p[2]; exit } }')
+  [ -n "$y" ] || return 1
+  timeout 20 "$SOCK" tap 720 "$y" >/dev/null 2>&1
+  return 0
+}
 
-WANT="${1:?用法: dsh-screen-ui 永不|1 分钟|30 分钟}"
+row_value() {  # 从树里读「自动锁屏」那一行的当前值
+  timeout 25 "$SOCK" ui '' 200 2>/dev/null | grep -A1 "text='自动锁屏'" | tail -1 \
+    | sed -n "s/.*text='\([^']*\)'.*/\1/p"
+}
+
+WANT="${1:?用法: dsh-screen-ui 永不|1 分钟|10 分钟|15 秒}"
+
+# ⚠ 全程保持屏幕常亮：这个流程要跑一两分钟（每步一次截图+OCR），而用户的超时是 1 分钟 ——
+#   实测跑一半屏幕就灭了，截图是黑的、OCR 什么都读不到，于是"找不到那一行"。
+#   这跟装包工具是同一个毛病，处理方式也一样：进来 keep，退出（含失败/中断）restore。
+SCREEN="$HOME/.local/bin/dsh-screen"
+screen_restore() { [ -x "$SCREEN" ] && "$SCREEN" restore >/dev/null 2>&1 || true; }
+[ -x "$SCREEN" ] && "$SCREEN" keep >/dev/null 2>&1 || true
+trap screen_restore EXIT INT TERM
 
 step "打开 设置 → 显示"
-# 每张截图前先确认"设置真的在前台"：用户随时可能在用手机，截到聊天页就会误判成"找不到那一行"。
-ensure_settings() {
-  local i
-  for i in 1 2 3; do
-    if timeout 12 "$SOCK" cur 2>/dev/null | grep -q 'com.android.settings'; then return 0; fi
-    timeout 20 am start -a android.settings.DISPLAY_SETTINGS >/dev/null 2>&1
-    sleep 3
-  done
-  return 1
-}
 for _ in 1 2 3; do
   timeout 20 am start -a android.settings.DISPLAY_SETTINGS >/dev/null 2>&1
   sleep 3
-  timeout 12 "$SOCK" cur 2>/dev/null | grep -q 'com.android.settings' && break
+  in_settings && break
 done
-timeout 12 "$SOCK" cur 2>/dev/null | grep -q 'com.android.settings' \
-  && ok "设置已在前台" || { bad "打不开设置（前台不是它）—— 你可能正在用手机"; exit 1; }
+in_settings || { bad "设置没在前台（你可能正在用手机）"; exit 1; }
+ok "设置在前台"
 
-step "找「自动锁屏」（最多轻划 2 下）"
-ROW=""
-# 从页面顶部开始，目标在第 6~8 行左右 → 允许最多 5 次小步（每次 300px，找到就停，不会滑过头）
-for i in 1 2 3 4 5; do
-  R=$(ocr_find '自动锁' || true)
-  [ -z "$R" ] && R=$(ocr_find '锁屏' || true)
-  if [ -n "$R" ]; then set -- $R; ROW="$1 $2"; ok "第 $i 次看到「$3」 在 ($1,$2)"; break; fi
-  warn "第 $i 次没看到，轻划一下"
-  light
+step "轻滑一下找「自动锁屏」（最多 3 次，每次 300px）"
+ROW_Y=""
+for i in 1 2 3; do
+  R=$(ocr_row '自动锁' || true)
+  [ -z "$R" ] && R=$(ocr_row '锁屏' || true)
+  if [ -n "$R" ]; then set -- $R; ROW_Y="$2"; ok "第 $i 次看到「$3」 → 点 (720,$2)"; break; fi
+  warn "第 $i 次没看到，轻滑一下"
+  timeout 20 "$SOCK" swipe 720 1400 720 1100 240 >/dev/null 2>&1
+  sleep 1.3
 done
-# 往下扫没找到，就**反向**往上扫：每次打开这一页的起始位置并不固定（可能停在目标下方），
+# 往下没找到就**反向**找：每次进这一页的起始滚动位置并不固定（可能停在目标下方），
 # 只朝一个方向扫必然有一半情况错过 —— 这正是"你每次都错过"的根因。
-if [ -z "$ROW" ]; then
-  warn "往下扫没找到，改往上找"
-  for i in 1 2 3 4 5 6 7 8; do
-    # 反向 = 手指**从上往下**划（内容往上走，露出**上面**的条目）
-    # ⚠ 第一版这里复制成了和正向一样的坐标，等于没反向。
-    timeout 20 "$SOCK" swipe 720 1100 720 1400 220 >/dev/null 2>&1
-    sleep 1.0
-    R=$(ocr_find '自动锁' || true)
-    [ -z "$R" ] && R=$(ocr_find '锁屏' || true)
-    if [ -n "$R" ]; then set -- $R; ROW="$1 $2"; ok "往上第 $i 次看到「$3」 在 ($1,$2)"; break; fi
+if [ -z "$ROW_Y" ]; then
+  warn "往下没找到，改往上找"
+  for i in 1 2 3 4 5 6; do
+    # 反向 = 手指**从上往下**划（内容往上走，露出上面的条目）
+    timeout 20 "$SOCK" swipe 720 1100 720 1400 240 >/dev/null 2>&1
+    sleep 1.2
+    R=$(ocr_row '自动锁' || true)
+    [ -z "$R" ] && R=$(ocr_row '锁屏' || true)
+    if [ -n "$R" ]; then set -- $R; ROW_Y="$2"; ok "往上第 $i 次看到「$3」 → 点 (720,$2)"; break; fi
   done
 fi
-[ -n "$ROW" ] || { bad "上下都扫过了还是没有「自动锁屏」—— 版面可能变了"; exit 1; }
+[ -n "$ROW_Y" ] || { bad "上下都扫过了还是没有那一行"; exit 1; }
 
-step "点开这一行"
-timeout 20 "$SOCK" tap $ROW >/dev/null 2>&1
+step "点开它"
+timeout 20 "$SOCK" tap 720 "$ROW_Y" >/dev/null 2>&1
 sleep 2
 
-step "选「$WANT」"
-OPT=$(ocr_find "$WANT" || true)
-if [ -z "$OPT" ]; then
-  bad "选项里没认出「$WANT」；屏幕上认到的候选（自己看一眼再决定）："
-  ocr_find '永不|[0-9]+ *(分钟|秒)' || true
+step "在弹窗里选「$WANT」（弹窗用无障碍树，坐标是准的）"
+if tree_tap "$WANT"; then ok "已点「$WANT」"
+else
+  bad "弹窗里没有「$WANT」；树里认到的选项："
+  timeout 25 "$SOCK" ui '' 80 2>/dev/null | sed -n "s/.*desc='\([^']*\)'.*/   \1/p" | grep -E '秒|分钟|取消' | head -8
   exit 1
 fi
-set -- $OPT
-ok "「$3」 在 ($1,$2)"
-timeout 20 "$SOCK" tap "$1" "$2" >/dev/null 2>&1
 sleep 2
 
-step "复核"
-V=$(ocr_find '自动锁' || true)
+step "复核（读树里那一行的值）"
+V=$(row_value)
 if [ -n "$V" ]; then
-  set -- $V
-  timeout 40 "$SOCK" shot "$IMG" >/dev/null 2>&1
-  timeout 60 magick "$IMG" -crop "760x90+680+$(( $2 - 45 ))" +repage "$HOME/.smoke/scrval.png" 2>/dev/null
-  NOW=$(timeout 60 tesseract "$HOME/.smoke/scrval.png" stdout -l chi_sim 2>/dev/null | tr -d ' \n')
-  ok "「自动锁屏」现在 = ${NOW:-（读不出）}"
-  case "$NOW" in *"$WANT"*) ok "与要求一致 ✅" ;; *) warn "读到的和「$WANT」不完全一样，请自己瞄一眼" ;; esac
+  ok "「自动锁屏」现在 = $V"
+  case "$V" in *"$WANT"*) ok "与要求一致 ✅" ;; *) warn "读到的和「$WANT」不一样，请自己瞄一眼" ;; esac
 else
-  warn "复核时没看到那一行（可能弹窗还开着），请自己瞄一眼"
+  warn "复核时没读到那一行（可能弹窗还开着）"
 fi
