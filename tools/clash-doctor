@@ -7,7 +7,13 @@
 #   the Clash log said: `dial <group name> ... error: connect error: dns resolve failed: couldn't find ip`.
 #   direct domestic links (Baidu/WeChat) were fine, so it looked like "the provider was down", but it was not.
 #
-# Usage: clash-doctor [node domain]        # with no domain, one is picked from ~/.clash-opt/*.yaml
+# Usage: clash-doctor [--fix] [node domain]  # with no domain, one is picked from ~/.clash-opt/*.yaml
+#        clash-doctor --fix                  # diagnose AND repair the two failures seen in the wild:
+#                                            #   ① core stopped          → start it
+#                                            #   ② core up, foreign dead → update the subscription (regenerates
+#                                            #      the config; measured 2026-09-27: github 000 → 200 in ~4s)
+#                                            # Repair drives the Clash UI through the accessibility bridge, so the
+#                                            # screen is used for a few seconds.
 # Exit codes: 0 all good; 1 a clear fault (with a next step)
 set -u
 SOCKS_PORT=7890
@@ -19,10 +25,62 @@ step() { printf '\n▶ %s\n' "$*"; }
 port_open() { (exec 3<>/dev/tcp/127.0.0.1/"$1") 2>/dev/null && exec 3<&- 3>&-; }
 
 FAIL=0
+FIX=0
+for a in "$@"; do [ "$a" = "--fix" ] && FIX=1; done
+SOCK="$HOME/.local/bin/droid-sock"
+
+# ---- repair helpers (only used with --fix) ----
+clash_foreground() {   # bring the Clash app to the front and read its state line
+  timeout 15 am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER \
+    -p com.github.metacubex.clash.meta >/dev/null 2>&1
+  sleep 3
+}
+toggle_state() { timeout 20 "$SOCK" ui 2>/dev/null | grep -oE 'text=.(已停止|运行中|点此启动|已转发)' | head -1; }
+
+start_core() {
+  step "FIX ① start the Clash core"
+  clash_foreground
+  case "$(toggle_state)" in
+    *已停止*|*点此启动*)
+      timeout 20 "$SOCK" tap 814 694 >/dev/null 2>&1
+      for i in 1 2 3 4 5 6; do
+        sleep 2
+        if port_open "$SOCKS_PORT"; then ok "core started (port ${SOCKS_PORT} is up)"; return 0; fi
+      done
+      bad "the core did not come up — open Clash and turn the switch on by hand"; return 1 ;;
+    *运行中*|*已转发*) ok "core was already running"; return 0 ;;
+    *) warn "could not read the Clash screen; assuming it is stopped"; return 1 ;;
+  esac
+}
+
+update_subscription() {
+  step "FIX ② update the subscription (this is what regenerates the config)"
+  clash_foreground
+  timeout 20 "$SOCK" tap 814 1341 >/dev/null 2>&1; sleep 2      # Profiles
+  timeout 20 "$SOCK" tap 1300 470  >/dev/null 2>&1; sleep 2      # ⋮ on the profile card
+  if ! timeout 20 "$SOCK" ui 2>/dev/null | grep -q '更新\|Update'; then
+    bad "the profile menu did not open (the layout may have changed) — update by hand: Profiles → ⋮ → Update"; return 1
+  fi
+  timeout 20 "$SOCK" tap 814 2175 >/dev/null 2>&1                # Update
+  for i in 1 2 3 4 5 6 7 8; do
+    sleep 4
+    local c; c=$(curl -s -o /dev/null -m 8 -w '%{http_code}' -x "$PROXY" https://github.com/ 2>/dev/null)
+    if [ "$c" = "200" ]; then ok "proxy is healthy again (github 200 after $((i*4))s)"; return 0; fi
+  done
+  bad "still not reachable after updating — read the Clash log (Logs) for dns resolve errors"; return 1
+}
 
 step "① is the Clash core there (mixed port ${SOCKS_PORT})"
 if port_open "$SOCKS_PORT"; then ok "port is listening — core is running"
-else bad "port is not listening — turn on the Clash main switch (Running)"; exit 1; fi
+else
+  bad "port is not listening — the core is stopped"
+  if [ "$FIX" = 1 ]; then
+    start_core && { ok "continuing the diagnosis with the core up"; FAIL=0; } || { bad "cannot continue without the core"; exit 1; }
+  else
+    printf '   → run: clash-doctor --fix   (or turn on the Clash main switch by hand)\n'
+    exit 1
+  fi
+fi
 
 step "② direct domestic link and DNS hijack are healthy"
 C=$(curl -s -o /dev/null -m 8 -w '%{http_code}' https://www.baidu.com 2>/dev/null)
@@ -33,7 +91,17 @@ C1=$(curl -s -o /dev/null -m 12 -w '%{http_code}' -x "$PROXY" http://www.gstatic
 C2=$(curl -s -o /dev/null -m 18 -w '%{http_code}' -x "$PROXY" https://github.com 2>/dev/null)
 printf '   gstatic204=%s   github=%s\n' "$C1" "$C2"
 if [ "$C1" = 204 ] || [ "$C2" = 200 ]; then ok "proxy path is fine"
-else bad "proxy is dead (502/000) — see step ④"; FAIL=1; fi
+else
+  bad "proxy is dead (502/000)"
+  if [ "$FIX" = 1 ]; then
+    update_subscription || FAIL=1
+    C2=$(curl -s -o /dev/null -m 10 -w '%{http_code}' -x "$PROXY" https://github.com/ 2>/dev/null)
+    [ "$C2" = "200" ] && FAIL=0 || FAIL=1
+  else
+    printf '   → run: clash-doctor --fix   (updates the subscription, which regenerates the config)\n'
+    FAIL=1
+  fi
+fi
 
 step "④ was the node domain eaten by fake-ip (the nastiest one: direct works, all proxies 502)"
 DOM="${1:-}"

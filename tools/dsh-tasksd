@@ -41,7 +41,7 @@ PORT = 8787
 ORIGIN_OK = {'http://127.0.0.1:8080', 'http://localhost:8080'}
 # Whitelist: only these script names; everything else is refused (no paths, no arbitrary commands)
 ALLOWED = {
-    '0_emergency-stop', '1_start-dsh', '2_shutdown-dsh', '3_backup-dsh', '4_soft-restart-dsh',
+    '0_emergency-stop', '10_net-fix', '1_start-dsh', '2_shutdown-dsh', '3_backup-dsh', '4_soft-restart-dsh',
     '5_cleanup-dsh', '6_hard-restart-dsh', '7_reconnect-ai', '8_enable-wireless-adb',
     '9_revoke-pin',
 }
