@@ -216,31 +216,13 @@ window.__ModuleLoader__.load({
       }
 
       // ── helpers ──
-      function lampOf(kind, status, extra) {
-        // Colour semantics are fixed across all three UIs: green ok · yellow transitional · red broken · grey off/unknown
-        if (kind === 'dsh') {
-          if (!status) return 'grey';
-          if (!(status.dsh && status.dsh.port)) return 'red';
-          // 401 is the *normal* answer here: the page requires the login token, so an unauthenticated
-          // curl to / gets 401 — that means DSH is up. 404 is the half-started window (port bound,
-          // routes not mounted yet) and is exactly what "yellow / transitional" is for.
-          const code = String((status.dsh && status.dsh.http) || '');
-          if (code === '401' || code === '200' || code.charAt(0) === '3') return 'green';
-          return 'yellow';
-        }
-        if (kind === 'bridge') {
-          if (!status) return 'grey';
-          const b = status.bridge || {};
-          if (b.ok) return 'green';
-          if (b.port) return 'yellow';
-          return 'grey';
-        }
-        if (kind === 'adb') {
-          if (!status) return 'grey';
-          const d = (status.adb && status.adb.devices) || [];
-          return d.length ? 'green' : 'grey';
-        }
-        return 'grey';
+      // 只剩 adb 这一盏灯在这里算：它的颜色与文字读的是**同一个事实**（status.adb.devices）。
+      // DSH 与桥的灯色搬到上面的 DSH_LAMP / LAMP_OF_STATE（由 state 推）—— 原来那个 kind 分支
+      // 现在没人调用了，留着就是第二个真相，删掉（同上：面板的 section() 也是这么删的）。
+      function adbLamp(status) {
+        if (!status) return 'grey';
+        const d = (status.adb && status.adb.devices) || [];
+        return d.length ? 'green' : 'grey';
       }
 
       function Lamp(props) {
@@ -493,6 +475,26 @@ window.__ModuleLoader__.load({
           const x = UI_GROUPS.filter((y) => y.id === gid)[0];
           return x ? (lang === 'zh' ? x.zh : x.en) : gid;
         };
+        // 桥与 DSH 的"状态 → 灯色"表：与 dsh-status-pub 的 LAMP_OF_STATE / DSH_LAMP **同一张表**。
+        // 面板必须自己算灯色（它只拿得到 status.json），但算的依据必须是 state —— 以前桥灯读 ok、
+        // 开关读 ok、文字读 state，三处两套数据（用户 2026-09-27 要求查这类）。
+        const LAMP_OF_STATE = { running: 'green', frozen: 'yellow', soft: 'grey', silent: 'grey', never: 'grey' };
+        const DSH_LAMP = { running: 'green', half: 'yellow', down: 'red' };
+        // 老 producer 没有 state 字段时，在同一处按 port/ok/http 现推一次（仍然只有一份结果）
+        const dshStateKey = (() => {
+          const d = s.dsh || {};
+          if (d.state) return d.state;
+          const code = String(d.http || '');
+          if (d.port && code && code !== '000' && code !== '404') return 'running';
+          return d.port ? 'half' : 'down';
+        })();
+        const brStateKey = (() => {
+          const b = s.bridge || {};
+          if (b.state) return b.state;
+          if (b.port) return b.ok ? 'running' : 'frozen';
+          return (b.note && b.note !== 'none') ? ((b.note === 'soft' || b.note === 'running') ? 'soft' : 'silent') : 'never';
+        })();
+
         // The bridge's four states, from **one ping plus the state note** — never from a timer.
         const brState = (() => {
           const b = s.bridge || {};
@@ -523,11 +525,14 @@ window.__ModuleLoader__.load({
         }, (collapsed[catId] ? '▸ ' : '▾ ') + catName(catId) + (lang === 'zh' ? '　' + rows + ' 项' : '  (' + rows + ')'));
 
         const lampRow = () => h('div', { className: 'mb-lamps' },
-          h(Lamp, { color: lampOf('dsh', status), aria: t(ctl('lamp_dsh').label),
-            text: t(ctl('lamp_dsh').label) + ' ' + (s.dsh && s.dsh.port ? (lang === 'zh' ? '运行中' : 'running') : (lang === 'zh' ? '未运行' : 'stopped')) }),
-          h(Lamp, { color: lampOf('bridge', status), aria: t(ctl('lamp_bridge').label),
-            text: t(ctl('lamp_bridge').label) + ' ' + (s.bridge && s.bridge.ok ? (lang === 'zh' ? '运行中' : 'running') : (lang === 'zh' ? '未运行' : 'down')) }),
-          h(Lamp, { color: lampOf('adb', status), aria: 'adb',
+          // 每盏灯的颜色与文字都读**同一个 key**（dshStateKey / brStateKey / adb devices）
+          h(Lamp, { color: DSH_LAMP[dshStateKey] || 'grey', aria: t(ctl('lamp_dsh').label),
+            text: t(ctl('lamp_dsh').label) + ' ' + t(dshStateKey === 'running' ? { zh: '运行中', en: 'running' }
+              : dshStateKey === 'half' ? { zh: '半启动（端口在听，页面还没应答）', en: 'half-started (port up, page not answering)' }
+              : { zh: '未运行', en: 'stopped' }) }),
+          h(Lamp, { color: LAMP_OF_STATE[brStateKey] || 'grey', aria: t(ctl('lamp_bridge').label),
+            text: t(ctl('lamp_bridge').label) + ' ' + brState }),
+          h(Lamp, { color: adbLamp(status), aria: 'adb',
             text: 'adb ' + (((s.adb && s.adb.devices) || [])[0] || (lang === 'zh' ? '未连接' : 'not connected')) }));
 
         const sections = UI_CATS.map((cat) => {
@@ -545,7 +550,11 @@ window.__ModuleLoader__.load({
               if (c.kind === 'text') {
                 if (c.id === 'bridge_state_text') return;          // that state lives on the switch row
                 if (c.id === 'version-update') {
-                  body.push(h('div', { key: c.id, className: 'mb-text' }, '面板 v' + UI_VERSION.panel + ' · 控制台 v' + UI_VERSION.console + ' · 桥 v' + UI_VERSION.bridge));
+                  // 三个名字也要跟语言开关走（以前写死中文，英文界面下照样显示"面板/控制台/桥"）
+                  body.push(h('div', { key: c.id, className: 'mb-text' },
+                    t({ zh: '面板', en: 'Panel' }) + ' v' + UI_VERSION.panel + ' · ' +
+                    t({ zh: '控制台', en: 'Console' }) + ' v' + UI_VERSION.console + ' · ' +
+                    t({ zh: '桥', en: 'Bridge' }) + ' v' + UI_VERSION.bridge));
                   return;
                 }
                 body.push(h('div', { key: c.id, className: 'mb-text' }, t(c.hint)));
@@ -559,9 +568,9 @@ window.__ModuleLoader__.load({
                 const isBridge = c.id === 'bridge_run';
                 const authed = !!(auth && auth.authorized);
                 const note = isBridge ? brState : (auth ? (authed ? (lang === 'zh' ? '已授权' : 'authorized') : (lang === 'zh' ? '未授权' : 'not authorized')) : (lang === 'zh' ? '读取中…' : 'loading…'));
-                const dot = isBridge ? lampOf('bridge', status) : (authed ? 'green' : 'grey');
+                const dot = isBridge ? (LAMP_OF_STATE[brStateKey] || 'grey') : (authed ? 'green' : 'grey');
                 body.push(h(SwitchRow, {
-                  key: c.id, c: c, lang: lang, busy: !!busy, on: isBridge ? !!(s.bridge && s.bridge.ok) : authed,
+                  key: c.id, c: c, lang: lang, busy: !!busy, on: isBridge ? brStateKey === 'running' : authed,
                   note: note, dot: dot, onExplain: showHint,
                   onToggle: (on) => isBridge ? onToggle(c, on) : setAuthArmed(on ? 'set' : 'revoke'),
                 }));

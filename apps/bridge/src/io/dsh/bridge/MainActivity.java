@@ -378,7 +378,11 @@ public class MainActivity extends Activity {
     private void updateState() {
         boolean on = isAccessibilityEnabled(this);
         BridgeService svc = BridgeService.INSTANCE;
-        String listen = (svc != null && svc.isListening()) ? Lang.t("Listening on 127.0.0.1:") + BridgeService.PORT : Lang.t("Not listening");
+        // ⚠ 只问一次：这一屏有三处（端口那行、状态文字、开关位置）都在讲"到底在不在听"。
+        // 以前是各算一次 isListening()，中间服务状态一变就会出现"端口：正在监听"配"开关：关"。
+        // 审计（tools/i18n-audit）现在会盯住这一点：isListening() 只允许出现一次。
+        final boolean listening = svc != null && svc.isListening();
+        String listen = listening ? Lang.t("Listening on 127.0.0.1:") + BridgeService.PORT : Lang.t("Not listening");
         stateView.setText(Lang.t("Accessibility: ") + (on ? Lang.t("on ✅") : Lang.t("off ❌"))
                 + "\n" + Lang.t("Port: ") + listen
                 + (on ? "" : "\n" + Lang.t("Tap ① Open accessibility settings and switch DSH Bridge on in the list")));
@@ -386,7 +390,6 @@ public class MainActivity extends Activity {
             // 开关与这行文字读**同一个事实**（listening）。顺带把第三种情况说清楚：
             // 服务根本没起来时以前也写"刚断（可唤醒）"—— 那是句不准的话（用户 2026-09-27 要求查这类
             // 自相矛盾）。现在 svc == null 就说"未运行"，并告诉他去哪儿把它叫起来。
-            boolean listening = svc != null && svc.isListening();
             if (listening) bridgeState.setText(Lang.t("Bridge: running") + " · v" + ver);
             else if (svc != null) bridgeState.setText(Lang.t("Bridge: just dropped (wakeable)"));
             else bridgeState.setText(Lang.t("Bridge: not running (the service is down; flip the switch above or wake it from the Console)"));

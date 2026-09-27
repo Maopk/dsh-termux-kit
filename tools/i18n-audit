@@ -298,48 +298,70 @@ def audit_palette():
 
 
 # ── 6. 桥状态口径：python 与 java 的 state→灯色 必须逐项相同 ────────────────
-def audit_bridge_state():
+def audit_state_maps():
+    """状态 → 灯色 / 文字：**三处实现同一张表**（dsh-status-pub 的 python、控制台/桥的 java、面板的 js）。
+
+    用户 2026-09-27 连着两轮问同一件事："灯色和文字是不是来自同一个数据源"。所以这里不看某一处，
+    而是把**所有会自己算灯色的地方**逐项对拍：只要有一处按 ok/port 另算，就对不上。
+    """
     py = io.open(STATUS_PUB, encoding='utf-8').read()
     m = re.search(r'LAMP_OF_STATE\s*=\s*\{(.*?)\}', py, re.S)
-    if not m:
-        bad('dsh-status-pub 里找不到 LAMP_OF_STATE'); return
-    pmap = dict(re.findall(r"'([a-z]+)':\s*'([a-z]+)'", m.group(1)))
-    js = io.open(os.path.join(CONSOLE_SRC, 'MainActivity.java'), encoding='utf-8').read()
-    k = re.search(r'private static String lampOf\(String state\)\s*\{(.*?)\n    \}', js, re.S)
-    if not k:
-        bad('控制台里找不到 lampOf()'); return
-    body = k.group(1)
-    jmap = {}
-    for st, col in re.findall(r'"([a-z]+)"\.equals\(state\)\) return "([a-z]+)"', body):
-        jmap[st] = col
-    defaults = re.findall(r'return "([a-z]+)";', body)
-    for st in pmap:
-        if st not in jmap:
-            jmap[st] = defaults[-1] if defaults else None
-    if pmap != jmap:
-        bad('桥的 state→灯色 两边不一致：dsh-status-pub=%s 控制台=%s' % (pmap, jmap))
+    m2 = re.search(r'DSH_LAMP\s*=\s*\{(.*?)\}', py, re.S)
+    if not m or not m2:
+        bad('dsh-status-pub 里找不到 LAMP_OF_STATE / DSH_LAMP'); return
+    bridge_py = dict(re.findall(r"'([a-z]+)':\s*'([a-z]+)'", m.group(1)))
+    dsh_py = dict(re.findall(r"'([a-z]+)':\s*'([a-z]+)'", m2.group(1)))
+
+    def java_map(fn, js):
+        k = re.search(r'private static String %s\(String state\)\s*\{(.*?)\n    \}' % fn, js, re.S)
+        if not k:
+            return None
+        body = k.group(1)
+        out = dict(re.findall(r'"([a-z]+)"\.equals\(state\)\) return "([a-z]+)"', body))
+        last = re.findall(r'return "([a-z]+)";', body)
+        for st in (bridge_py if fn == 'lampOf' else dsh_py):
+            if st not in out:
+                out[st] = last[-1] if last else None
+        return out
+
+    js_console = io.open(os.path.join(CONSOLE_SRC, 'MainActivity.java'), encoding='utf-8').read()
+    js_bridge = io.open(os.path.join(BRIDGE_SRC, 'MainActivity.java'), encoding='utf-8').read()
+    client = io.open(os.path.join(ROOT, 'plugins', 'dsh-mobile-local', 'client.js'), encoding='utf-8').read()
+
+    def js_map(name):
+        mm = re.search(r'%s\s*=\s*\{(.*?)\}' % name, client, re.S)
+        return dict(re.findall(r'([a-z]+):\s*\'([a-z]+)\'', mm.group(1))) if mm else None
+
+    # 桥 App 本身没有灯（它只有一行状态文字 + 一个开关，两者都读 svc.isListening()），所以这里没有它；
+    # 它那一份同源检查在下面单独做。
+    variants = {
+        'dsh-status-pub':    (bridge_py, dsh_py),
+        'console (java)':    (java_map('lampOf', js_console), java_map('lampOfDsh', js_console)),
+        'panel (client.js)': (js_map('LAMP_OF_STATE'), js_map('DSH_LAMP')),
+    }
+    for label, (bm, dm) in variants.items():
+        if bm is None or dm is None:
+            bad('%s：找不到状态→灯色的映射表' % label); return
+        if bm != bridge_py:
+            bad('%s 的桥 state→灯色与 dsh-status-pub 不一致：%s vs %s' % (label, bm, bridge_py)); return
+        if dm is not None and dm != dsh_py:
+            bad('%s 的 DSH state→灯色与 dsh-status-pub 不一致：%s vs %s' % (label, dm, dsh_py)); return
+    ok('状态→灯色 三处实现同一张表：桥 %s / DSH %s' % (bridge_py, dsh_py))
+
+    # 桥 App：状态文字与开关位置必须读**同一个** listening（两处各算一次就会出现"开关关着、文字说在跑"）
+    code_bridge = strip_comments(js_bridge)          # 注释里提到 isListening() 不算
+    n = code_bridge.count('isListening()')
+    if n != 1 or 'setChecked(listening)' not in code_bridge:
+        bad('桥 App 的 listening 被算了 %d 次（应该只有 1 次，赋给 listening 后文字与开关都用它）' % n)
     else:
-        ok('桥的 state→灯色 两侧同表：%s' % pmap)
+        ok('桥 App 的状态文字与开关位置读同一个 listening（只算一次）')
 
-    # DSH 那盏灯也一样（用户 2026-09-27：灯色和文字必须同源）
-    m = re.search(r'DSH_LAMP\s*=\s*\{(.*?)\}', py, re.S)
-    k = re.search(r'private static String lampOfDsh\(String state\)\s*\{(.*?)\n    \}', js, re.S)
-    if not m or not k:
-        bad('找不到 DSH_LAMP / lampOfDsh —— 灯色与文字可能又分成两处算了'); return
-    pdsh = dict(re.findall(r"'([a-z]+)':\s*'([a-z]+)'", m.group(1)))
-    body = k.group(1)
-    jdsh = dict(re.findall(r'"([a-z]+)"\.equals\(state\)\) return "([a-z]+)"', body))
-    last = re.findall(r'return "([a-z]+)";', body)
-    for st in pdsh:
-        if st not in jdsh:
-            jdsh[st] = last[-1] if last else None
-    if pdsh != jdsh:
-        bad('DSH 的 state→灯色 两边不一致：dsh-status-pub=%s 控制台=%s' % (pdsh, jdsh))
+    # 面板：不许再有"按 ok/port 另算"的入口（灯色、开关位置、文字都必须读 state）
+    if re.search(r"lampOf\('bridge'|lampOf\('dsh'|\.bridge\.ok\s*\?", client):
+        bad('面板里又出现了按 ok/port 另算桥或 DSH 状态的写法（必须读 state）')
     else:
-        ok('DSH 的 state→灯色 两侧同表：%s（文字读同一个 state）' % pdsh)
+        ok('面板的桥/DSH 灯色、开关位置、状态文字都读同一个 state（只剩 adb 灯按 devices 算）')
 
-
-# ── 7. 标题类文字不许残留英文（用户要的那条自检）───────────────────────────
 def english_left(text, allow=TERMS):
     out = []
     for w in re.findall(r'[A-Za-z][A-Za-z_.\-]{1,}', text):
@@ -347,6 +369,32 @@ def english_left(text, allow=TERMS):
             continue
         out.append(w)
     return out
+
+
+def audit_panel_i18n():
+    """面板里写死的中文 = 英文界面下照样显示中文（用户 2026-09-27 要求查）。
+
+    判定一条语句：把多行三元表达式接成一行，然后要求它要么带 `lang === 'zh'`，要么用
+    `t({ zh: ..., en: ... })`，要么在注释里。生成块（UI_CATS/UI_CONTROLS/UI_GROUPS）本来
+    就带两种语言，先整块挖掉。
+    """
+    p = os.path.join(ROOT, 'plugins', 'dsh-mobile-local', 'client.js')
+    src = io.open(p, encoding='utf-8').read()
+    gen = re.search(r'// ── generated:controls.*?// ── /generated:controls ──', src, re.S)
+    body = src.replace(gen.group(0), '') if gen else src
+    # 把语句接起来（简单做法：去掉 // 注释后按分号/换行合并成 3 行的窗口）
+    body = re.sub(r'//[^\n]*', '', body)
+    flat = re.sub(r'\s+', ' ', body)
+    hits = []
+    for m in re.finditer(r'[\u4e00-\u9fff]+', flat):
+        seg = flat[max(0, m.start() - 220): m.end() + 220]
+        if "lang === 'zh'" in seg or 'zh:' in seg:
+            continue
+        hits.append(seg.strip()[:120])
+    if hits:
+        bad('面板里有 %d 处中文不跟语言开关走（英文界面下会照样显示中文）：%s' % (len(hits), ' | '.join(hits[:3])))
+    else:
+        ok('面板里所有中文都在语言分支里（lang === \'zh\' 或 t({zh,en})），没有写死的')
 
 
 def audit_titles(zh, data):
@@ -487,8 +535,9 @@ def main():
     audit_controls(data, zh)
     audit_theme(theme)
     audit_palette()
-    audit_bridge_state()
+    audit_state_maps()
     audit_counts(data)
+    audit_panel_i18n()
     audit_titles(zh, data)
 
     if not quiet:
