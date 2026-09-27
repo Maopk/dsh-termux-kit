@@ -59,6 +59,12 @@ def _connect_once(timeout):
     return s
 
 
+def iv(x):
+    """坐标容错：'600' 与 '600.0' 都要能用（调用方算坐标时很容易带出小数）。
+    以前直接 int(a[1])，传小数就 ValueError 崩在 stderr、stdout 空 —— 调用方会误判成"手势失败"。"""
+    return int(round(float(x)))
+
+
 def call(obj, timeout=40):
     tok = load_token()
     if not tok:
@@ -169,7 +175,7 @@ def main():
     elif k == 'netstate':      # Wi-Fi switch + whether the internet really works (bridge direct test)
         r = call({'action': 'netstate'}, timeout=15)
     elif k == 'adbwifi':       # toggle 「无线调试」 (needs WRITE_SECURE_SETTINGS)
-        r = call({'action': 'adbwifi', 'value': int(a[1]) if len(a) > 1 else 1}, timeout=15)
+        r = call({'action': 'adbwifi', 'value': iv(a[1]) if len(a) > 1 else 1}, timeout=15)
     elif k == 'caps':          # list of actions the bridge supports (to tell versions apart; old ones return an error)
         r = call({'action': 'caps'}, timeout=15)
     elif k == 'sleep':         # hard stop (v1.7+): close the port + stop the foreground service + disable its own accessibility; it does not come back
@@ -191,17 +197,17 @@ def main():
         r = call({'action': 'panic'})
     elif k == 'ui':
         r = call({'action': 'ui', 'keyword': a[1] if len(a) > 1 else '',
-                  'limit': int(a[2]) if len(a) > 2 else 40})
+                  'limit': iv(a[2]) if len(a) > 2 else 40})
     elif k == 'shot':
         r = call({'action': 'shot'}, timeout=60)
     elif k == 'tap':
-        r = call({'action': 'tap', 'x': int(a[1]), 'y': int(a[2])})
+        r = call({'action': 'tap', 'x': iv(a[1]), 'y': iv(a[2])})
     elif k == 'longpress':
-        r = call({'action': 'longpress', 'x': int(a[1]), 'y': int(a[2]),
-                  'ms': int(a[3]) if len(a) > 3 else 800})
+        r = call({'action': 'longpress', 'x': iv(a[1]), 'y': iv(a[2]),
+                  'ms': iv(a[3]) if len(a) > 3 else 800})
     elif k == 'swipe':
-        r = call({'action': 'swipe', 'x1': int(a[1]), 'y1': int(a[2]),
-                  'x2': int(a[3]), 'y2': int(a[4]), 'ms': int(a[5]) if len(a) > 5 else 300})
+        r = call({'action': 'swipe', 'x1': iv(a[1]), 'y1': iv(a[2]),
+                  'x2': iv(a[3]), 'y2': iv(a[4]), 'ms': iv(a[5]) if len(a) > 5 else 300})
     elif k == 'text':
         r = call({'action': 'text', 'value': a[1] if len(a) > 1 else ''})
     elif k == 'lang':
