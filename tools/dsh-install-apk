@@ -75,6 +75,10 @@ tap_dsc() { local xy; xy=$(xy_of "$1" desc);  [ -n "$xy" ] && { tap_xy "$xy"; re
 tap_any() { tap_txt "$1" || tap_dsc "$1"; }
 
 # ── preconditions ──
+# 上次点成功的位置（用户建议：直接点那个位置就行）—— 记下来，下次优先用它，省掉找蓝字
+LAST_FILE="$HOME_DIR/.smoke/install-link-xy"
+LAST_XY="$(cat "$LAST_FILE" 2>/dev/null || true)"
+
 step "① precondition check"
 DIGITS=""
 if [ "$DRY" != 1 ]; then
@@ -116,115 +120,58 @@ else
   [ "$UP" != 0 ] && ok "installer is in front (took ${UP}s)" || { bad "the installer never came to the front within 20s"; exit 4; }
 fi
 
-# ── wait for the page to finish rendering ──
-# 这个页面先显示「正在准备安装应用…」，那一行蓝色小字**还没进树也没画出来**。
-# 不等它，后面所有找蓝字/点蓝字的动作都是对着一屏没有链接的界面做的 ——
-# 表现就是"每个候选坐标点了都没反应"，而其实只是来早了（实测：这一步要 2 秒上下，
-# 但慢的时候十几秒，所以轮询而不是固定 sleep）。
-step "②·b wait for the installer page to finish preparing"
-if [ "$DRY" = 0 ]; then
-  R=0
-  for _ in $(seq 1 25); do
-    T=$(ui)
-    if printf '%s' "$T" | grep -qE '本次安装|您可授权|已安装相同版本'; then R=1; break; fi
-    # ⚠ 必须要求树非空：ui 转储偶尔返回空，而"空树里没有准备中字样"会被误判成"页面好了" ——
-    #   实测就是这样骗过一次，后面全程对着一屏还没画出来的界面找蓝字。
-    if [ -n "$(printf '%s' "$T" | tr -d '[:space:]')" ] && ! printf '%s' "$T" | grep -q '正在准备安装应用'; then R=1; break; fi
-    sleep 1
-  done
-  [ "$R" = 1 ] && ok "page is ready" || warn "the page still says 正在准备安装应用 after 25s; continuing anyway"
+# ── the one and only step that needs the screen: tap the blue 「授权本次安装」 ──
+#
+# 用户给的配方（2026-09-27，他用得比我快，所以照他的来）：
+#   等 5 秒 → 直接点那个位置 → 点「锁屏密码验证」 → 输密码 → 完事
+#
+# 我原来的做法是**反复转储无障碍树**去找那段话、再按颜色扫波段，一次要一两分钟，还经常找不到 ——
+# 因为那行字**根本不在树里**（整段话只有一个节点），而每次 `ui` 转储都要好几秒。
+# 现在改成：**只截一张图**按颜色找一次，找不到就退回到"上次成功的坐标"（存在文件里）。
+# 这样正常情况下 5 秒等待 + 一次截图 + 一次点击就过去了。
+step "③ already installed? then this is a no-op"
+ALREADY=0
+for _ in $(seq 1 10); do
+  ui | grep -q '已安装相同版本' && { ALREADY=1; break; }
+  sleep 1
+done
+if [ "$ALREADY" = 1 ]; then
+  ok "already at this version — nothing to install (this is also the --verify evidence)"
+  VERLINE=$(ui | grep -oE '已安装相同版本[^ ]*' | head -1)
+  [ -n "$VERLINE" ] && ok "installer says: $VERLINE"
+  rm -f "$TMP_APK"; exit 0
 fi
 
-# ── one-time install permission ──
-step "③ install-source permission (choose 「本次允许」; no long-term grant)"
-if [ "$DRY" = 1 ]; then printf '   · [dry] tap 「本次允许使用权限」\n'; ok "(dry-run)"
-elif tap_dsc "本次允许使用权限"; then ok "tapped 「本次允许使用权限」"; sleep 8
-elif ui | grep -q "已安装相同版本"; then ok "the 「已安装相同版本」 page is already up (skipping the permission dialog)"
-else warn "no permission dialog seen (maybe already granted); continuing"; fi
-
-# ── the small blue text ──
-step "④ tap the small blue line 「…您可授权本次安装」 (the wording and layout change, so the spot is found by color)"
-if [ "$DRY" = 1 ]; then printf '   · [dry] first read the paragraph y from the accessibility tree, then use dsh-find-blue to find the blue text in that band and tap it\n'; ok "(dry-run)"
+step "④ tap the blue 「…您可授权本次安装」 (the user's recipe: wait 5s, tap the recorded spot)"
+if [ "$DRY" = 1 ]; then
+  printf '   · [dry] sleep 5 → screenshot → find blue → tap ($LAST_XY if that fails)\n'; ok "(dry-run)"
 else
+  sleep 5
+  XY=$(timeout 60 "$HOME_DIR/.local/bin/dsh-find-blue" 2>/dev/null | grep -oE '^[0-9]+,[0-9]+' | head -1)
+  if [ -n "$XY" ]; then ok "found the blue text at $XY"; else
+    XY="$LAST_XY"
+    [ -n "$XY" ] && warn "no blue found; falling back to the position that worked last time ($XY)"
+  fi
   GOT=0
-  # that line is **not in the accessibility tree** (the tree has one node for the whole paragraph) → use the paragraph y as a band and find the blue text by color.
-  # two layouts measured: paragraph y≈1135 ("未经vivo人工亲测") and y≈1255 ("未核准（备案）"), with the link at the end of the paragraph.
-  BAND=$(ui | awk 'index($0,"本次安装")>0 && index($0,"text=")>0 {
-            match($0,/\[[0-9]+,[0-9]+\]/); if (RSTART>0) { split(substr($0,RSTART+1,RLENGTH-2),p,","); print p[2]; exit } }')
-  CANDS=""
-  if [ -n "$BAND" ]; then
-    Y1=$((BAND-170)); Y2=$((BAND+230)); [ "$Y1" -lt 0 ] && Y1=0
-    P=$(timeout 45 "$HOME_DIR/.local/bin/dsh-find-blue" "$Y1" "$Y2" 2>/dev/null) && CANDS="$P"
-    if [ -n "$CANDS" ]; then ok "blue text located: $CANDS (paragraph y=$BAND, search band $Y1..$Y2)"
-    else warn "color location found nothing; falling back to fixed coordinates"; fi
-  else
-    warn "no paragraph containing 「本次安装」 in the tree; falling back to fixed coordinates"
-  fi
-  # Fallback when the paragraph is not in the accessibility tree: scan a few horizontal bands for
-  # BLUE text. The old hard-coded points below came from an older installer layout and no longer hit
-  # anything on this ROM (measured 2026-09-27: the link sits at y≈1270). Cropping the band first
-  # matters: scanning a whole 1440x3168 screenshot pixel by pixel is slow enough to time out.
-  if [ -n "$CANDS" ] || [ -z "$CANDS" ]; then   # always: dsh-find-blue may return a wrong blue spot
-    SHOT=$(timeout 40 "$SOCK" shot 2>/dev/null | grep -oE '/data[^ ]+\.png' | head -1)
-    if [ -n "$SHOT" ]; then
-      CANDS=$(python3 - "$SHOT" <<'PYX'
-import re, subprocess, sys
-# Several blue things can be on screen (an icon, a "details" link …). Collect every band's cluster and
-# order them by PIXEL COUNT, biggest first: measured 2026-09-27 the real link on the paragraph line had
-# 2080 blue pixels while a decorative icon had 892 — taking the first hit landed on the icon and failed.
-img = sys.argv[1]
-found = []
-for y in (1240, 1180, 1120, 1060, 1300, 1000, 940, 880):
-    out = subprocess.run(['magick', img, '-crop', '1440x120+0+%d' % y, '+repage', '-depth', '8', 'txt:-'],
-                         capture_output=True, text=True).stdout
-    pts = []
-    for line in out.split('\n')[1:]:
-        m = re.match(r'(\d+),(\d+): \((\d+),(\d+),(\d+)', line)
-        if not m:
-            continue
-        x, yy, r, g, b = map(int, m.groups())
-        if b > 150 and b - r > 40 and g > 80:
-            pts.append((x, yy + y))
-    if len(pts) >= 60:                      # ignore stray antialiasing
-        x1, x2 = min(p[0] for p in pts), max(p[0] for p in pts)
-        y1, y2 = min(p[1] for p in pts), max(p[1] for p in pts)
-        found.append((len(pts), (x1 + x2) // 2, (y1 + y2) // 2))
-found.sort(reverse=True)
-print(' '.join('%d,%d' % (c[1], c[2]) for c in found))
-PYX
-)
-      if [ -n "$CANDS" ]; then
-        BAND=$(printf '%s\n' "$CANDS" | tail -1)
-        CANDS="${CANDS%%$BAND} $BAND"
-        ok "blue candidates: $CANDS (band scan included)"
-      fi
-    fi
-  fi
-  for pt in $CANDS "338,1151" "348,1152" "330,1150"; do
+  for pt in $XY "261,1273" "277,1150" "1144,972"; do
     [ -n "$pt" ] || continue
     tap_xy "$pt"
-    # Wait for the dialog instead of sampling once after 3s. Measured 2026-09-27: the tap DOES work,
-    # but 「安全验证」 came up after the old `sleep 3` had already elapsed, so the tool reported
-    # "no reaction" and moved on to the next candidate — every later tap then landed on a screen
-    # with no link, and the run ended as "could not bring up 安全验证" while the dialog was in fact
-    # open behind it. cur_pkg is cheap, so poll it; `ui` is slow and only used as a fallback.
-    W=0
-    for _ in $(seq 1 12); do
-      sleep 1; W=$((W+1))
+    for _ in $(seq 1 15); do
+      sleep 1
       [ "$(cur_pkg)" = "com.android.systemui" ] && { GOT=1; break; }
+      ui | grep -q '安全验证' && { GOT=1; break; }
     done
-    [ "$GOT" != 1 ] && ui | grep -q "安全验证" && GOT=1
-    [ "$GOT" = 1 ] && { ok "the verification dialog appeared (tapped $pt, after ${W}s)"; break; }
-    warn "no reaction at $pt after ${W}s; trying the next one"
+    if [ "$GOT" = 1 ]; then
+      ok "verification dialog appeared (tapped $pt)"
+      printf '%s\n' "$pt" > "$LAST_FILE"      # remember what worked: next time it is the first try
+      break
+    fi
+    warn "no reaction at $pt; trying the next one"
   done
-  if [ "$GOT" != 1 ] && ui | grep -q "已安装相同版本"; then
-    # Not a failure: this page means the APK is already installed, which is exactly the goal.
-    # Measured 2026-09-27: re-running the tool after a successful install lands here, and the
-    # old code reported it as "could not bring up 安全验证".
-    ok "the 「same version already installed」 page is up → already installed, nothing to do"
-    rm -f "$TMP_APK"; exit 0
+  if [ "$GOT" != 1 ]; then
+    ui | grep -q '已安装相同版本' && { ok "the same-version page is up → already installed"; rm -f "$TMP_APK"; exit 0; }
+    bad "could not bring up 「安全验证」 (did the installer screen change?)"; rm -f "$TMP_APK"; exit 1
   fi
-  [ "$GOT" = 1 ] || { bad "could not bring up 「安全验证」 (did the installer screen change?)"; rm -f "$TMP_APK"; exit 1; }
 fi
 
 # ── lockscreen password ──

@@ -50,43 +50,47 @@ for d in "$BAKDIR" "$BAKDIR/系统备份"; do
   else okf "%s" "$(basename "$d"): $FN full snapshots, under the cap ($KEEP_FULL)"; fi
 done
 
-stepf "② My screenshots: clear every recognized one (keep %s); delete anything older than 7 days first" "$KEEP_IMG"
-# 2026-09-27 fix: only five prefixes were recognized (self-look-/droid-/adb-/board-/screen-),
-#   and the names I later saved with droid-sock shot / self-view were clash-*, whale-*, real-* etc. → **all judged "your images" and left alone**.
-#   Now: the prefix list grew to 13 + a manifest file as a fallback (however odd the name, listing it gets it claimed).
+stepf "② 我的截图：清掉这个目录里的图（保留最新 %s 张）；超过 7 天的先删" "$KEEP_IMG"
+# ⚠ 规则在 2026-09-27 反过来了：以前靠**文件名前缀**猜哪张是我存的，于是我随手起的名
+#   （s.png / nf.png / br20-*.png / console-1.10.png …）全被判成"你的图片"跳过 ——
+#   用户看到的就是"清理根本清不掉图片"（实测 53 张里 37 张是我的，一张都没删）。
+#   而 Download/dsh/图片/ 本来就是**本套件的输出目录**（见该目录 README），
+#   所以现在的规则是：**这里面的图默认都是我的**，按保留策略清；
+#   真要留哪张，把文件名写进保名单（或在文件管理器里移出这个目录）。
+KEEP_LIST="$HOME_DIR/.dsh-images-keep"
+is_kept() {
+  [ -f "$KEEP_LIST" ] || return 1
+  grep -qxF "$(basename "$1")" "$KEEP_LIST" 2>/dev/null
+}
 mine_list() {
-  {
-    find "$IMGDIR" -maxdepth 1 -type f \
-      \( -name 'self-look-*' -o -name 'droid-*' -o -name 'adb-*' -o -name 'board-*' -o -name 'screen-*' \
-         -o -name 'clash-*' -o -name 'whale-*' -o -name 'real-*' -o -name 'probe-*' -o -name 'shot-*' \
-         -o -name 'capture-*' -o -name 'termux-*' -o -name 'dsh-*' \) 2>/dev/null
-    [ -f "$IMG_MANIFEST" ] && grep -v '^[[:space:]]*#' "$IMG_MANIFEST" | grep -v '^[[:space:]]*$' | sed "s|^|$IMGDIR/|"
-  } | sort -u
+  find "$IMGDIR" -maxdepth 1 -type f ! -name '.*' 2>/dev/null | while read -r f; do
+    is_kept "$f" || printf '%s\n' "$f"
+  done
 }
 MINE_LIST="$(mine_list)"
 MINE=$(printf '%s\n' "$MINE_LIST" | grep -c . || true)
-TOTAL=$(find "$IMGDIR" -maxdepth 1 -type f ! -name '.*' 2>/dev/null | wc -l)   # Exclude my own registry files such as .dsh-images.list
+TOTAL=$(find "$IMGDIR" -maxdepth 1 -type f ! -name '.*' 2>/dev/null | wc -l)
 OTHER=$((TOTAL-MINE))
 if [ "$MINE" -gt 0 ]; then
   OLD=$(printf '%s\n' "$MINE_LIST" | while read -r f; do [ -n "$f" ] && [ -n "$(find "$f" -maxdepth 0 -mtime +7 2>/dev/null)" ] && printf '%s\n' "$f"; done | grep -c . || true)
   if [ "$OLD" -gt 0 ]; then
-    printf "$(dsh_msg '%s\n')" "$MINE_LIST" | while read -r f; do
-      [ -n "$f" ] && [ -n "$(find "$f" -maxdepth 0 -mtime +7 2>/dev/null)" ] && run "rm -f \\\"$f\\\""
+    printf '%s\n' "$MINE_LIST" | while read -r f; do
+      [ -n "$f" ] && [ -n "$(find "$f" -maxdepth 0 -mtime +7 2>/dev/null)" ] && run "rm -f \"$f\""
     done
-    okf "Deleted %s of them by the 7-day rule" "$OLD"
+    okf "按 7 天规则删了 %s 张" "$OLD"
   fi
   LEFT_LIST="$(mine_list)"
   LEFT=$(printf '%s\n' "$LEFT_LIST" | grep -c . || true)
   if [ "$LEFT" -gt "$KEEP_IMG" ]; then
-    printf "$(dsh_msg '%s\n')" "$LEFT_LIST" | while read -r f; do
+    printf '%s\n' "$LEFT_LIST" | while read -r f; do
       [ -n "$f" ] && stat -c '%Y %n' "$f" 2>/dev/null
     done | sort -rn | tail -n +$((KEEP_IMG+1)) | cut -d' ' -f2- | while read -r f; do
-      run "rm -f \\\"$f\\\""
+      run "rm -f \"$f\""
     done
-    okf "Deleted %s, kept the newest %s" "$((LEFT-KEEP_IMG))" "$KEEP_IMG"
-  else okf "%s screenshots of mine, under the cap (%s)" "$LEFT" "$KEEP_IMG"; fi
-else ok "No screenshots of mine"; fi
-[ "$OTHER" -gt 0 ] && okf "Plus %s images of your own, **untouched** (if any of them are mine, list the filename in %s and it gets claimed)" "$OTHER" "$IMG_MANIFEST"
+    okf "删了 %s 张，保留最新 %s 张" "$((LEFT-KEEP_IMG))" "$KEEP_IMG"
+  else okf "我的截图 %s 张，在上限内（%s）" "$LEFT" "$KEEP_IMG"; fi
+else ok "这个目录里没有我的截图"; fi
+[ "$OTHER" -gt 0 ] && okf "另有 %s 张在保名单里，不动（保名单：%s）" "$OTHER" "$KEEP_LIST"
 step "②·b Media-library hygiene: pin .nomedia in the image dir so the gallery keeps no 'ghost' entries"
 # 2026-09-27 from your real testing: after cleanup the gallery still showed clash-*.png, but opening one said "corrupted".
 #   Cause: those images live in Download/dsh/图片 (**a public media directory**) → MediaStore indexed them,

@@ -55,6 +55,8 @@ public class BridgeService extends AccessibilityService {
 
     public static final int PORT = 8788;
     public static final String PREFS = "dsh";
+    /** 「不息屏」用的值：30 分钟 —— 系统设置菜单里真有这一档，ROM 不会当非法值丢掉。 */
+    private static final int KEEP_MS = 30 * 60 * 1000;
     public static final String CHANNEL = "dsh-bridge";
     public static final int NOTIF_ID = 8788;
 
@@ -395,9 +397,14 @@ public class BridgeService extends AccessibilityService {
                 try {
                     int cur = android.provider.Settings.System.getInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT);
                     if (!alreadyKept) sp.edit().putInt("screen_off_saved", cur).putBoolean("screen_off_kept", true).apply();
-                    android.provider.Settings.System.putInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT, 2147483647);
+                    // ⚠ 用**系统菜单里真实存在的值**（30 分钟），不要写 Integer.MAX_VALUE：
+                    //   实测写 2147483647 读回来是那个数，但屏幕照旧按原时间熄屏 —— ROM 把它当非法值忽略了。
+                    //   用户的原话是"你这个息屏时间调节没有效果"，根因就在这里。
+                    android.provider.Settings.System.putInt(cr, android.provider.Settings.System.SCREEN_OFF_TIMEOUT, KEEP_MS);
                     d.put("method", "screen_off_timeout");
                     d.put("was", cur);
+                    d.put("now", KEEP_MS);
+                    d.put("minutes", KEEP_MS / 60000);
                 } catch (Throwable t1) {
                     try {
                         int cur = android.provider.Settings.Global.getInt(cr, android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN, 0);
