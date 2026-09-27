@@ -56,7 +56,7 @@ import java.util.List;
  *   · The log is never blank: with no entries it says exactly where to tap.
  */
 public class MainActivity extends Activity {
-    private static final String VER = "v1.2";
+    private static final String VER = "v1.5";
     private static final int TIMEOUT_S = 45;
     private static final int MAX_HISTORY = 60;
 
@@ -133,6 +133,19 @@ public class MainActivity extends Activity {
             String label = pendingLabel.isEmpty() ? Lang.t("Task") : pendingLabel;
             int code = i.getIntExtra("exit", -1);
             String cmdId = i.getStringExtra("cmdId");
+            if ("lang_query".equals(cmdId)) {
+                // The app cannot read ~/.dsh-lang (Termux's private dir), so it asks Termux. This is the
+                // piece that keeps the app, the widgets and the page panel on ONE language.
+                String lv = i.getStringExtra("output");
+                if (lv != null) {
+                    lv = lv.trim();
+                    if ((lv.equals("zh") || lv.equals("en") || lv.equals("auto")) && !lv.equals(Lang.mode())) {
+                        Lang.setMode(MainActivity.this, lv);
+                        recreate();
+                    }
+                }
+                return;
+            }
             if ("installpass_query".equals(cmdId)) {
                 // Auth status query: updates the switch only — no log, no summary, pending untouched
                 setAuthUi(true, code == 0, i.getStringExtra("output"));
@@ -178,7 +191,8 @@ public class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
-        Lang.init();   // read ~/.dsh-lang (or the system locale when it says auto) before building any UI
+        Lang.init(this);   // persisted choice (the app cannot read ~/.dsh-lang; it writes it through Termux)
+        askTermuxLang();   // the file is the source of truth; only Termux can read it
         ScrollView sc = new ScrollView(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -239,14 +253,16 @@ public class MainActivity extends Activity {
             for (Tasks.T x : Tasks.ALL) if (cat.equals(x.cat)) n++;
             if (n == 0) continue;
             TextView h = new TextView(this);
-            h.setText("▍" + cat);
+            h.setText("▍" + Lang.t(cat));   // same static-array trap as the task labels: translate at render
             h.setTextSize(13); h.setTypeface(Typeface.DEFAULT_BOLD);
             h.setTextColor(Color.parseColor("#58A6FF"));
             h.setPadding(0, dp(14), 0, dp(2));
             root.addView(h);
             for (Tasks.T task : Tasks.ALL) {
                 if (!cat.equals(task.cat)) continue;
-                Button bt = mkBtn(task.label + "　·　" + task.hint, task.danger, v -> fire(task));
+                // Translate at RENDER time: Tasks.ALL is static, so wrapping there would freeze the
+                // language that happened to be active when the class was first loaded.
+                Button bt = mkBtn(Lang.t(task.label) + "　·　" + Lang.t(task.hint), task.danger, v -> fire(task));
                 buttons.add(bt);
                 root.addView(bt, wideLp());
             }
@@ -284,6 +300,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        askTermuxLang();   // pick up a change made elsewhere (e.g. `dsh-lang set zh` from a widget)
         render();
         autoStatus();
         refreshAuthState();
@@ -402,6 +419,11 @@ public class MainActivity extends Activity {
 
     // ---------- Install password authorization (a switch, not a button) ----------
     /** That row in the maintenance section: explanation on the left, switch on the right, current state on the line below. */
+    /** Ask Termux for the authoritative language (~/.dsh-lang); the answer arrives via the callback. */
+    private void askTermuxLang() {
+        run("lang_query", "Language", TermuxRunner.HOME + "/.local/bin/dsh-lang mode", false, true);
+    }
+
     /** Shows the current language and cycles it: auto → zh → en.
      *  The choice is stored locally (L) AND pushed into ~/.dsh-lang through Termux, so the scripts,
      *  the DSH page panel and this app always agree. recreate() redraws the screen immediately. */
@@ -433,7 +455,7 @@ public class MainActivity extends Activity {
         String shown = mode.equals("auto") ? Lang.t("System") : (mode.equals("zh") ? Lang.t("Chinese") : "English");
         Button b = mkBtn(shown, false, 0xFF79C0FF, v -> {
             String next = mode.equals("auto") ? "zh" : (mode.equals("zh") ? "en" : "auto");
-            Lang.setMode(next);
+            Lang.setMode(this, next);
             run("lang", Lang.t("Language"), TermuxRunner.HOME + "/.local/bin/dsh-lang set " + next, false, true);
             recreate();
         });
@@ -555,24 +577,24 @@ public class MainActivity extends Activity {
     private void fire(Tasks.T task) {
         if (task.danger) {
             new AlertDialog.Builder(this)
-                    .setTitle(Lang.t("Run ") + task.label + "?")
-                    .setMessage(task.hint + "\n\n⚠ Confirmation required: restart/shutdown drops the current web session; "
+                    .setTitle(Lang.t("Run ") + Lang.t(task.label) + "?")
+                    .setMessage(Lang.t(task.hint) + "\n\n⚠ Confirmation required: restart/shutdown drops the current web session; "
                             + Lang.t("revoke-style actions do not come back on their own (re-authorize to restore)."))
                     .setNegativeButton(Lang.t("Cancel"), null)
                     .setPositiveButton(Lang.t("Run"), (d, w) -> {
-                        toast(Lang.t("Sent: ") + task.label);
+                        toast(Lang.t("Sent: ") + Lang.t(task.label));
                         sendTask(task);
                     })
                     .show();
             return;
         }
-        toast(Lang.t("Sent: ") + task.label);
+        toast(Lang.t("Sent: ") + Lang.t(task.label));
         sendTask(task);
     }
 
     /** Single entry point: uses each task's own wait window (long tasks like backup/restart no longer raise false alarms). */
     private void sendTask(Tasks.T task) {
-        run(task.id, task.label, task.cmd != null ? task.cmd : TermuxRunner.taskCmd(task.id),
+        run(task.id, Lang.t(task.label), task.cmd != null ? task.cmd : TermuxRunner.taskCmd(task.id),
                 false, false, false, task.waitS, false);
     }
 

@@ -106,6 +106,41 @@ else
   else
     warn "no paragraph containing 「本次安装」 in the tree; falling back to fixed coordinates"
   fi
+  # Fallback when the paragraph is not in the accessibility tree: scan a few horizontal bands for
+  # BLUE text. The old hard-coded points below came from an older installer layout and no longer hit
+  # anything on this ROM (measured 2026-09-27: the link sits at y≈1270). Cropping the band first
+  # matters: scanning a whole 1440x3168 screenshot pixel by pixel is slow enough to time out.
+  if [ -n "$CANDS" ] || [ -z "$CANDS" ]; then   # always: dsh-find-blue may return a wrong blue spot
+    SHOT=$(timeout 40 "$SOCK" shot 2>/dev/null | grep -oE '/data[^ ]+\.png' | head -1)
+    if [ -n "$SHOT" ]; then
+      CANDS=$(python3 - "$SHOT" <<'PYX'
+import re, subprocess, sys
+img = sys.argv[1]
+for y in (1240, 1160, 1080, 1300, 1000):
+    out = subprocess.run(['magick', img, '-crop', '1440x120+0+%d' % y, '+repage', '-depth', '8', 'txt:-'],
+                         capture_output=True, text=True).stdout
+    xs = []
+    for line in out.split('\n')[1:]:
+        m = re.match(r'(\d+),(\d+): \((\d+),(\d+),(\d+)', line)
+        if not m:
+            continue
+        x, yy, r, g, b = map(int, m.groups())
+        if b > 150 and b - r > 40 and g > 80:
+            xs.append((x, yy + y))
+    if xs:
+        x1, x2 = min(p[0] for p in xs), max(p[0] for p in xs)
+        y1, y2 = min(p[1] for p in xs), max(p[1] for p in xs)
+        print("%d,%d" % ((x1 + x2) // 2, (y1 + y2) // 2))
+        break
+PYX
+)
+      if [ -n "$CANDS" ]; then
+        BAND=$(printf '%s\n' "$CANDS" | tail -1)
+        CANDS="${CANDS%%$BAND} $BAND"
+        ok "blue candidates: $CANDS (band scan included)"
+      fi
+    fi
+  fi
   for pt in $CANDS "338,1151" "348,1152" "330,1150"; do
     [ -n "$pt" ] || continue
     tap_xy "$pt"; sleep 3
@@ -129,6 +164,15 @@ else
     tap_xy "$xy"; i=$((i+1)); sleep 0.7
   done
   ok "entered $i digits"
+fi
+
+# A "same version already installed" page means what we came to install is already on the device:
+# that IS success (it is also exactly what --verify looks for). Stop here rather than hunting for the
+# blue link — that was a real bug: the tool detected the page and then failed anyway.
+if ui | grep -qE '已安装相同版本|already installed'; then
+  ok "the 「same version already installed」 page is up → nothing left to install"
+  tap_any "取消" || tap_any "Cancel" || true
+  exit 0
 fi
 
 # ── the done page ──
