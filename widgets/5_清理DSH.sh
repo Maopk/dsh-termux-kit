@@ -87,6 +87,22 @@ if [ "$MINE" -gt 0 ]; then
   else ok "我的截图 $LEFT 张，未超上限（$KEEP_IMG）"; fi
 else ok "没有我的截图"; fi
 [ "$OTHER" -gt 0 ] && ok "另有你自己的图片 $OTHER 个，**未触碰**（若其中有我产出的，把文件名写进 $IMG_MANIFEST 就会被认领）"
+step "②·补 媒体库卫生：给图目录钉 .nomedia，别让相册留"幽灵条目""
+# 2026-09-27 用户实测反馈：清理后相册里仍显示 clash-*.png，点开却"损坏"。
+#   原因：这些图存在 Download/dsh/图片（**公共媒体目录**）→ 被 MediaStore 索引，
+#   而清理用 rm 直接删文件、没通知媒体库 → 索引记录（含时间/大小/缩略图）还留着，
+#   文件却没了 ⇒ 相册能显示、点开报损坏。
+#   修法两条：① 该目录放 .nomedia → 以后写进去的图**根本不会被相册索引**；
+#            ② 有 adb 时顺手把已失效的记录从 MediaStore 里删掉（shell 身份才有权限）。
+touch "$IMGDIR/.nomedia" && ok "已确保 $IMGDIR/.nomedia 存在（相册不再索引这个目录）"
+if adb devices 2>/dev/null | awk 'NR>1 && $2=="device"' | grep -q .; then
+  DEL=$(timeout 25 adb shell content delete --uri content://media/external/images/media \
+        --where "_data LIKE '%/Download/dsh/图片/%'" 2>&1 | tail -1)
+  ok "已让媒体库删除该目录的旧记录：${DEL:-已执行}"
+else
+  ok "（没 adb：旧记录由系统空闲维护/重启自行清理；也可手动清「媒体存储」的数据）"
+fi
+
 step "③ 视觉工具临时产物：只留最新 $KEEP_RUNS 次"
 if [ -d "$RUNS" ]; then
   R=$(find "$RUNS" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
