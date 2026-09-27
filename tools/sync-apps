@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# install: runtime   （把 ~/dsh-console、~/droid-bridge 镜像进仓库 apps/）
 # sync-apps —— 把真正被编译的两份 App 源码镜像进仓库 apps/（ui/controls.json 的说明里一直提到它，
 # 但脚本本身此前并不存在，是手工 cp 的 —— 手工就会漂移，2026-09-27 这次就漂了：仓库里的
 # UiControls.java / Lang.java 还是旧的，而手机装的是另一份）。

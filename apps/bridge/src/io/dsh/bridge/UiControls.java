@@ -17,29 +17,34 @@ final class UiControls {
     static final class C {
         final String id, kind, cat, group, icon, labelEn, hintEn;
         final boolean danger;
-        C(String id, String kind, String cat, String group, String icon, String labelEn, String hintEn, boolean danger) {
+        /** true = draw the red outline. Only for the one action that cannot be undone
+         *  (closing DSH). The user asked for this on 2026-09-27: three red-outlined
+         *  buttons side by side made none of them feel dangerous. */
+        final boolean redBorder;
+        C(String id, String kind, String cat, String group, String icon, String labelEn, String hintEn, boolean danger, boolean redBorder) {
             this.id = id; this.kind = kind; this.cat = cat; this.group = group;
             this.icon = icon; this.labelEn = labelEn; this.hintEn = hintEn; this.danger = danger;
+            this.redBorder = redBorder;
         }
     }
 
     /** Category order on screen, and the two column names (id, en, zh). */
-    static final String[][] CATS = { {"startstop", "Start / Stop", "启动 / 停止"}, {"channels", "Channels (adb and bridge separate)", "通道（adb 与桥分开）"}, {"maintenance", "Maintenance", "维护"}, {"emergency", "Emergency", "紧急"}, {"statuslog", "Status / Log", "状态 / 日志"} };
-    static final String[][] GROUPS = { {"adb", "channels", "adb · wireless debugging, needs working Wi-Fi", "adb · 无线调试，需要可用 Wi-Fi"}, {"bridge", "channels", "bridge · accessibility loopback, no network", "桥 · 无障碍回环，不需要网络"} };
+    static final String[][] CATS = { {"startstop", "Start / Stop", "启动 / 停止"}, {"channels", "Channels (adb and bridge separate)", "通道（adb 与桥分开）"}, {"maintenance", "Maintenance", "维护"}, {"security", "Security", "安全"}, {"settings", "Settings", "设置"}, {"emergency", "Emergency", "紧急"}, {"statuslog", "Status / Log", "状态 / 日志"}, {"about", "About this app", "关于本应用"} };
+    static final String[][] GROUPS = { {"adb", "channels", "adb · wireless debugging, needs working Wi-Fi", "adb · 无线调试，需要可用 Wi-Fi"}, {"bridge", "channels", "bridge · accessibility loopback, no network", "桥 · 无障碍回环，不需要网络"}, {"danger", "channels", "Danger zone · only you can undo it by hand", "危险操作 · 只能你手动恢复"} };
 
     static final C[] ALL = {
-        new C("bridge_run", "switch", "channels", "bridge", "🌉", "Bridge running", "On = DSH may drive the phone through this app (listening on 127.0.0.1:8788). Off = soft stop: the port closes, the process stays, and one broadcast brings it back.", false),
-        new C("bridge_state_text", "text", "channels", "bridge", "·", "Bridge state", "Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).", false),
-        new C("bridge_full_stop", "button", "channels", "bridge", "⏻", "Fully stop bridge", "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.", true),
-        new C("lang", "switch", "maintenance", "", "🌐", "Language", "System / Chinese / English. The widgets and the page panel follow this too.", false),
-        new C("project-page", "button", "maintenance", "", "🔗", "Project page", "Opens github.com/Maopk/dsh-termux-kit - source, releases and docs.", false),
-        new C("version-update", "text", "maintenance", "", "·", "Version", "Installed version and whether a newer release exists. If the check fails it says so instead of claiming it is up to date.", false),
-        new C("copy-token", "button", "maintenance", "", "📋", "Copy token", "Copies the bridge token, which the Termux side needs. Handing it out is handing out the key to this channel.", true),
-        new C("open-accessibility", "button", "maintenance", "", "♿", "Open accessibility settings", "For the first setup, or after the system unbound the service and it has to be re-enabled by hand.", false),
-        new C("bridge_refresh", "button", "maintenance", "", "🔄", "Re-read state and resume listening", "Re-reads the accessibility state from the system and starts listening again if it was soft-stopped.", false),
-        new C("open-notification", "button", "maintenance", "", "🔔", "Notification settings", "Keeps the notification-bar emergency stop working; with notifications off you lose that rescue path.", false),
-        new C("idle-auto-stop", "switch", "maintenance", "", "⏱", "Idle auto-stop", "On = soft-stops itself after N idle minutes (less exposure, less battery). Off = always listening.", false),
-        new C("bridge_panic", "button", "emergency", "", "🛑", "Emergency stop", "Turns accessibility off right now. The same button sits in the notification bar, which is why notifications must stay on.", true),
+        new C("bridge_run", "switch", "channels", "bridge", "🌉", "Bridge running", "On = DSH may drive the phone through this app (listening on 127.0.0.1:8788). Off = soft stop: the port closes, the process stays, and one broadcast brings it back.", false, false),
+        new C("bridge_state_text", "text", "channels", "bridge", "·", "Bridge state", "Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).", false, false),
+        new C("bridge_full_stop", "button", "channels", "danger", "⏻", "Fully stop bridge", "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.", true, false),
+        new C("lang", "switch", "settings", "", "🌐", "Language", "System / Chinese / English. The widgets and the page panel follow this too.", false, false),
+        new C("project-page", "button", "settings", "", "🔗", "Project page", "Opens github.com/Maopk/dsh-termux-kit - source, releases and docs.", false, false),
+        new C("version-update", "text", "settings", "", "·", "Version", "Installed version and whether a newer release exists. If the check fails it says so instead of claiming it is up to date.", false, false),
+        new C("copy-token", "button", "maintenance", "", "📋", "Copy token", "Copies the bridge token, which the Termux side needs. Handing it out is handing out the key to this channel.", true, false),
+        new C("open-accessibility", "button", "maintenance", "", "♿", "Open accessibility settings", "For the first setup, or after the system unbound the service and it has to be re-enabled by hand.", false, false),
+        new C("bridge_refresh", "button", "maintenance", "", "🔄", "Re-read state and resume listening", "Re-reads the accessibility state from the system and starts listening again if it was soft-stopped.", false, false),
+        new C("open-notification", "button", "maintenance", "", "🔔", "Notification settings", "Keeps the notification-bar emergency stop working; with notifications off you lose that rescue path.", false, false),
+        new C("idle-auto-stop", "switch", "maintenance", "", "⏱", "Idle auto-stop", "On = soft-stops itself after N idle minutes (less exposure, less battery). Off = always listening.", false, false),
+        new C("bridge_panic", "button", "emergency", "", "🛑", "Emergency stop", "Turns accessibility off right now. The same button sits in the notification bar, which is why notifications must stay on.", true, false),
     };
 
     static C get(String id) {

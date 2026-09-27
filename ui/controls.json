@@ -30,6 +30,16 @@
       "zh": "维护"
     },
     {
+      "id": "security",
+      "en": "Security",
+      "zh": "安全"
+    },
+    {
+      "id": "settings",
+      "en": "Settings",
+      "zh": "设置"
+    },
+    {
       "id": "emergency",
       "en": "Emergency",
       "zh": "紧急"
@@ -38,6 +48,11 @@
       "id": "statuslog",
       "en": "Status / Log",
       "zh": "状态 / 日志"
+    },
+    {
+      "id": "about",
+      "en": "About this app",
+      "zh": "关于本应用"
     }
   ],
   "groups": [
@@ -52,6 +67,12 @@
       "cat": "channels",
       "en": "bridge · accessibility loopback, no network",
       "zh": "桥 · 无障碍回环，不需要网络"
+    },
+    {
+      "id": "danger",
+      "cat": "channels",
+      "en": "Danger zone · only you can undo it by hand",
+      "zh": "危险操作 · 只能你手动恢复"
     }
   ],
   "controls": [
@@ -164,28 +185,6 @@
       "task": true
     },
     {
-      "id": "bridge_full_stop",
-      "kind": "button",
-      "cat": "channels",
-      "icon": "⏻",
-      "label": {
-        "en": "Fully stop bridge",
-        "zh": "真停桥"
-      },
-      "hint": {
-        "en": "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.",
-        "zh": "让 App 退出并解绑无障碍。这台 vivo 上可能唤不回来 —— 只能你手动打开「DSH 桥」。"
-      },
-      "danger": true,
-      "surfaces": [
-        "panel",
-        "console",
-        "bridge"
-      ],
-      "task": true,
-      "group": "bridge"
-    },
-    {
       "id": "1_start-dsh",
       "kind": "button",
       "cat": "startstop",
@@ -264,7 +263,8 @@
         "panel",
         "console"
       ],
-      "task": true
+      "task": true,
+      "redBorder": true
     },
     {
       "id": "adb_ensure",
@@ -308,6 +308,28 @@
         "widget"
       ],
       "task": true
+    },
+    {
+      "id": "bridge_full_stop",
+      "kind": "button",
+      "cat": "channels",
+      "icon": "⏻",
+      "label": {
+        "en": "Fully stop bridge",
+        "zh": "真停桥"
+      },
+      "hint": {
+        "en": "Lets the App exit and unbinds accessibility. On this vivo it may not be wakeable again - you would have to open DSH Bridge by hand.",
+        "zh": "让 App 退出并解绑无障碍。这台 vivo 上可能唤不回来 —— 只能你手动打开「DSH 桥」。"
+      },
+      "danger": true,
+      "surfaces": [
+        "panel",
+        "console",
+        "bridge"
+      ],
+      "task": true,
+      "group": "danger"
     },
     {
       "id": "adb_lamp",
@@ -411,7 +433,7 @@
     {
       "id": "lang",
       "kind": "switch",
-      "cat": "maintenance",
+      "cat": "settings",
       "icon": "🌐",
       "label": {
         "en": "Language",
@@ -431,7 +453,7 @@
     {
       "id": "project-page",
       "kind": "button",
-      "cat": "maintenance",
+      "cat": "settings",
       "icon": "🔗",
       "label": {
         "en": "Project page",
@@ -450,7 +472,7 @@
     {
       "id": "version-update",
       "kind": "text",
-      "cat": "maintenance",
+      "cat": "settings",
       "icon": "·",
       "label": {
         "en": "Version",
@@ -560,7 +582,7 @@
     {
       "id": "password-access",
       "kind": "switch",
-      "cat": "maintenance",
+      "cat": "security",
       "icon": "🔑",
       "label": {
         "en": "Password access",

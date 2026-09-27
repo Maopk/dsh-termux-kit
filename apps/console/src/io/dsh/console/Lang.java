@@ -69,6 +69,7 @@ final class Lang {
         ZH.put("6_hard-restart-dsh", "6_硬重启DSH");
         ZH.put("7_reconnect-ai", "7_重连AI通道");
         ZH.put("8_enable-wireless-adb", "8_自动开无线调试");
+        ZH.put("About this app", "关于本应用");
         ZH.put("Afterwards the AI can no longer use those 6 digits to pass any identity check for you (the security check when installing an APK, ", "之后 AI 就不能再用那 6 位替你过任何身份验证了（装 APK 时的安全验证、");
         ZH.put("Authorize", "授权");
         ZH.put("Authorize the AI to use your password", "授权 AI 使用你的密码");
@@ -98,6 +99,7 @@ final class Lang {
         ZH.put("DSH Console", "DSH 控制台");
         ZH.put("DSH Console ", "DSH 控制台 ");
         ZH.put("DSH Console log", "DSH 控制台日志");
+        ZH.put("Danger zone · only you can undo it by hand", "危险操作 · 只能你手动恢复");
         ZH.put("Deletes only this kit's own artifacts. Your files are not touched.", "只删本工具自己的产物，不碰你的文件。");
         ZH.put("Downloads the two APKs from GitHub Releases, verifies SHA256, then installs them.", "从 GitHub Releases 下载两个 APK，校验 SHA256 后安装。");
         ZH.put("Emergency", "紧急");
@@ -157,10 +159,12 @@ final class Lang {
         ZH.put("Run", "执行");
         ZH.put("Run ", "运行 ");
         ZH.put("Running: ", "正在执行：");
+        ZH.put("Security", "安全");
         ZH.put("Sends one token-carrying broadcast. Never takes your screen. Can take 20-40s if the process was reclaimed.", "发一条带 token 的广播把它唤回，绝不抢你的屏幕。进程被回收时要 20-40 秒。");
         ZH.put("Sent: ", "已发送：");
         ZH.put("Sent: Wake bridge", "已发送：唤醒桥");
         ZH.put("Sent: stop the bridge listening", "已发送：让桥停止监听");
+        ZH.put("Settings", "设置");
         ZH.put("Soft restart", "软重启");
         ZH.put("Start / Stop", "启动 / 停止");
         ZH.put("Start DSH", "启动 DSH");

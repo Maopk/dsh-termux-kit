@@ -63,6 +63,7 @@ final class Lang {
         ZH.put("DSH Bridge started: hold volume +/- together for 3s for emergency stop", "DSH 桥已启动：音量+/- 同时按住 3 秒可紧急停止");
         ZH.put("DSH Bridge stays stopped (you turned it off earlier); tap widgets 1/7/8 to resume", "DSH 桥保持停止（你之前关过它）；点组件 1/7/8 可恢复");
         ZH.put("DSH Bridge: ", "DSH 桥：");
+        ZH.put("Danger zone · only you can undo it by hand", "危险操作 · 只能你手动恢复");
         ZH.put("Emergency", "紧急");
         ZH.put("Emergency stop", "紧急停止");
         ZH.put("Emergency stop done; the accessibility service is off", "已紧急停止，无障碍服务已关闭");
@@ -99,6 +100,8 @@ final class Lang {
         ZH.put("Re-reads the accessibility state from the system and starts listening again if it was soft-stopped.", "从系统重新读无障碍状态；被软停时用它恢复监听。");
         ZH.put("Resumed listening on 127.0.0.1:", "已恢复监听 127.0.0.1：");
         ZH.put("Runs as a foreground service so system/vendor battery savers cannot freeze it and lose contact.", "以前台服务方式常驻，系统/厂商省电策略无法冻结它、导致失联。");
+        ZH.put("Security", "安全");
+        ZH.put("Settings", "设置");
         ZH.put("Soft-stopped: the port is closed, the process stays, one broadcast brings it back", "已软停：端口关闭、进程保留，一条广播就能拉回");
         ZH.put("Start / Stop", "启动 / 停止");
         ZH.put("Status / Log", "状态 / 日志");

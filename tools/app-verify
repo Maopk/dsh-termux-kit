@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/python3
+# install: runtime   （打开 APK 核对文案/主题；装机前跑一次）
 r"""app-verify —— 出包后/装机后自检：这个 APK 里到底有没有"已经修好的那份文案和主题"。
 
 WHY（这条是用户 2026-09-27 那次投诉的直接产物）

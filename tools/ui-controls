@@ -74,6 +74,7 @@ def js_block(data):
         rows.append('        ' + json.dumps({
             'id': c['id'], 'kind': c['kind'], 'cat': c['cat'], 'group': c.get('group', ''),
             'icon': c.get('icon', ''), 'danger': bool(c.get('danger')),
+            'redBorder': bool(c.get('redBorder')),
             'label': c['label'], 'hint': c['hint'], 'surfaces': c['surfaces'],
         }, ensure_ascii=False))
     out.append('      const UI_CONTROLS = [\n' + ',\n'.join(rows) + ',\n      ];')
@@ -104,9 +105,14 @@ def java_file(pkg, cls, data, app):
     L.append('    static final class C {')
     L.append('        final String id, kind, cat, group, icon, labelEn, hintEn;')
     L.append('        final boolean danger;')
-    L.append('        C(String id, String kind, String cat, String group, String icon, String labelEn, String hintEn, boolean danger) {')
+    L.append('        /** true = draw the red outline. Only for the one action that cannot be undone')
+    L.append('         *  (closing DSH). The user asked for this on 2026-09-27: three red-outlined')
+    L.append('         *  buttons side by side made none of them feel dangerous. */')
+    L.append('        final boolean redBorder;')
+    L.append('        C(String id, String kind, String cat, String group, String icon, String labelEn, String hintEn, boolean danger, boolean redBorder) {')
     L.append('            this.id = id; this.kind = kind; this.cat = cat; this.group = group;')
     L.append('            this.icon = icon; this.labelEn = labelEn; this.hintEn = hintEn; this.danger = danger;')
+    L.append('            this.redBorder = redBorder;')
     L.append('        }')
     L.append('    }')
     L.append('')
@@ -119,10 +125,11 @@ def java_file(pkg, cls, data, app):
     L.append('')
     L.append('    static final C[] ALL = {')
     for c in mine:
-        L.append('        new C("%s", "%s", "%s", "%s", "%s", "%s", "%s", %s),' % (
+        L.append('        new C("%s", "%s", "%s", "%s", "%s", "%s", "%s", %s, %s),' % (
             c['id'], c['kind'], c['cat'], c.get('group', ''), c.get('icon', ''),
             c['label']['en'].replace('"', '\\"'), c['hint']['en'].replace('"', '\\"'),
-            'true' if c.get('danger') else 'false'))
+            'true' if c.get('danger') else 'false',
+            'true' if c.get('redBorder') else 'false'))
     L.append('    };')
     L.append('')
     L.append('    static C get(String id) {')

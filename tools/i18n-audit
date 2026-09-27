@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/python3
+# install: runtime   （出包门禁；build.sh 会调用它，装到 ~/.local/bin 后也能手跑）
 r"""i18n-audit —— 交付前的静态审计：三处 UI 的文案/色板/主题/状态口径，一次全查。
 
 WHY（都是真踩过的）
@@ -344,7 +345,7 @@ def screen_model(zh, data):
                 grp = c['group']
                 L.append('     · %s' % next(g['zh'] for g in data['groups'] if g['id'] == grp))
             L.append('     [%s] %s' % (c['kind'], c['label']['zh']))
-    L.append('  （底部结果条只在状态/日志里，见 P1-14）')
+    L.append('  ───── 最近一次结果固定在窗口底部（不随分类滚动；没结果时整条不显示）─────')
     L.append('【桥】')
     L.append('  DSH 桥  v2.22')
     L.append('  无障碍：已开启 ✅ / 端口：正在监听 127.0.0.1:8788')
@@ -353,7 +354,11 @@ def screen_model(zh, data):
         if not ctrls:
             continue
         L.append('  ▾ %s' % cat['zh'])
+        grp = ''
         for c in ctrls:
+            if c.get('group') and c['group'] != grp:
+                grp = c['group']
+                L.append('     · %s' % next(g['zh'] for g in data['groups'] if g['id'] == grp))
             L.append('     [%s] %s' % (c['kind'], c['label']['zh']))
     L.append('  ▾ 关于本应用')
     return L

@@ -38,6 +38,13 @@ public class MainActivity extends Activity {
     static final int BG = Palette.BG, FG = Palette.FG, DIM = Palette.DIM, LINK = Palette.LINK, DANGER = Palette.DANGER;
     /** Views that carry a deliberate colour opt out of the dark pass. */
     private void keepColor(View v) { v.setTag("keepcolor"); }
+    /** 列表里的按钮一律左对齐（用户 2026-09-27：这几个标题居中了，跟其它列表不一致）。
+     *  显式设一次，不依赖深色 pass 顺手带上的 gravity —— 那样哪天 pass 不跑就又居中。 */
+    private Button listBtn(Button b) {
+        b.setAllCaps(false);
+        b.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
+        return b;
+    }
     private void applyDark(View v) {
         if ("keepcolor".equals(v.getTag())) return;
         if (v instanceof android.widget.Button) {
@@ -98,7 +105,7 @@ public class MainActivity extends Activity {
         tokenView.setTextSize(17f);
         tokenView.setPadding(0, pad / 2, 0, pad / 2);
 
-        Button copy = new Button(this);
+        Button copy = listBtn(new Button(this));
         copy.setText(Lang.t("Copy token"));
         copy.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -109,7 +116,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        Button open = new Button(this);
+        Button open = listBtn(new Button(this));
         open.setText(Lang.t(UiControls.get("open-accessibility").labelEn));
         open.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -120,7 +127,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        Button refresh = new Button(this);
+        Button refresh = listBtn(new Button(this));
         refresh.setText(Lang.t(UiControls.get("bridge_refresh").labelEn));
         refresh.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -224,7 +231,7 @@ public class MainActivity extends Activity {
         warnView.setTextColor(Palette.DANGER);
         warnView.setPadding(0, pad / 2, 0, 0);
 
-        Button notif = new Button(this);
+        Button notif = listBtn(new Button(this));
         notif.setText(Lang.t(UiControls.get("open-notification").labelEn));
         notif.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -403,7 +410,12 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(BG);
         android.content.SharedPreferences sp = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE);
         java.util.Set<String> collapsed = new java.util.HashSet<String>(sp.getStringSet("collapsed", java.util.Collections.<String>emptySet()));
-        if (!sp.contains("collapsed")) { collapsed.add("channels"); collapsed.add("maintenance"); collapsed.add("emergency"); }
+        // 首次打开只展开「通道」（那是你真正要看的一类）；其余全收起，包括「关于本应用」
+        // （用户 2026-09-27：它是一页说明，不该每次滚过去）。
+        if (!sp.contains("collapsed")) {
+            collapsed.add("maintenance"); collapsed.add("settings");
+            collapsed.add("emergency"); collapsed.add("about");
+        }
         root.addView(title);
         // ⚠ The title is NOT keepColor'd any more: on the platform's default (light) theme that kept
         //   the default BLACK text, which is why "DSH Bridge" read as a second, foreign title above
@@ -414,18 +426,30 @@ public class MainActivity extends Activity {
         root.addView(warnView);
         keepColor(warnView);
 
-        root.addView(foldSection(root, "channels", collapsed, sp,
-                runSwitch, bridgeState, hintOf("bridge_run")));
-        root.addView(foldSection(root, "maintenance", collapsed, sp,
+        // 分类顺序与名字**全部来自 ui/controls.json**（UiControls.CATS）：两个 App 的分类必须一模一样，
+        // 手写一份就会漂移（上一版桥把「语言/项目主页/版本」塞在「维护」里，而控制台也在维护里 ——
+        // 用户 2026-09-27 要求这两样各自归位）。
+        java.util.Map<String, View[]> body = new java.util.HashMap<String, View[]>();
+        body.put("channels", new View[]{
+                runSwitch, bridgeState, hintOf("bridge_run"),
+                // 真停桥从"跟开关并排"挪到独立子分类「危险操作」（用户 2026-09-27 要求）
+                groupHeader("danger"), fullStopBtn(), hintOf("bridge_full_stop")});
+        body.put("maintenance", new View[]{
                 refresh, hintOf("bridge_refresh"), open, hintOf("open-accessibility"),
                 notif, hintOf("open-notification"), copy, hintOf("copy-token"),
-                idleSwitch, hintOf("idle-auto-stop"), langRow(), fullStopBtn(), hintOf("bridge_full_stop"),
-                updateView, projBtn));
-        root.addView(foldSection(root, "emergency", collapsed, sp, panic, hintOf("bridge_panic")));
+                idleSwitch, hintOf("idle-auto-stop")});
+        body.put("settings", new View[]{langRow(), projBtn, updateView});
+        body.put("emergency", new View[]{panic, hintOf("bridge_panic")});
+        body.put("about", new View[]{desc, tokenView});
 
-        // About is folded away by default: it is a page of explanation, not something to scroll past every time.
-        root.addView(foldSection(root, "about", new java.util.HashSet<String>(java.util.Arrays.asList("about")),
-                getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE), desc, tokenView));
+        boolean any = false;
+        for (String[] cat : UiControls.CATS) {
+            View[] vs = body.get(cat[0]);
+            if (vs == null) continue;              // 桥没有这一类（安全 / 状态·日志）
+            if (any) root.addView(divider());      // 分类之间的分割线
+            any = true;
+            root.addView(foldSection(root, cat[0], collapsed, sp, vs));
+        }
         applyDark(root);
         // Views with a deliberate colour re-apply it after the dark pass.
         stateView.setTextColor(DIM);
@@ -435,6 +459,32 @@ public class MainActivity extends Activity {
         tokenView.setTextColor(DIM);
         desc.setTextColor(DIM);
         projBtn.setTextColor(LINK);
+    }
+
+    /** 子分类标题（ui/controls.json 的 groups）：把「危险操作」和普通开关分开，用琥珀色提醒。 */
+    private TextView groupHeader(String groupId) {
+        TextView t = new TextView(this);
+        t.setText(Lang.t(UiControls.groupEn(groupId)));
+        t.setTextSize(12f);
+        t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        t.setTextColor(Palette.WARN);
+        int d = (int) getResources().getDisplayMetrics().density;
+        t.setPadding(0, 10 * d, 0, 4 * d);
+        keepColor(t);
+        return t;
+    }
+
+    /** 分类之间的分割线：收起后不再是一片空白，视线知道"这里换了一类"。 */
+    private View divider() {
+        View v = new View(this);
+        v.setBackgroundColor(Palette.DIVIDER);
+        android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                Math.max(1, (int) getResources().getDisplayMetrics().density));
+        int d = (int) getResources().getDisplayMetrics().density;
+        lp.setMargins(0, 10 * d, 0, 0);
+        v.setLayoutParams(lp);
+        return v;
     }
 
     /** A section header that folds its body; the choice is remembered across launches. */
@@ -557,11 +607,13 @@ public class MainActivity extends Activity {
     private TextView section(String label) {
         TextView h = new TextView(this);
         h.setText("▍" + label);
-        h.setTextSize(13f);
+        // 用户 2026-09-27：收起状态下分类标题不够显眼 → 13sp 提到 14.5sp，上边距 14dp 收到 11dp
+        // （分割线已经负责"断开"，不用再靠空白撑）。
+        h.setTextSize(14.5f);
         h.setTypeface(Typeface.DEFAULT_BOLD);
         h.setTextColor(Palette.ACCENT);
         keepColor(h);   // the dark pass must not repaint the blue headers grey
-        int p = (int) (14 * getResources().getDisplayMetrics().density);
+        int p = (int) (11 * getResources().getDisplayMetrics().density);
         h.setPadding(0, p, 0, (int) (2 * getResources().getDisplayMetrics().density));
         return h;
     }

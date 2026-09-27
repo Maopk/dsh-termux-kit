@@ -237,7 +237,6 @@ public class MainActivity extends Activity {
         int p = dp(14); root.setPadding(p, p, p, p);
         root.setBackgroundColor(Palette.BG);
         sc.addView(root);
-
         // ── Title row (title + version; the version is visible at a glance so an old build is obvious) ──
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -271,9 +270,14 @@ public class MainActivity extends Activity {
         // ── Everything below comes from the generated control source (ui/controls.json) ──
         // One source, three surfaces: the page panel and the bridge app render the same entries, so the
         // same control cannot end up named or explained differently here than there.
+        boolean firstCat = true;
         for (String[] cat : UiControls.CATS) {
             List<UiControls.C> list = UiControls.ofCat(cat[0]);
             if (list.isEmpty()) continue;
+            // 分类之间画一条分割线（用户 2026-09-27：收起后下面一片空，视觉断裂）。
+            // 第一个分类之前不画 —— 那时上面是标题与忙碌条，再画一条反而像多了一类。
+            if (!firstCat) root.addView(divider());
+            firstCat = false;
             // Collapsible, and the choice is remembered (SharedPreferences "collapsed" set). First run:
             // only Start/Stop is open — a phone screen should not open with 17 buttons at once.
             final LinearLayout box = new LinearLayout(this);
@@ -325,18 +329,32 @@ public class MainActivity extends Activity {
             }
         }
 
-        // ── Last-result summary (tapping it also opens the log); hidden when there is no result, so no blank space ──
+        // ── Last-result bar: **pinned to the bottom of the screen**, outside the ScrollView ──
+        // 用户 2026-09-27：这一条是全局的，以前放在根布局末尾 → 每个分类展开/收起它都跟着滚，看着像
+        // "重复出现"，而且滚动到别处时看不到点下去的结果（用户最在意"点下去必须立刻有反馈"）。
+        // 现在它固定在窗口底部，不随分类滚动；没结果时整条隐藏，不留空白。
         lastLine = new TextView(this);
         lastLine.setTextSize(12); lastLine.setPadding(dp(10), dp(10), dp(10), dp(10));
         lastLine.setBackgroundResource(R.drawable.box);
         lastLine.setVisibility(View.GONE);
-        LinearLayout.LayoutParams llp = wideLp();
-        llp.setMargins(0, dp(12), 0, 0);
         lastLine.setOnClickListener(v -> openLog());
-        root.addView(lastLine, llp);
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.VERTICAL);
+        footer.setBackgroundColor(Palette.BG);
+        footer.setPadding(p, 0, p, dp(10));
+        LinearLayout.LayoutParams llp = wideLp();
+        llp.setMargins(0, dp(8), 0, 0);
+        footer.addView(lastLine, llp);
 
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(Palette.BG);
+        page.addView(sc, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        page.addView(footer, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        setContentView(sc);
+        setContentView(page);
         registerReceiver(refresh, new IntentFilter("io.dsh.console.UI_REFRESH"),
                 Build.VERSION.SDK_INT >= 33 ? Context.RECEIVER_NOT_EXPORTED : 0);
         loadHistory();   // the log survives a cold start now (see saveHistory)
@@ -1060,13 +1078,28 @@ public class MainActivity extends Activity {
 
     // ══ helpers for the generated control list (ui/controls.json → UiControls.java) ══
 
+    /**
+     * 分类标题。用户 2026-09-27：收起状态下标题不够显眼 → 13sp 提到 14.5sp 并保持加粗，
+     * 上边距从 14dp 收到 11dp（分割线已经负责"断开"，不用再靠空白撑）。
+     */
     private TextView sectionHeader(String text) {
         TextView h = new TextView(this);
         h.setText("▍" + text);
-        h.setTextSize(13); h.setTypeface(Typeface.DEFAULT_BOLD);
+        h.setTextSize(14.5f); h.setTypeface(Typeface.DEFAULT_BOLD);
         h.setTextColor(Palette.ACCENT);
-        h.setPadding(0, dp(14), 0, dp(2));
+        h.setPadding(0, dp(11), 0, dp(2));
         return h;
+    }
+
+    /** 分类之间的分割线：收起后不再是一片空白，视线知道"这里换了一类"。 */
+    private View divider() {
+        View v = new View(this);
+        v.setBackgroundColor(Palette.DIVIDER);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        lp.setMargins(0, dp(10), 0, 0);
+        v.setLayoutParams(lp);
+        return v;
     }
 
     private TextView subHeader(String text) {
@@ -1094,16 +1127,17 @@ public class MainActivity extends Activity {
         bt.setMinHeight(dp(54));
         bt.setOnLongClickListener(v -> { showHint(ctrl); return true; });
         if (ctrl.danger) {
-            // Two danger levels, visually different (user's call):
-            //   emergency = solid red on white text  -> the last resort
-            //   everything else dangerous = white background, red text and a red border -> serious but not final
+            // 三级，靠**形状**分而不是靠"都画红框"（用户 2026-09-27 的要求）：
+            //   紧急类 = 实心红底白字（最后手段）
+            //   redBorder=true = 白底红字 + 红边框 —— 只给**不可逆的那一个**（关闭 DSH）
+            //   其余危险项 = 普通样式 + 说明行前的 ⚠（软重启/硬重启/真停桥/复制 token/密码使用权）
+            // 为什么改：三个红边框按钮并排，反而谁都不像危险动作。
             if ("emergency".equals(ctrl.cat)) {
                 bt.setBackgroundColor(Palette.DANGER);
                 bt.setTextColor(Palette.ON_DANGER);
-            } else {
-                bt.setBackgroundColor(Palette.DANGER_FILL);
-                bt.setTextColor(Palette.DANGER);
+            } else if (ctrl.redBorder) {
                 bt.setBackground(rounded(Palette.DANGER_FILL, Palette.DANGER));
+                bt.setTextColor(Palette.DANGER);
             }
         }
         if ("project-page".equals(ctrl.id)) {

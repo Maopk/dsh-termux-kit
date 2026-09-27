@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/python3
 r"""i18n-table — the kit's single translation source and its two code generators.
 
 WHY

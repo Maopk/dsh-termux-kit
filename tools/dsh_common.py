@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/python3
 """dsh_common — one place that answers "where is DSH actually running?".
 
 WHY THIS EXISTS

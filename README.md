@@ -72,11 +72,11 @@ The bridge app, the console app and the page panel show the **same categories, t
 the same one-line consequences**, because all three are generated from one file — `ui/controls.json`
 (`tools/ui-controls gen`; `ui-controls check` compares the md5 of each artifact and runs in the self-test).
 
-- **Five categories**: Start·Stop / Channels (adb and bridge separate) / Maintenance / Emergency / Status·Log.
+- **Seven categories** (plus the bridge's *About this app*): Start·Stop / Channels (adb and bridge separate) / Maintenance / Security / Settings / Emergency / Status·Log.
 - **Kinds are explicit**: a button triggers one action; a switch expresses a lasting state (bridge running,
   idle auto-stop, PIN usage rights); a lamp is read-only.
 - **Every control explains itself**: one grey line under the name says what it does and what it costs, and a
-  long-press opens the full text. Danger adds ⚠ and a red border — it never moves the control to another category.
+  long-press opens the full text. Danger comes in three shapes: emergency = solid red on white text; **only "Stop DSH"** (the one irreversible action) = white fill, red text, red border; every other dangerous control = ordinary styling + ⚠ (user, 2026-09-27: three red-outlined buttons side by side made none of them look dangerous).
 - **Fixed colour semantics**: green ok · yellow transitional · red broken · grey off/not installed; the lamp
   line colours each dot by finding it (`indexOf`), never by a hard-coded offset.
 - **The bridge has four states**, decided by one ping plus a state note — not by a timer: running /
@@ -105,12 +105,12 @@ Every widget supports `--dry-run` (print only, execute nothing).
 ### DSH Console app
 
 - **Status / log** section: three lamps (DSH / bridge / adb — green ok, yellow transitional, red broken, grey off), a detail line, `Refresh status` (read-only: it never wakes a channel) and the log.
-- Every control carries a one-line consequence under its name; **long-press any of them for the full text**. Danger is a red border + ⚠, never a different category.
-- Five categories, identical in all three UIs: `Start·Stop` / `Channels (adb and bridge kept separate)` / `Maintenance` / `Emergency` / `Status·Log`. Inside Channels, adb and the bridge are two labelled groups: *adb · wireless debugging, needs working Wi-Fi* and *bridge · accessibility loopback, no network*.
+- Every control carries a one-line consequence under its name; **long-press any of them for the full text**. Danger is ⚠ (plus a red border for the one irreversible action), never a different category.
+- Seven categories, identical in all three UIs: `Start·Stop` / `Channels (adb and bridge kept separate)` / `Maintenance` / `Security` / `Settings` / `Emergency` / `Status·Log` (the bridge app adds a folded *About this app*). Inside Channels, adb and the bridge are two labelled groups: *adb · wireless debugging, needs working Wi-Fi* and *bridge · accessibility loopback, no network*; `Fully stop bridge` moved out of the switch row into its own **Danger zone · only you can undo it by hand** group.
 - **Logs** live on their own screen: command sent, result, exit code, raw output; the button shows an unread badge.
 - “PIN usage rights” is a **switch**: on = the AI may use your 6-digit lock-screen PIN to pass system verification; off = revoked immediately.
-- **Language switch** (System / 中文 / English) under Maintenance: it writes the shared `~/.dsh-lang`, so the app, the DSH page panel and the 12 widgets all follow the same choice. Source text is English; Chinese comes from the shared table in `i18n/zh.json` (see [`docs/i18n.md`](docs/i18n.md)).
-- `Bridge running` is a real **switch** (on = listening on 8788, off = soft stop), and the line under it names the state from one ping: *running / just dropped (wakeable) / long silent / not installed*. `Fully stop bridge` is separate, dangerous, and says so: on this ROM it may not be wakeable again.
+- **Language switch** (System / 中文 / English) under Settings: it writes the shared `~/.dsh-lang`, so the app, the DSH page panel and the 12 widgets all follow the same choice. Source text is English; Chinese comes from the shared table in `i18n/zh.json` (see [`docs/i18n.md`](docs/i18n.md)).
+- `Bridge running` is a real **switch** (on = listening on 8788, off = soft stop), and the line under it names the state from one ping: *running / just dropped (wakeable) / long silent / not installed*. `Fully stop bridge` is dangerous and says so (on this ROM it may not be wakeable again); it lives in its own Danger-zone group, not beside the switch.
 - Dangerous actions (restart / shutdown / full stop / emergency stop) require confirmation.
 - Timeouts are per task (backup 420s / restart 300s / queries 25s with one automatic resend), and timeout messages state the real reason (e.g. “the phone was busy”).
 - It requests exactly one permission: `com.termux.permission.RUN_COMMAND`. No storage, network, accessibility or overlay permissions.
