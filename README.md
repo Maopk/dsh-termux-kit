@@ -33,10 +33,8 @@ pkg install zstd imagemagick tesseract tesseract-lang   # tesseract is optional 
 # 2) Put the scripts in place
 git clone <this-repo> dsh-termux-kit && cd dsh-termux-kit
 install -m755 tools/*   ~/.local/bin/
-mkdir -p ~/.shortcuts/tasks ~/.local/share/dsh-widgets
-install -m755 widgets/*.sh ~/.shortcuts/tasks/
 install -m755 tests/selftest.sh ~/.local/share/dsh-widgets/
-install -m755 widgets/common.sh ~/.local/share/dsh-widgets/
+bash tools/install-widgets          # adds the task widgets AND their Chinese names
 
 # 3) Let external apps run commands in Termux (needed by the Console app)
 grep -q allow-external-apps ~/.termux/termux.properties 2>/dev/null \
@@ -50,6 +48,13 @@ bash apps/console/build.sh && bash apps/bridge/build.sh
 # 5) Self-test
 bash tests/selftest.sh
 ```
+
+> **Why the widgets need a script.** Termux:Widget lists *every file* in `~/.shortcuts/tasks`, so
+> those filenames are a user-facing surface. Each task is installed under its English repo name
+> **and** under a Chinese name that forwards to it, so a shortcut already on the home screen keeps
+> working after a rename and the list does not end up with one lonely English row among Chinese
+> ones. The mapping is one table in `tools/install-widgets`, and a repo task missing from it is
+> reported instead of shipped.
 
 Two more steps after installing:
 

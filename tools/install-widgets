@@ -1,0 +1,87 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# install-widgets — put the kit's task widgets on the phone, and keep the Termux:Widget list consistent.
+#
+# Why a script instead of "copy the files": Termux:Widget lists **every file** in
+# ~/.shortcuts/tasks, so the names in that list are a user-facing surface.
+#
+#   · Each task is installed under its **English** repo name (the repo's face is English).
+#   · Each task ALSO gets a **Chinese** name that forwards to it, so a shortcut the user already
+#     put on the home screen keeps working after a rename — and so the list reads consistently
+#     instead of showing one lonely English entry among Chinese ones.
+#   · Anything that is not a task (editor leftovers such as *.bak-*) is moved out of the way,
+#     because otherwise it shows up on the home screen as a dead entry.
+#
+# Usage: install-widgets [--dry-run]
+set -u
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO=$(cd "$HERE/../widgets" 2>/dev/null && pwd) || { printf '✘ cannot find widgets/ next to %s\n' "$HERE" >&2; exit 1; }
+T="$HOME/.shortcuts/tasks"
+STALE="$HOME/.shortcuts/.stale"
+DRY=0
+[ "${1:-}" = "--dry-run" ] && DRY=1
+
+# Chinese name → English task name. One place, so a new task cannot ship with only one name.
+declare -A MAP=(
+  [0_紧急停止]=0_emergency-stop [1_启动DSH]=1_start-dsh [2_关闭DSH]=2_shutdown-dsh
+  [3_备份DSH]=3_backup-dsh [4_软重启DSH]=4_soft-restart-dsh [5_清理DSH]=5_cleanup-dsh
+  [6_硬重启DSH]=6_hard-restart-dsh [7_重连AI通道]=7_reconnect-ai
+  [8_自动开无线调试]=8_enable-wireless-adb [9_撤销密码授权]=9_revoke-pin
+  [10_网络急救]=10_net-fix
+)
+
+# Gate: a task in the repo with no Chinese name would show up as a single English row in an
+# otherwise Chinese list (this is exactly how 10_net-fix was noticed on 2026-09-27 — the table
+# above used to stop at 9). Name it here instead of shipping the inconsistency.
+MISSING=0
+for f in "$REPO"/[0-9]*.sh; do
+  b=$(basename "$f" .sh)
+  case " ${MAP[*]} " in *" $b "*) ;; *) printf '   ⚠ repo task %s has no Chinese name (add one to MAP)\n' "$b"; MISSING=1 ;; esac
+done
+[ "$MISSING" = 0 ] || printf '   ↑ without one, Termux:Widget shows it as an English-only row\n'
+
+run() { if [ "$DRY" = 1 ]; then printf '   · [dry] %s\n' "$*"; else eval "$@"; fi; }
+
+run mkdir -p "'$T'"
+for zh in "${!MAP[@]}"; do
+  en="${MAP[$zh]}"
+  [ -f "$REPO/$en.sh" ] || { printf '   ⚠ %s is in MAP but not in widgets/ — skipped\n' "$en"; continue; }
+  run install -m755 "'$REPO/$en.sh'" "'$T/$en.sh'"
+  if [ "$DRY" = 1 ]; then
+    printf '   · [dry] write the forwarder %s.sh → %s.sh\n' "$zh" "$en"
+  else
+    cat > "$T/$zh.sh" <<INNER
+#!/data/data/com.termux/files/usr/bin/bash
+# Compatibility forwarder: this task was renamed to $en.sh (home-screen shortcuts still point at the old name)
+exec "$T/$en.sh" "\$@"
+INNER
+    chmod 755 "$T/$zh.sh"
+  fi
+done
+
+# Tasks present in the repo but absent from MAP (added later) still get installed under their
+# English name — better an English-only row than a missing widget. The gate above tells you to
+# give it a Chinese name.
+for f in "$REPO"/[0-9]*.sh; do
+  b=$(basename "$f")
+  case " ${MAP[*]} " in *" ${b%.sh} "*) continue ;; esac
+  run install -m755 "'$f'" "'$T/$b'"
+done
+
+# Termux:Widget lists every file, so editor leftovers become dead desktop entries.
+run mkdir -p "'$STALE'"
+for f in "$T"/*.bak-* "$T"/*.orig "$T"/*~; do
+  [ -e "$f" ] || continue
+  run mv "'$f'" "'$STALE/'"
+done
+
+# The shared language layer lives outside the widget dir (common.sh sources it from there).
+LIB="$HOME/.local/share/dsh-widgets"
+run mkdir -p "'$LIB'"
+run install -m755 "'$REPO/common.sh'" "'$LIB/common.sh'"
+run install -m755 "'$REPO/i18n.sh'" "'$LIB/i18n.sh'"
+
+[ "$DRY" = 1 ] && { printf '\n(dry run: nothing was written)\n'; exit 0; }
+printf '\n✔ installed to %s\n' "$T"
+printf '   English tasks : %s\n' "$(ls "$T" | grep -cE '^[0-9]+_[a-z]')"
+printf '   Chinese names : %s\n' "$(ls "$T" | grep -cE '^[0-9]+_[^a-z]')"
+printf '   moved aside   : %s\n' "$(ls "$STALE" 2>/dev/null | wc -l)"
