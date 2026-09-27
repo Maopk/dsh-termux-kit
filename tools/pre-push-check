@@ -57,7 +57,10 @@ else ok 5 "docs/ 与本次改动的关系已确认"; fi
 
 # 6) 运维笔记已追加（两份）
 a=0; b=0
-{ [ -n "$(git status --porcelain docs/DSH运维笔记.md)" ] || git show --stat --oneline HEAD 2>/dev/null | grep -q 'DSH运维笔记'; } && a=1
+# 笔记可能已经提交了（工作区干净）：看最近一条 commit 有没有它。
+# 注意 git 默认会把非 ASCII 路径转义成 \350\277\220…，所以要关掉 quotepath 再 grep。
+{ [ -n "$(git status --porcelain docs/DSH运维笔记.md)" ] \
+  || git -c core.quotepath=false show --name-only --oneline HEAD 2>/dev/null | grep -q 'DSH运维笔记'; } && a=1
 [ -n "$(diff -q docs/DSH运维笔记.md "$HOME/DSH运维笔记.md" 2>/dev/null)" ] && b=1
 if [ "$a" = 1 ]; then ok 6 "仓库版运维笔记有新增"
 else warn_ 6 "docs/DSH运维笔记.md 没有变化 —— 这次改动记了吗？"; fi
