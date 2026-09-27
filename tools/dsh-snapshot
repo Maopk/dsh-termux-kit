@@ -9,19 +9,21 @@
 # 用法：
 #   dsh-snapshot                 # 打包（默认不含 pnpm store 等缓存）
 #   dsh-snapshot --with-store    # 连 pnpm store(约 674MB) 一起打，还原后完全离线可用
-#   dsh-snapshot --out DIR       # 指定输出目录
+#   dsh-snapshot --out DIR       # 指定输出目录（默认 备份/系统备份/）
 #   dsh-snapshot --list          # 列出已有完整快照
 #   dsh-snapshot --verify FILE   # 只校验某个快照
 #
 # 还原（同版本 Termux 装好后，无需 root）：
 #   pkg install -y zstd
-#   tar -I zstd -xf /sdcard/Download/dsh/备份/dsh-full-*.tar.zst -C /
+#   tar -I zstd -xf /sdcard/Download/dsh/备份/系统备份/dsh-full-*.tar.zst -C /
 #   bash ~/.shortcuts/tasks/1_启动DSH.sh
 set -u
 
 HOME_DIR="/data/data/com.termux/files/home"
 PREFIX_DIR="/data/data/com.termux/files/usr"
-DEST="${DSH_BACKUP_DEST:-$HOME_DIR/storage/downloads/dsh/备份}"
+# 2026-09-27 改：完整快照放进「备份/系统备份/」，与自动状态备份（dsh-state-*）分开 ——
+#   原来它直接落在 备份/ 根下，和一个空的「系统备份/」子目录并存，看着像放错了地方。
+DEST="${DSH_BACKUP_DEST:-$HOME_DIR/storage/downloads/dsh/备份/系统备份}"
 STAMP="$(date '+%Y%m%d-%H%M%S')"
 NAME="dsh-full-${STAMP}.tar.zst"
 KEEP="${DSH_SNAPSHOT_KEEP:-3}"        # 完整快照很占地方：默认只留最近 3 份
