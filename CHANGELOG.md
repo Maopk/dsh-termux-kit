@@ -40,6 +40,32 @@
 - 面板 `client.js` 重新部署（v0.8，八个分类与数据源一致）+ `pnpm install` + `dsh-relink-bundles --check`
   通过；刷一下页面即可看到新分类。
 
+## 2026-09-27 — 修"一点开插件就消失"（面板 0.10）
+
+**症状**：点右下角 ☰ → 面板刚出来就整块没了（插件从页面上消失）。
+
+**根因**（我上一批引入的）：把面板文案搬进 i18n 表时，helper 写在了**模块作用域**：
+```js
+const T = (en) => (lang === 'zh' ? (UI_TEXT[en] || en) : en);   // ← lang 是组件里的变量
+```
+`node --check` 语法全过，静态审计也全过（因为 `lang` 这个**名字**在文件里确实存在，只是在另一个作用域）。
+于是插件照常加载、☰ 也在，**一点开** TaskSheet 调 `T()` → `ReferenceError: lang is not defined` →
+React 把整棵子树卸掉。用户看到的就是"点一下它就消失了"。
+
+**修法**：`UI_TEXT`（纯数据）留在模块作用域，`T` 改成**每个用到它的组件各定义一份**（那里才有 `lang`）：
+Control / SwitchRow / LangRow / HintDialog / TaskSheet 五处，11 个调用点全部落在有定义的函数里（已逐点核对）。
+
+**新增 `tools/panel-render-test`（渲染测试台）——这类错误以后过不了门禁**
+用最小 React 垫片把组件**真的调用起来**（createElement/useState/useEffect/useCallback/useMemo/useRef
++ document/window/fetch/localStorage 垫片），跑三遍：
+① 默认折叠态；② 全部展开（清空"默认折叠"、把 false/null/'' 的 state 顶成能进分支的值）→ 覆盖
+Control/SwitchRow/LangRow/Lamp/TaskSheet；③ 二次确认弹层（armed/hintId 指向真实控件 id）→ 覆盖 HintDialog。
+任何一遍抛错就非零退出。当前：三遍共渲染 66 个组件（Fab×2 · TaskSheet×2 · Control×34 · SwitchRow×4 ·
+LangRow×2 · Lamp×18 · HintDialog×4）✅；拿**上一版（有 bug 的那个提交）**跑同一个测试台会当场失败：
+`ReferenceError: lang is not defined at T (...:74) at TaskSheet (...:573)` —— 回归验证过。
+
+已接进 `tools/i18n-audit`（每次出包/自检都会跑），面板这种"点开就崩"不会再悄悄发出去。
+
 ## 2026-09-27 — 版本号与 ⚠ 提示（面板 0.9 / 控制台 1.17 / 桥 2.23）
 
 用户指出两件事，都成立：

@@ -1,0 +1,137 @@
+#!/data/data/com.termux/files/usr/bin/node
+/**
+ * panel-render-test —— 真正**跑一遍**面板的渲染，抓"一点开插件就消失"这类运行时错误。
+ *
+ * WHY（2026-09-27 真踩）
+ * ----------------------
+ * 我把面板的文案搬进 i18n 表时，把 helper 写在了**模块作用域**：
+ *     const T = (en) => (lang === 'zh' ? (UI_TEXT[en] || en) : en);   // ← lang 是组件里的变量
+ * 语法检查（node --check）完全过得去，静态审计也过得去 —— 因为 `lang` 这个名字在文件里**确实存在**，
+ * 只是在另一个作用域。结果：插件加载正常、☰ 也在，**一点开** TaskSheet 去调 T() → ReferenceError →
+ * React 卸掉整棵子树 → 用户看到的就是"点一下它就消失了"。
+ *
+ * 结论：这种错误只有**真的执行一次渲染**才抓得住。所以这个测试台：
+ *   ① 用最小 React 垫片（createElement/useState/useEffect/useCallback/useMemo/useRef）把组件**真的调用**起来；
+ *   ② 跑三遍：普通渲染 / 强制展开（把 useState 的 false/null 顶成真值，让折叠的、弹层的都渲染）/
+ *      强制进入"二次确认"分支（把 armed === c.id 改成 true，把 HintDialog 也渲染出来）；
+ *   ③ 任何一次抛错就非零退出，并把栈打出来；顺带报出这一遍渲染到了哪些组件。
+ *
+ * 用法
+ * ----
+ *   panel-render-test                      默认测仓库里的 plugins/dsh-mobile-local/client.js
+ *   panel-render-test <client.js 路径>      测指定文件（用来验证旧版本确实会挂）
+ */
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const file = process.argv[2] || path.join(process.env.HOME || '.', 'dsh-termux-kit/plugins/dsh-mobile-local/client.js');
+let src = fs.readFileSync(file, 'utf8');
+
+const PASSES = [
+  { name: '普通渲染（默认折叠态）', mode: 'plain', patch: (s) => s },
+  {
+    name: '全部展开（面板、日志、灯、语言行都渲染）',
+    mode: 'open',
+    // 只在内存里改，不动仓库文件：把"默认折叠哪几类"清空，让每个分类的 body 都渲染出来
+    patch: (s) => s.replace(
+      /const \[collapsed, setCollapsed\] = useState\(\{[^}]*\}\);/,
+      'const [collapsed, setCollapsed] = useState({});'),
+  },
+  {
+    name: '二次确认弹层（HintDialog / armed）',
+    mode: 'open',
+    patch: (s) => s
+      .replace(/const \[collapsed, setCollapsed\] = useState\(\{[^}]*\}\);/,
+               'const [collapsed, setCollapsed] = useState({});')
+      // '' 的 state 顶成一个**真实控件 id**：armed/hintId 那两处 `x && ctl(x)` 才会成立，弹层才渲染
+      .replace(/const isArmed = armed === c\.id;/, 'const isArmed = true;'),
+  },
+];
+
+function run(pass) {
+  const created = [];
+  const React = {
+    Fragment: Symbol('Fragment'),
+    createElement(type, props) {
+      const children = Array.prototype.slice.call(arguments, 2);
+      if (type === React.Fragment) return children;
+      if (typeof type === 'function') {
+        created.push(type.name || 'anonymous');
+        return type(Object.assign({}, props, { children: children }));
+      }
+      return { type: type, props: Object.assign({}, props, { children: children }) };
+    },
+    // 'open' 模式把初值顶成"能进分支"的值：false→true、null→{}、''→一个真实控件 id
+    // （空串顶成普通真值没用：面板里是 `hintId && ctl(hintId)`，ctl 查不到就还是不渲染）
+    useState: (v) => [pass.mode === 'open'
+      ? (v === false ? true : (v === null ? {} : (v === '' ? '0_emergency-stop' : v)))
+      : v, () => {}],
+    useEffect: () => {},
+    useCallback: (f) => f,
+    useMemo: (f) => f(),
+    useRef: (v) => ({ current: v }),
+  };
+  const noop = () => {};
+  const styleEl = { setAttribute: noop, appendChild: noop, remove: noop, style: {} };
+  const sandbox = {
+    React: React,
+    console: console,
+    setTimeout: setTimeout, clearTimeout: clearTimeout, setInterval: setInterval, clearInterval: clearInterval,
+    Promise: Promise, JSON: JSON, Math: Math, Date: Date, Object: Object, Array: Array, String: String,
+    Number: Number, Boolean: Boolean, RegExp: RegExp, Error: Error, Symbol: Symbol,
+    document: {
+      head: { appendChild: noop },
+      body: { appendChild: noop },
+      createElement: () => styleEl,
+      querySelector: () => null,
+      addEventListener: noop,
+    },
+    window: {
+      addEventListener: noop,
+      matchMedia: () => ({ matches: false }),
+      // 插件是从 window.__ModuleLoader__ 进来的（第一版垫片把它放在顶层，于是渲染前就报错）
+      __ModuleLoader__: {
+        load: (def) => { sandbox.__factory = def.factory; return { exports: {} }; },
+      },
+    },
+    navigator: { clipboard: { writeText: noop }, userAgent: 'harness' },
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    fetch: () => new Promise(() => {}),          // 永远 pending：不联网、不产生异步噪声
+  };
+  sandbox.globalThis = sandbox;
+  let renders = [];
+  vm.createContext(sandbox);
+  vm.runInContext(pass.patch(src), sandbox, { filename: file });
+  // factory(require)：插件自己 require('react')，所以这里给一个 require 垫片
+  const plug = sandbox.__factory((name) => (name === 'react' ? React : {}));
+  plug.apply({
+    logger: { info: noop, warn: noop, error: noop },
+    slots: {
+      inject: (slot, fn) => fn(),
+      register: (meta, render) => { renders.push(render); return () => {}; },
+    },
+  });
+  if (!renders.length) throw new Error('没有任何 slot 注册成功（mount 没跑？）');
+  renders.forEach((r) => r());
+  return created;
+}
+
+let failed = 0;
+console.log('渲染测试台：' + file);
+for (const pass of PASSES) {
+  try {
+    const created = run(pass);
+    const tally = {};
+    created.forEach((n) => { tally[n] = (tally[n] || 0) + 1; });
+    const list = Object.keys(tally).map((k) => k + '×' + tally[k]).join(' · ');
+    console.log('   ✔ ' + pass.name + '：渲染了 ' + created.length + ' 个组件 —— ' + list);
+  } catch (e) {
+    failed++;
+    console.log('   ✘ ' + pass.name + '：抛错了 —— ' + String((e && (e.message || e)) || 'unknown'));
+    const st = String((e && e.stack) || '').split('\n').slice(0, 4).join('\n      ');
+    console.log('      ' + st);
+  }
+}
+console.log(failed ? '\n❌ 面板会在这些路径上挂掉（用户看到的就是"点一下就消失"）' : '\n✅ 三遍渲染都通过：面板不会一点就消失');
+process.exit(failed ? 1 : 0);

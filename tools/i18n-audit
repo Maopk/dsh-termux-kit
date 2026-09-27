@@ -412,6 +412,21 @@ def audit_panel_i18n():
         bad('面板里有 %d 处中文不在生成表里（应改成 T(\'English\')）：%s' % (len(hits), ' | '.join(ctx[:3])))
     else:
         ok('面板里所有文案都走 T(\'English\') → i18n/zh.json 生成的 UI_TEXT（没有散落的字符串）')
+    # 真的跑一遍渲染：面板"一点开就消失"这类运行时错误，语法检查与静态规则都抓不住
+    # （2026-09-27 真踩：T() 写在模块作用域、却读组件里的 lang —— node --check 全过，一打开面板就 ReferenceError）
+    try:
+        r = subprocess.run(['node', os.path.join(ROOT, 'tools', 'panel-render-test'), p],
+                           capture_output=True, text=True, timeout=180)
+        if r.returncode != 0:
+            tail = [l for l in r.stdout.splitlines() if l.strip().startswith('✘')]
+            bad('面板渲染测试台不通过（点开就会崩）：%s' % (tail[0].strip() if tail else r.stdout.strip()[-160:]))
+        else:
+            last = [l for l in r.stdout.splitlines() if '渲染了' in l]
+            ok('面板渲染测试台通过：%d 遍都渲染到底（%s）'
+               % (len(last), last[-1].split('——')[-1].strip() if last else ''))
+    except FileNotFoundError:
+        pass
+
     # 表本身必须能被 JS 解析/求值：一个语法错就让整个面板从页面上消失（不是"显示英文"那么轻）
     try:
         r = subprocess.run(['node', '-e',

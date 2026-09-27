@@ -11,7 +11,7 @@
   "appVersions": {
     "bridge": "2.23",
     "console": "1.17",
-    "panel": "0.9"
+    "panel": "0.10"
   },
   "cats": [
     {
