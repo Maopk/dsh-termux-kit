@@ -55,7 +55,9 @@ def set_text(v):
 
 
 def nodes(kw=''):
-    out = sh(SOCK, 'ui', kw)
+    # 必须显式要更多节点：droid-sock ui 默认只回 40 条，而覆写页字段远多于 40，
+    # 默认值下「FakeIP 过滤器」那一项根本不在返回里——「看不见」和「不存在」是两件事。
+    out = sh(SOCK, 'ui', kw, '400')
     res = []
     for line in out.splitlines():
         m = re.match(r"\s*\[(-?\d+),(-?\d+)\]\s+(\S+)\s+text=(.*?)\s+desc=(.*?)\s+id=", line)
