@@ -48,6 +48,7 @@ public class BridgeForeground extends Service {
                     .setContentTitle("DSH Bridge is running")
                     .setContentText("Listening on 127.0.0.1:" + BridgeService.PORT + " · hold volume +/- for 3s to stop")
                     .setOngoing(true)
+                    .setOnlyAlertOnce(true)
                     .setContentIntent(pi)
                     .addAction(new Notification.Action.Builder(
                             Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),

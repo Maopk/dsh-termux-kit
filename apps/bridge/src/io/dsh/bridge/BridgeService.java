@@ -113,6 +113,24 @@ public class BridgeService extends AccessibilityService {
         c.getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean("userPaused", v).apply();
     }
 
+    /**
+     * Show a toast at most once per `minMs`, keyed by `key`.
+     *
+     * Why: this ROM rebinds the accessibility service periodically, and onServiceConnected used to
+     * replay the same LENGTH_LONG "started" toast (and the "stays stopped" one) on every rebind — the
+     * user reported it as a repeating prompt. The state did not change, so the message should not
+     * reappear either. The persistent notification gets setOnlyAlertOnce for the same reason.
+     */
+    void toastOnce(String key, String text, long minMs) {
+        try {
+            android.content.SharedPreferences sp = getSharedPreferences(PREFS, MODE_PRIVATE);
+            long now = System.currentTimeMillis();
+            if (now - sp.getLong("toast_at_" + key, 0L) < minMs) return;
+            sp.edit().putLong("toast_at_" + key, now).apply();
+            Toast.makeText(this, text, Toast.LENGTH_SHORT).show();
+        } catch (Throwable ignore) { /* a missing toast must never break the service */ }
+    }
+
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
@@ -127,7 +145,7 @@ public class BridgeService extends AccessibilityService {
         // Key: if the user stopped it (soft stop / sleep), a system rebind must not start listening or raise the persistent notification by itself
         if (userPaused(this)) {
             running = false;
-            Toast.makeText(this, "DSH Bridge stays stopped (you turned it off earlier); tap widgets 1/7/8 to resume", Toast.LENGTH_SHORT).show();
+            toastOnce("staysStopped", Lang.t("DSH Bridge stays stopped (you turned it off earlier); tap widgets 1/7/8 to resume"), 30 * 60 * 1000L);
             return;
         }
         startListening();
@@ -138,7 +156,7 @@ public class BridgeService extends AccessibilityService {
         } catch (Throwable t) { /* failure does not affect accessibility */ }
         handler.removeCallbacks(idleWatch);
         handler.postDelayed(idleWatch, 60000);
-        Toast.makeText(this, "DSH Bridge started: hold volume +/- together for 3s for emergency stop", Toast.LENGTH_LONG).show();
+        toastOnce("started", Lang.t("DSH Bridge started: hold volume +/- together for 3s for emergency stop"), 10 * 60 * 1000L);
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
