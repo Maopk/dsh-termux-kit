@@ -303,6 +303,57 @@ def audit(d):
     return 0
 
 
+def unused():
+    """Entries no call site ever looks up — the mirror image of `audit`.
+
+    `audit` finds strings that reach the screen but never reach the table. This finds the
+    opposite, and it is how the Bridge's persistent notification was missed: the table carried
+    'DSH Bridge is running' -> 'DSH 桥正在运行' while the notification builder used the raw
+    English literal, so the shade stayed English and every check said the string was translated.
+    An entry that nothing references is either a call site that forgot to wrap, or dead weight.
+    """
+    tbl = load_source()
+    sources = {}
+    # ⚠ Skip the generated tables themselves. The first version of this check scanned
+    # widgets/*.sh, which includes the generated i18n.sh — so every key trivially "appeared in
+    # the source" and the check could never fail. Same for each app's Lang.java. Only real call
+    # sites count.
+    skip = {os.path.basename(BASH_TARGET)} | {os.path.basename(t) for t in JAVA_TARGETS}
+    pats = ['widgets/*.sh', 'tools/*', 'tests/*.sh', 'plugins/*/*.js', 'plugins/*/*/*.js']
+    files = []
+    for pat in pats:
+        files += sorted(__import__('glob').glob(os.path.join(ROOT, pat)))
+    for p in files:
+        if os.path.isdir(p) or os.path.basename(p) in skip:
+            continue
+        try:
+            sources[p] = open(p, encoding='utf-8').read()
+        except Exception:
+            pass
+    for app_dir in JAVA_TARGETS:
+        d = os.path.dirname(app_dir)
+        for f in sorted(os.listdir(d)):
+            if f.endswith('.java') and f not in skip:
+                sources[os.path.join(d, f)] = open(os.path.join(d, f), encoding='utf-8').read()
+    dead = []
+    for k in tbl:
+        if not k.strip():
+            continue
+        # the runtime value must appear somewhere; shell templates spell \n as two chars, so
+        # search the key as-is and with its line breaks flattened
+        # the same string is written three ways: real newlines (JSON), the two characters
+        # \\n (shell templates and Java source), or joined with no break at all
+        variants = {k, k.replace('\n', '\\n'), k.replace('\n', ''),
+                    k.replace('"', '\\"'),                      # 双引号在源码里常写成 \"
+                    k.replace('"', "'")}                          # 或改用单引号避免拆串
+        if not any(any(v and v in src for v in variants) for src in sources.values()):
+            dead.append(k)
+    for k in dead:
+        print(f'  {k!r}')
+    print(f'  → {len(dead)} entries that no call site looks up (of {len(tbl)})')
+    return 0
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -338,6 +389,8 @@ def main():
         return gen()
     if cmd == 'audit':
         return audit(sys.argv[2])
+    if cmd == 'unused':
+        return unused()
     raise SystemExit(f'unknown command {cmd!r}')
 
 

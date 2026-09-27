@@ -306,6 +306,7 @@ public class MainActivity extends Activity {
         setContentView(sc);
         registerReceiver(refresh, new IntentFilter("io.dsh.console.UI_REFRESH"),
                 Build.VERSION.SDK_INT >= 33 ? Context.RECEIVER_NOT_EXPORTED : 0);
+        loadHistory();   // the log survives a cold start now (see saveHistory)
         render();
         autoStatus();
         refreshAuthState();
@@ -363,7 +364,7 @@ public class MainActivity extends Activity {
             if (cp != null) cp.setOnClickListener(v -> copyLog());
             Button cl = d.getButton(AlertDialog.BUTTON_NEGATIVE);
             if (cl != null) cl.setOnClickListener(v -> {
-                history.clear(); unread = 0; updateLogBtn(); refreshLogView(); toast(Lang.t("Log cleared"));
+                history.clear(); saveHistory(); unread = 0; updateLogBtn(); refreshLogView(); toast(Lang.t("Log cleared"));
             });
         });
         d.setOnDismissListener(x -> { logDialog = null; logBody = null; logScroll = null; });
@@ -666,8 +667,39 @@ public class MainActivity extends Activity {
     private void pushHistory(String s) {
         history.add(s);
         while (history.size() > MAX_HISTORY) history.remove(0);
+        saveHistory();
         if (logDialog == null) { unread++; updateLogBtn(); }
         refreshLogView();
+    }
+
+    /**
+     * The log used to live only in this process: {@code history} is an ArrayList and nothing ever
+     * wrote it anywhere, so every cold start began with an empty log — the header promising
+     * "keeps up to 60" only held within a single run. The user saw exactly that as "why does the
+     * log have only 4 entries", and it also meant the record of a failure vanished the moment the
+     * app was reclaimed. It now lives in SharedPreferences (the same file Lang uses), still capped
+     * at MAX_HISTORY; an unreadable value degrades to an empty log, never a crash.
+     */
+    private void saveHistory() {
+        try {
+            org.json.JSONArray a = new org.json.JSONArray();
+            for (String h : history) a.put(h);
+            getSharedPreferences("dsh-console", MODE_PRIVATE).edit()
+                    .putString("history", a.toString()).apply();
+        } catch (Throwable t) { /* a log is a convenience, never a reason to fail a task */ }
+    }
+
+    private void loadHistory() {
+        try {
+            String raw = getSharedPreferences("dsh-console", MODE_PRIVATE).getString("history", "");
+            if (raw == null || raw.isEmpty()) return;
+            org.json.JSONArray a = new org.json.JSONArray(raw);
+            for (int i = 0; i < a.length(); i++) {
+                String line = a.optString(i, "");
+                if (!line.isEmpty()) history.add(line);
+            }
+            while (history.size() > MAX_HISTORY) history.remove(0);
+        } catch (Throwable t) { history.clear(); }
     }
 
     // ---------- Rendering ----------

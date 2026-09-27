@@ -33,7 +33,7 @@ SMOKE_BEFORE=$(du -sm "$LOGS" 2>/dev/null | cut -f1 || echo 0)
 stepf "① Backups: keep the newest 5 state bundles; keep the newest %s full snapshots" "$KEEP_FULL"
 N=$(ls -1 "$BAKDIR"/dsh-state-*.tar.gz 2>/dev/null | wc -l)
 if [ "$N" -gt 5 ]; then
-  runf "ls -1t '%s'/dsh-state-*.tar.gz | tail -n +6 | xargs -r rm -f" "$BAKDIR"
+  run "ls -1t '$BAKDIR'/dsh-state-*.tar.gz | tail -n +6 | xargs -r rm -f"
   okf "Deleted %s state bundles, kept 5" "$((N-5))"
 else okf "%s state bundles, under the cap" "$N"; fi
 # Full snapshots (produced by dsh-snapshot, 1.1G each): this used to be ignored entirely → the backup directory never shrank
@@ -44,7 +44,7 @@ for d in "$BAKDIR" "$BAKDIR/系统备份"; do
   if [ "$FN" -gt "$KEEP_FULL" ]; then
     ls -1t "$d"/dsh-full-*.tar.zst | tail -n +$((KEEP_FULL+1)) | while read -r f; do
       b="${f%.tar.zst}"
-      runf "rm -f \\\"%s\\\" \\\"%s.sha256\\\" \\\"%s.说明.md\\\"" "$f" "${b}" "${b}"
+      run "rm -f \\\"$f\\\" \\\"${b}.sha256\\\" \\\"${b}.说明.md\\\""
       okf "Deleted the old full snapshot %s" "$(basename "$f") (with .sha256 / .说明.md)"
     done
   else okf "%s" "$(basename "$d"): $FN full snapshots, under the cap ($KEEP_FULL)"; fi
@@ -71,7 +71,7 @@ if [ "$MINE" -gt 0 ]; then
   OLD=$(printf '%s\n' "$MINE_LIST" | while read -r f; do [ -n "$f" ] && [ -n "$(find "$f" -maxdepth 0 -mtime +7 2>/dev/null)" ] && printf '%s\n' "$f"; done | grep -c . || true)
   if [ "$OLD" -gt 0 ]; then
     printf "$(dsh_msg '%s\n')" "$MINE_LIST" | while read -r f; do
-      [ -n "$f" ] && [ -n "$(find "$f" -maxdepth 0 -mtime +7 2>/dev/null)" ] && runf "rm -f \\\"%s\\\"" "$f"
+      [ -n "$f" ] && [ -n "$(find "$f" -maxdepth 0 -mtime +7 2>/dev/null)" ] && run "rm -f \\\"$f\\\""
     done
     okf "Deleted %s of them by the 7-day rule" "$OLD"
   fi
@@ -81,7 +81,7 @@ if [ "$MINE" -gt 0 ]; then
     printf "$(dsh_msg '%s\n')" "$LEFT_LIST" | while read -r f; do
       [ -n "$f" ] && stat -c '%Y %n' "$f" 2>/dev/null
     done | sort -rn | tail -n +$((KEEP_IMG+1)) | cut -d' ' -f2- | while read -r f; do
-      runf "rm -f \\\"%s\\\"" "$f"
+      run "rm -f \\\"$f\\\""
     done
     okf "Deleted %s, kept the newest %s" "$((LEFT-KEEP_IMG))" "$KEEP_IMG"
   else okf "%s screenshots of mine, under the cap (%s)" "$LEFT" "$KEEP_IMG"; fi
@@ -107,24 +107,24 @@ stepf "③ Vision-tool temp artifacts: keep only the newest %s runs" "$KEEP_RUNS
 if [ -d "$RUNS" ]; then
   R=$(find "$RUNS" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
   if [ "$R" -gt "$KEEP_RUNS" ]; then
-    runf "find '%s' -mindepth 1 -maxdepth 1 -printf '%T@ %p\\\\n' | sort -rn | tail -n +%s | cut -d' ' -f2- | xargs -r rm -rf" "$RUNS" "$((KEEP_RUNS+1))"
+    run "find '$RUNS' -mindepth 1 -maxdepth 1 -printf '%T@ %p\\\\n' | sort -rn | tail -n +$((KEEP_RUNS+1)) | cut -d' ' -f2- | xargs -r rm -rf"
     okf "Deleted %s old vision run directories (hidden ones included)" "$((R-KEEP_RUNS))"
   else okf "%s present, under the cap" "$R"; fi
 else ok "No vision temp directory"; fi
 
 step "④ Large workspace files and test leftovers (~/.smoke)"
 for f in readmes.json updates.json; do
-  [ -f "$LOGS/$f" ] && { SZ=$(du -h "$LOGS/$f" | cut -f1); runf "rm -f '%s/%s'" "$LOGS" "$f"; okf "Deleted %s (%s, a big dump from fetching)" "$f" "$SZ"; }
+  [ -f "$LOGS/$f" ] && { SZ=$(du -h "$LOGS/$f" | cut -f1); run "rm -f '$LOGS/$f'"; okf "Deleted %s (%s, a big dump from fetching)" "$f" "$SZ"; }
 done
 for pat in 'idx*.html' 'index.html' 'c*.css' 'whale.js' 'u.xml' 'board-*.png' 'adb-shot.png' 'cj*.txt' 'ax.json' 'ax2.json' 'autox.json' 'pair-crop*.png' 'droid-ui.xml' 'probe-boot.log'; do
   for f in $LOGS/$pat; do
     [ -f "$f" ] || continue
-    runf "rm -f '%s'" "$f"; okf "Deleted test leftover %s" "$(basename "$f")"
+    run "rm -f '$f'"; okf "Deleted test leftover %s" "$(basename "$f")"
   done
 done
 if [ "$DEEP" = 1 ]; then
   for f in android.jar plugins.json platform-*.zip; do
-    [ -f "$LOGS/$f" ] && { SZ=$(du -h "$LOGS/$f" | cut -f1); runf "rm -f '%s/%s'" "$LOGS" "$f"; okf "Deep clean of %s (%s, can be re-downloaded when needed)" "$f" "$SZ"; }
+    [ -f "$LOGS/$f" ] && { SZ=$(du -h "$LOGS/$f" | cut -f1); run "rm -f '$LOGS/$f'"; okf "Deep clean of %s (%s, can be re-downloaded when needed)" "$f" "$SZ"; }
   done
 else
   [ -f "$LOGS/android.jar" ] && ok "Keeping android.jar (needed to rebuild when the app changes)"
@@ -133,16 +133,16 @@ fi
 # Smoke-test logs: keep only the newest 3
 BOOTS=$(find "$LOGS" -maxdepth 1 -name 'boot*.log' 2>/dev/null | wc -l)
 if [ "$BOOTS" -gt 3 ]; then
-  runf "find '%s' -maxdepth 1 -name 'boot*.log' -printf '%T@ %p\\\\n' | sort -rn | tail -n +4 | cut -d' ' -f2- | xargs -r rm -f" "$LOGS"
+  run "find '$LOGS' -maxdepth 1 -name 'boot*.log' -printf '%T@ %p\\\\n' | sort -rn | tail -n +4 | cut -d' ' -f2- | xargs -r rm -f"
   okf "Keeping only the newest 3 smoke logs (deleted %s)" "$((BOOTS-3))"
 else okf "%s smoke logs, under the cap" "$BOOTS"; fi
 
 for f in "$LOGS"/*.log; do
   [ -f "$f" ] || continue
   SZ=$(( $(stat -c%s "$f") / 1024 ))
-  [ "$SZ" -gt 512 ] && { runf ": > '%s'" "$f"; okf "Truncated log %s" "$(basename "$f") (${SZ}KB)"; }
+  [ "$SZ" -gt 512 ] && { run ": > '$f'"; okf "Truncated log %s" "$(basename "$f") (${SZ}KB)"; }
 done
-runf "find '%s' -maxdepth 1 -name '*.log.bak' -mtime +14 -delete 2>/dev/null || true" "$LOGS"
+run "find '$LOGS' -maxdepth 1 -name '*.log.bak' -mtime +14 -delete 2>/dev/null || true"
 
 step "⑤ Save the auth URL to disk (before the log is deleted)"
 URLFILE="$HOME_DIR/.dsh-url"
@@ -153,7 +153,7 @@ else
 fi
 
 step "⑥ Log rotation + package-manager cache (the pnpm cache is left alone by default)"
-rotate_logf "%s" "$(dsh_log)" 2
+rotate_log "$(dsh_log)" 2
 if [ "$DO_PNPM" = 1 ] && need pnpm; then
   [ "$DRY" = 1 ] && printf '   · [dry] pnpm store prune\n' || { R=$(timeout 180 pnpm store prune 2>&1 | tail -1); okf "%s" "${R:-pruned}"; }
 else ok "Skipping the pnpm cache prune (keeping it makes the next plugin install fast; add --prune-store to prune)"; fi

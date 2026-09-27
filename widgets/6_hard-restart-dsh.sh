@@ -62,12 +62,12 @@ if [ "$DO_BAK" = 1 ] && [ -x "$HOME_DIR/.local/bin/dsh-backup" ]; then
 else warn "Skipping backup"; fi
 
 step "④ Log rotation"
-rotate_logf "%s" "$LOG" 2; runf ": > '%s'" "$LOG"; ok "Boot log reset"
+rotate_log "$LOG" 2; run ": > '$LOG'"; ok "Boot log reset"
 
 stepf "⑤ Wait for port %s to be released" "$DSH_PORT"
 if [ "$DRY" = 1 ]; then printf '   · [dry] skipped (dry-run really kills nothing)\n'; elif ! wait_port_free "$DSH_PORT" 15; then
   warn "Port is still in use, trying to force it free"
-  runf "fuser -k '%s'/tcp 2>/dev/null || true" "$DSH_PORT"; sleep 1
+  run "fuser -k '$DSH_PORT'/tcp 2>/dev/null || true"; sleep 1
   port_open "$DSH_PORT" && die "Port $DSH_PORT cannot be released" || ok "Force-released"
 else ok "Port is free"; fi
 

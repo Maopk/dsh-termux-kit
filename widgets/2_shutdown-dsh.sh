@@ -53,10 +53,10 @@ else
 fi
 
 step "④ Log rotation (archive the auth URL into .dsh-url first, then clear the log)"
-CUR=$(token_from_logf "%s" "$LOG" 2>/dev/null)
+CUR=$(token_from_log "$LOG" 2>/dev/null)
 [ -n "$CUR" ] && { printf '%s\n' "$CUR" > "$HOME_DIR/.dsh-url"; ok "Auth URL archived to .dsh-url"; } \
               || warn "No token line in the log (this instance may not have been started by this widget)"
-rotate_logf "%s" "$(dsh_log)" 2
+rotate_log "$(dsh_log)" 2
 dsh_log_reset "$(dsh_log)"
 ok "Boot log reset"
 

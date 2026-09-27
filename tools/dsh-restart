@@ -21,7 +21,7 @@ if [ "$WAKELOCK" = 1 ] && need termux-wake-lock; then termux-wake-lock 2>/dev/nu
 
 # ── ① is the service still alive? Tell a stuck page from a dead service──
 if port_open "$DSH_PORT"; then
-  U=$(token_from_logf "%s" "$LOG" 2>/dev/null)
+  U=$(token_from_log "$LOG" 2>/dev/null)
   if [ -n "$U" ] && url_ready "$U"; then
     ok "DSH is alive and the auth URL is valid (HTTP 200)"
   else
@@ -63,11 +63,11 @@ case "$rc" in
 esac
 
 step "③ keep the previous URL in .dsh-url (saved before the log is cleared)"
-CUR=$(token_from_logf "%s" "$LOG" 2>/dev/null)
+CUR=$(token_from_log "$LOG" 2>/dev/null)
 [ -n "$CUR" ] && { printf '%s\n' "$CUR" > "$HOME_DIR/.dsh-url"; ok "archived"; } || warn "no token line in the log"
 
 step "④ start and wait for **real readiness** (token line + following the redirect to 200)"
-rotate_logf "%s" "$LOG" 2
+rotate_log "$LOG" 2
 dsh_log_reset "$LOG"
 if dsh_start_and_wait "$LOG" 120; then
   ok "start complete"

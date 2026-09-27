@@ -7,8 +7,8 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="io.dsh.console"
-    android:versionCode="23"
-    android:versionName="1.10">
+    android:versionCode="24"
+    android:versionName="1.11">
 
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 

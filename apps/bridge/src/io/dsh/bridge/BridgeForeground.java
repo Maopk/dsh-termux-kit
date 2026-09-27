@@ -44,15 +44,20 @@ public class BridgeForeground extends Service {
             Notification.Builder b = (Build.VERSION.SDK_INT >= 26)
                     ? new Notification.Builder(this, BridgeService.CHANNEL)
                     : new Notification.Builder(this);
+            // The shade is one of the two places the Bridge is seen most (the app screen is the
+            // other), so every word here goes through Lang.t: the persistent notification used to be
+            // raw English while the table already carried a translation nothing ever looked up.
+            // The port is interpolated, so the text is translated in fragments around it.
             b.setSmallIcon(android.R.drawable.presence_online)
-                    .setContentTitle("DSH Bridge is running")
-                    .setContentText("Listening on 127.0.0.1:" + BridgeService.PORT + " · hold volume +/- for 3s to stop")
+                    .setContentTitle(Lang.t("DSH Bridge is running"))
+                    .setContentText(Lang.t("Listening on 127.0.0.1:") + BridgeService.PORT
+                            + Lang.t(" · hold volume +/- for 3s to stop"))
                     .setOngoing(true)
                     .setOnlyAlertOnce(true)
                     .setContentIntent(pi)
                     .addAction(new Notification.Action.Builder(
                             Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
-                            "Emergency stop", panicPi).build());
+                            Lang.t("Emergency stop"), panicPi).build());
             startForeground(BridgeService.NOTIF_ID, b.build());
         } catch (Throwable t) {
             // Must still come up without notification permission: degrade to a plain foreground service
@@ -60,7 +65,7 @@ public class BridgeForeground extends Service {
                 Notification.Builder b = (Build.VERSION.SDK_INT >= 26)
                         ? new Notification.Builder(this, BridgeService.CHANNEL)
                         : new Notification.Builder(this);
-                b.setSmallIcon(android.R.drawable.presence_online).setContentTitle("DSH Bridge is running");
+                b.setSmallIcon(android.R.drawable.presence_online).setContentTitle(Lang.t("DSH Bridge is running"));
                 startForeground(BridgeService.NOTIF_ID, b.build());
             } catch (Throwable t2) { /* if it really will not work, never mind; accessibility still functions */ }
         }

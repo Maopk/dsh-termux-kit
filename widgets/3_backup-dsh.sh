@@ -32,9 +32,9 @@ sha256sum "$NEW" 2>/dev/null | cut -c1-16 | sed 's/^/   sha256(first 16): /'
 step "③ Retention policy (30 days / 200 max; manual cleanup keeps only 5)"
 TOT=$(ls -1 "$BAKDIR"/dsh-state-*.tar.gz 2>/dev/null | wc -l)
 FIND_OLD=$(find "$BAKDIR" -name 'dsh-state-*.tar.gz' -mtime +30 2>/dev/null | wc -l)
-[ "$FIND_OLD" -gt 0 ] && { runf "find '%s' -name 'dsh-state-*.tar.gz' -mtime +30 -delete" "$BAKDIR"; okf "Deleted %s expired archives" "$FIND_OLD"; } || ok "No expired archives"
+[ "$FIND_OLD" -gt 0 ] && { run "find '$BAKDIR' -name 'dsh-state-*.tar.gz' -mtime +30 -delete"; okf "Deleted %s expired archives" "$FIND_OLD"; } || ok "No expired archives"
 if [ "$TOT" -gt 200 ]; then
-  runf "ls -1t '%s'/dsh-state-*.tar.gz | tail -n +201 | xargs -r rm -f" "$BAKDIR"
+  run "ls -1t '$BAKDIR'/dsh-state-*.tar.gz | tail -n +201 | xargs -r rm -f"
   ok "Trimmed to the 200-archive cap"
 fi
 

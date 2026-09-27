@@ -22,15 +22,15 @@ fi
 
 step "② Revoke the token"
 if [ -f "$HOME_DIR/.dsh-bridge-token" ]; then
-  runf "mv -f '%s/.dsh-bridge-token' '%s/.dsh-bridge-token.revoked-%s'" "$HOME_DIR" "$HOME_DIR" "$(date +%s)"
+  run "mv -f '$HOME_DIR/.dsh-bridge-token' '$HOME_DIR/.dsh-bridge-token.revoked-$(date +%s)'"
   ok "Token revoked (renamed and kept for the record)"
 else
   ok "No token file, nothing to revoke"
 fi
 
 step "③ Empty the shared-dir command channel (AutoX bridge / page remote control)"
-runf ": > '%s/dsh-droid/cmd.json' 2>/dev/null || true" "$SHARED"
-runf ": > '%s/.dsh-look-cmd.json' 2>/dev/null || true" "$HOME_DIR"
+run ": > '$SHARED/dsh-droid/cmd.json' 2>/dev/null || true"
+run ": > '$HOME_DIR/.dsh-look-cmd.json' 2>/dev/null || true"
 ok "Command files emptied"
 
 step "④ Cut adb wireless debugging (the strongest channel of all)"

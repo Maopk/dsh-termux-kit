@@ -44,7 +44,7 @@ if [ "$DO_BAK" = 1 ] && [ -x "$HOME_DIR/.local/bin/dsh-backup" ]; then
 else warn "Skipping backup"; fi
 
 step "③ Log rotation"
-rotate_logf "%s" "$LOG" 2; runf ": > '%s'" "$LOG"; ok "Boot log reset"
+rotate_log "$LOG" 2; run ": > '$LOG'"; ok "Boot log reset"
 
 stepf "④ Wait for port %s to be released" "$DSH_PORT"
 if [ "$DRY" = 1 ]; then printf '   · [dry] skipped (dry-run did not really stop the process)\n'; else

@@ -27,7 +27,7 @@ URLFILE="${DSH_URL_FILE:-$HOME_DIR/.dsh-url}"
 
 open_browser() {   # $1=url
   [ "$OPEN" = 1 ] || { warn "Not opening the browser, as requested"; return 0; }
-  if [ -x "$OPENER" ]; then runf "'%s' '$1' >/dev/null 2>&1" "$OPENER"; else run "termux-open-url '$1'"; fi
+  if [ -x "$OPENER" ]; then run "'$OPENER' '$1' >/dev/null 2>&1"; else run "termux-open-url '$1'"; fi
 }
 
 # Also restore the AI channels (a failure here does not affect the startup itself)
@@ -70,7 +70,7 @@ if port_open "$DSH_PORT"; then
     warnf "The cached auth URL no longer works (a token left by an old instance, HTTP %s" "$(url_code "$C"))"
   fi
   if [ -z "$U" ]; then
-    C=$(token_from_logf "%s" "$LOG")
+    C=$(token_from_log "$LOG")
     if [ -n "$C" ] && url_ready "$C"; then
       U="$C"; printf '%s\n' "$U" > "$URLFILE"; ok "Took the auth URL of the current instance from the boot log and wrote it back to .dsh-url"
     fi
@@ -108,7 +108,7 @@ case "$rc" in
 esac
 
 step "⑤ Reset the boot log (the token is taken from this log only)"
-rotate_logf "%s" "$LOG" 2
+rotate_log "$LOG" 2
 dsh_log_reset "$LOG"
 ok "Boot log reset"
 
