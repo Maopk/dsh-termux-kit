@@ -31,6 +31,7 @@ final class Lang {
         ZH.put("   Tap ③ Open this app's notification settings below to enable it.", "   点下面的 ③ 打开本应用的通知设置即可启用。");
         ZH.put("  (tap Copy token to copy it)", "  （点「复制 token」可取）");
         ZH.put("  v", "  v");
+        ZH.put(" (length ", "（长度 ");
         ZH.put(" min", " 分钟");
         ZH.put(" min idle", " 分钟自动停止");
         ZH.put(" · checking for a newer release…", " · 正在检查有没有新版本…");

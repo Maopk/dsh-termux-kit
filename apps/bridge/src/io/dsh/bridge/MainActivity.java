@@ -260,7 +260,11 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         setContentView(sv);
 
-        tokenView.setText(Lang.t("token: ") + "tok\u2022\u2022\u2022\u2022\u2022\u2022" + Lang.t("  (tap Copy token to copy it)"));
+        // token 打码：以前是固定 6 个圆点，看不出长度（用户 2026-09-27）。现在**明确写出长度**，
+        // 圆点数量不承担信息（免得靠数点猜），真正的值只有点「复制 token」才进剪贴板。
+        String tk = token(this);
+        tokenView.setText(Lang.t("token: ") + "tok\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"
+                + Lang.t(" (length ") + tk.length() + Lang.t(")") + Lang.t("  (tap Copy token to copy it)"));
         requestNotifPermission();
         updateIdleBtn();
         updateState();
@@ -413,8 +417,9 @@ public class MainActivity extends Activity {
         // 首次打开只展开「通道」（那是你真正要看的一类）；其余全收起，包括「关于本应用」
         // （用户 2026-09-27：它是一页说明，不该每次滚过去）。
         if (!sp.contains("collapsed")) {
-            collapsed.add("maintenance"); collapsed.add("settings");
-            collapsed.add("emergency"); collapsed.add("about");
+            // 首次运行：只展开「通道」，其余全收起（含「关于本应用」）—— 同样按生成表推导。
+            for (String[] c : UiControls.CATS) collapsed.add(c[0]);
+            collapsed.remove("channels");
         }
         root.addView(title);
         // ⚠ The title is NOT keepColor'd any more: on the platform's default (light) theme that kept

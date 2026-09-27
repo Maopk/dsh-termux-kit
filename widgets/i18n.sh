@@ -149,6 +149,7 @@ declare -A DSH_ZH=(
   ['  ✔ %s = %d entries']='  ✔ %s = %d 个条目'
   [' (Wi-Fi off, or Wireless debugging not on)']='（Wi-Fi 未连，或无线调试没开）'
   [' (dry-run, nothing changed)']='（dry-run，未改动）'
+  [' (length ']='（长度 '
   [' (you have ']='（你的是 '
   [' a switch (or is not wired to the helper)']='做成开关（或没接上 helper）'
   [' completed (exit=']=' 已完成（exit='

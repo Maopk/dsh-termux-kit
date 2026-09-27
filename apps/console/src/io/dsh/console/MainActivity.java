@@ -230,7 +230,12 @@ public class MainActivity extends Activity {
         java.util.Set<String> stored = getSharedPreferences("dsh-console", MODE_PRIVATE)
                 .getStringSet("collapsed", null);
         if (stored != null) collapsedCats = new java.util.HashSet<String>(stored);
-        else { collapsedCats.add("channels"); collapsedCats.add("maintenance"); collapsedCats.add("emergency"); collapsedCats.add("statuslog"); }
+        else {
+            // 首次运行：除「启动 / 停止」外全收起。**按生成表推导**，不手写分类名 ——
+            // 手写的那份在新增「安全 / 设置」时会漏掉，新分类就默认展开。
+            for (String[] c : UiControls.CATS) collapsedCats.add(c[0]);
+            collapsedCats.remove("startstop");
+        }
         ScrollView sc = new ScrollView(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
