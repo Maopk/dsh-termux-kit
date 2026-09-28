@@ -38,7 +38,23 @@ hits=$(git ls-files -m -o --exclude-standard 2>/dev/null | grep -vE '\.(apk|png|
 if [ -n "$hits" ]; then no 2 "改动文件里出现疑似明文凭据："; echo "$hits" | sed 's/^/       /'; fi
 
 # 3) README 同步（改了功能/UI 却没动 README = 提醒）
-changed=$(git status --porcelain | awk '{print $2}')
+#
+# 「本次改动」必须＝ **工作区改动 ∪ 将要推送的 commit 里改过的文件**。
+# 为什么：push 前的常规状态是"已经 commit 了、git status 是干净的"，只看 `git status --porcelain`
+# 会把所有改动都看成"没有"，于是第 7 条（版本号顶没顶）和第 12 条（产物要不要重编）
+# 在 commit 之后集体变成"本次没改 App，无需变动" —— 这两条恰恰是 push 前最该说话的。
+# 这条清单自己踩过（2026-09-28：commit 前 7 号报"改了 App"，commit 后同一批改动报"没改 App"）。
+# core.quotepath=false：路径里有中文时 git 默认会输出带引号的八进制转义，前缀匹配就全废了。
+up_ref=""
+for cand in "@{u}" "origin/$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" "origin/HEAD"; do
+  if git rev-parse --verify --quiet "$cand" >/dev/null 2>&1; then up_ref="$cand"; break; fi
+done
+changed=$(
+  {
+    git -c core.quotepath=false status --porcelain 2>/dev/null | awk '{print $2}'
+    [ -n "$up_ref" ] && git -c core.quotepath=false diff --name-only "$up_ref"...HEAD 2>/dev/null
+  } | sed '/^$/d' | sort -u
+)
 if echo "$changed" | grep -qE '^(apps/|plugins/|ui/|widgets/|tools/)' && ! echo "$changed" | grep -q '^README'; then
   warn_ 3 "改了功能/UI 代码但 README 没动 —— 逐条过 CONTRIBUTING §四 那 8 项了吗？"
 else ok 3 "README 与本次改动的关系已确认"; fi

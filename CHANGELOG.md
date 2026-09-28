@@ -22,6 +22,9 @@
 
 ### 修复
 
+· **`tools/pre-push-check` 的第 7 / 12 条在 commit 之后集体失明**：它们判断「本次改了什么」只看 `git status --porcelain`，而 push 前的常规状态恰恰是「已经 commit、工作区干净」→ 于是同一批改动，commit 前报「改了 App，版本号顶了吗」，commit 后变成「本次没改 App，无需变动」。
+  现在「本次改动」＝工作区改动 ∪ **将要推送的 commit** 里改过的文件（`@{u}...HEAD`，无上游时退 `origin/<分支>` → `origin/HEAD`），并加 `core.quotepath=false` 让中文路径也能做前缀匹配。
+
 · **「从控制台启动 DSH 比点小组件慢得多」的真因不是启动慢，是页面根本没被打开**（2026-09-28 定位）：
   Termux 在**后台**以应用身份发 `am start` 会被 Android 后台启动限制**静默拦掉**（`dsh-browser-open`
   自己的头注释里就写着这条坑），而控制台这条路的前台是控制台、Termux 在缓存档（`oom_score_adj` 实测 945）
