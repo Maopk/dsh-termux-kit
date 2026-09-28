@@ -12,7 +12,7 @@ import java.util.List;
  * still works; the Chinese side lives in i18n/zh.json, the kit's single translation source.
  */
 final class UiControls {
-    static final String VERSION = "2.23";
+    static final String VERSION = "2.24";
 
     static final class C {
         final String id, kind, cat, group, icon, labelEn, hintEn;

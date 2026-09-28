@@ -994,7 +994,7 @@ public class MainActivity extends Activity {
      */
     private void showUpdateResult(String out) {
         if (updateRow == null) return;
-        String latest = "", curRaw = "";
+        String latest = "", curRaw = "", repoSrc = "";
         boolean ok = false;
         try {
             org.json.JSONObject o = new org.json.JSONObject((out == null ? "" : out).trim());
@@ -1004,6 +1004,8 @@ public class MainActivity extends Activity {
             // 不再一边用界面字段 ver、一边用返回里的 latest —— 两次交换之间版本变了，行里就会出现
             // "你的是 vA / 仓库最新 vB" 这种半新半旧的话（用户 2026-09-27 通用约束第 3 条）。
             curRaw = o.optString("current", ver);
+            // 仓库源码里的版本（dsh-update 顺手读的 master ui/controls.json）—— 和发行版是两个事实
+            repoSrc = o.optString("repo_app", "");
         } catch (Throwable t) { ok = false; }
         if (!ok || latest.isEmpty()) {
             // 查不到就直说查不到 —— 显示"已是最新"会把"没网"说成"没问题"
@@ -1015,7 +1017,7 @@ public class MainActivity extends Activity {
         String shown = curRaw.startsWith("v") ? curRaw : "v" + curRaw;
         String mine = shown.startsWith("v") ? shown.substring(1) : shown;
         if (isNewer(latest, mine)) {
-            updateRow.setText(Lang.t("Version: ") + shown + Lang.t(" → the repo has ") + "v" + latest
+            updateRow.setText(Lang.t("Version: ") + shown + Lang.t(" → the release channel has ") + "v" + latest
                     + Lang.t(" · tap this line to update"));
             updateRow.setTextColor(Palette.WARN);
             updateRow.setOnClickListener(v -> confirmUpdate());
@@ -1024,8 +1026,19 @@ public class MainActivity extends Activity {
             updateRow.setTextColor(Palette.OK);
             updateRow.setOnClickListener(null);
         } else {
-            updateRow.setText(Lang.t("Version: ") + shown + Lang.t(" · local is newer than the repo (the repo only has v")
-                    + latest + Lang.t(")"));
+            // ⚠ 这一段以前写的是「本地比**仓库**新（仓库只有 vX）」—— 那句话是假的，用户 2026-09-28 就是拿它
+            //   质问我"你这个推送有问题啊"：他刚看着我把 1.20 推上 GitHub，界面却说仓库只有 1.14。
+            //   真相是**两个事实、两个来源**：发行版（GitHub Releases，能下载安装的那个）确实还停在 1.14；
+            //   而仓库源码（master 的 ui/controls.json）已经是 1.20 —— 推了源码、没发版就会长这样。
+            //   两个都必须说出来，且不许混成一个"仓库"。
+            StringBuilder sb2 = new StringBuilder();
+            sb2.append(Lang.t("Version: ")).append(shown)
+               .append(Lang.t(" · the release channel is still v")).append(latest);
+            if (repoSrc != null && !repoSrc.isEmpty()) {
+                sb2.append(Lang.t(" · the repo source is v")).append(repoSrc);
+                if (sameVer(repoSrc, mine)) sb2.append(Lang.t(" (the source is pushed, only the release is missing)"));
+            }
+            updateRow.setText(sb2.toString());
             updateRow.setTextColor(Palette.DIM);
             updateRow.setOnClickListener(null);
         }

@@ -73,7 +73,7 @@ window.__ModuleLoader__.load({
       // ── /generated:theme ──
 
       // ── generated:controls (ui/controls.json) — do not edit by hand; run tools/ui-controls gen ──
-      const UI_VERSION = {"bridge": "2.23", "console": "1.20", "panel": "0.10"};
+      const UI_VERSION = {"bridge": "2.24", "console": "1.21", "panel": "0.10"};
       const UI_CATS = [{"id": "startstop", "en": "Start / Stop", "zh": "启动 / 停止"}, {"id": "channels", "en": "Channels (adb and bridge separate)", "zh": "通道（adb 与桥分开）"}, {"id": "maintenance", "en": "Maintenance", "zh": "维护"}, {"id": "security", "en": "Security", "zh": "安全"}, {"id": "settings", "en": "Settings", "zh": "设置"}, {"id": "emergency", "en": "Emergency", "zh": "紧急"}, {"id": "statuslog", "en": "Status / Log", "zh": "状态 / 日志"}, {"id": "about", "en": "About this app", "zh": "关于本应用"}];
       const UI_GROUPS = [{"id": "adb", "cat": "channels", "en": "adb · wireless debugging, needs working Wi-Fi", "zh": "adb · 无线调试，需要可用 Wi-Fi"}, {"id": "bridge", "cat": "channels", "en": "bridge · accessibility loopback, no network", "zh": "桥 · 无障碍回环，不需要网络"}, {"id": "danger", "cat": "channels", "en": "Danger zone · only you can undo it by hand", "zh": "危险操作 · 只能你手动恢复"}];
       const UI_CONTROLS = [

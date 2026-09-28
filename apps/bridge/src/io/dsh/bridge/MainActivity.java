@@ -358,7 +358,7 @@ public class MainActivity extends Activity {
             return;
         }
         if (isNewer(latest, mine)) {
-            updateView.setText(Lang.t("Version ") + mine + Lang.t(" → the repo has ") + "v" + latest
+            updateView.setText(Lang.t("Version ") + mine + Lang.t(" → the release channel has ") + "v" + latest
                     + Lang.t(" · tap the project page to update"));
             updateView.setTextColor(Palette.WARN);
         } else if (sameVer(latest, mine)) {
@@ -369,8 +369,7 @@ public class MainActivity extends Activity {
             // to "已是最新" as well, so the line read "版本：v1.15 · 已是最新（仓库最新 v1.14）" while the
             // installed build was ahead of the repo — the user caught that contradiction on 2026-09-27.
             // Rule now: equal → 已是最新; ahead → say so; behind → point at the repo.
-            updateView.setText(Lang.t("Version ") + mine + Lang.t(" · local is newer than the repo (the repo only has v")
-                    + latest + Lang.t(")"));
+            updateView.setText(Lang.t("Version ") + mine + Lang.t(" · the release channel is still v") + latest);
             updateView.setTextColor(Palette.DIM);
         }
     }

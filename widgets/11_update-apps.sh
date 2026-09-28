@@ -38,10 +38,10 @@ INSTALL="$HOME_DIR/.local/bin/dsh-install-apk"
 SCREEN="$HOME_DIR/.local/bin/dsh-screen"
 DROID="$HOME_DIR/.local/bin/droid"
 
-step "① 检查仓库最新发行版"
+step "① 检查最新发行版"
 LATEST=$("$UPDATE" latest --json 2>/dev/null) || { bad "查不到发行版（没网？）"; done_; exit 1; }
 TAG=$(printf '%s' "$LATEST" | python3 -c "import json,sys;print(json.load(sys.stdin).get('tag','?'))" 2>/dev/null)
-okf "仓库最新：%s" "${TAG:-?}"
+okf "发行版最新：%s" "${TAG:-?}"
 
 # ── 本机版本：一个事实一个来源 ────────────────────────────────────────────
 #   控制台 → 优先用 App 自己传进来的 --console-ver；小部件路径没传就读系统里的包
@@ -85,14 +85,14 @@ for app in console bridge; do
   read -r vd vlatest <<<"$(verdict "$app" "$(printf '%s' "$LOCAL")")"
   case "$vd" in
     install)
-      okf "%s：本机 %s → 仓库 %s，要更新" "$app" "${LOCAL:-未知}" "${vlatest:-?}" ;;
+      okf "%s：本机 %s → 发行版 %s，要更新" "$app" "${LOCAL:-未知}" "${vlatest:-?}" ;;
     current)
       okf "%s 已是最新（v%s），跳过" "$app" "$vlatest" ;;
     ahead)
       if [ "$FORCE" = 1 ]; then
-        warnf "%s：本机 v%s **领先**仓库 v%s，--force 强制装（等于降级）" "$app" "$LOCAL" "$vlatest"
+        warnf "%s：本机 v%s **领先**发行版 v%s，--force 强制装（等于降级）" "$app" "$LOCAL" "$vlatest"
       else
-        warnf "%s：本机 v%s 领先仓库 v%s，**不降级**，跳过（确实要装就加 --force）" "$app" "$LOCAL" "$vlatest"
+        warnf "%s：本机 v%s 领先发行版 v%s，**不降级**，跳过（确实要装就加 --force）" "$app" "$LOCAL" "$vlatest"
         continue
       fi ;;
     *)

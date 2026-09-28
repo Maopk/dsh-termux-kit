@@ -9,8 +9,8 @@
     "术语不翻译：adb / token / GitHub / Wi-Fi / DSH / APK / SHA256 / exit 保持原样。"
   ],
   "appVersions": {
-    "bridge": "2.23",
-    "console": "1.20",
+    "bridge": "2.24",
+    "console": "1.21",
     "panel": "0.10"
   },
   "cats": [

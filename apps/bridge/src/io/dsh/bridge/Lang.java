@@ -37,10 +37,10 @@ final class Lang {
         ZH.put(" · checking for a newer release…", " · 正在检查有没有新版本…");
         ZH.put(" · could not check for updates now (no network?)", " · 现在查不了更新（没网？）");
         ZH.put(" · hold volume +/- for 3s to stop", " · 音量+/- 同时按住 3 秒紧急停止");
-        ZH.put(" · local is newer than the repo (the repo only has v", " · 本地比仓库新（仓库只有 v");
         ZH.put(" · tap the project page to update", " · 点项目主页更新");
+        ZH.put(" · the release channel is still v", " · 发行版还是 v");
         ZH.put(" · up to date", " · 已是最新");
-        ZH.put(" → the repo has ", " → 仓库最新 ");
+        ZH.put(" → the release channel has ", " → 发行版有 ");
         ZH.put("(Also: this app does not autostart; it will not come up by itself after a phone restart)", "（另外：本应用不自动启动；手机重启后它不会自己起来）");
         ZH.put("(new in v1.5: turns wireless debugging on automatically when online, used by widget 8)", "（v1.5 新增：联网时自动打开无线调试，组件 8 会用到）");
         ZH.put(")", "）");

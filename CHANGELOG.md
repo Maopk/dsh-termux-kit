@@ -22,6 +22,15 @@
 
 ### 修复
 
+· **版本行把「发行版」说成了「仓库」**（用户 2026-09-28 拿截图质问「你这个推流有问题啊」）：那一行读的是
+  GitHub **Releases**（能下载安装的 APK），文案却写「仓库」—— 用户刚看着源码 1.20 推上 GitHub，界面却说
+  「仓库只有 v1.14」，一句话里混了两个不同的事实。现在**两个事实各说各的、各有来源**：
+  `dsh-update check --json` 除发行版版本（Releases API）外，再报一个 `repo_app`（master 的 `ui/controls.json`，
+  只读前 4KB，读不到就留空 —— 界面必须能区分「没有」和「不知道」）；界面按情况说成
+  「版本：v1.21 · 发行版还是 v1.14 · 仓库源码 v1.21（源码已推上去，只差发版）」。
+  两个 App 的版本行、`dsh-update` 自己的输出、`11_update-apps.sh` 的措辞一并改口（仓库 → 发行版）。
+  `tools/i18n-audit` 的「版本行」样例也跟着改成三段式，`" → the repo has "` 这类会把两个概念搅在一起的 key 已删除。
+
 · **`tools/pre-push-check` 的第 7 / 12 条在 commit 之后集体失明**：它们判断「本次改了什么」只看 `git status --porcelain`，而 push 前的常规状态恰恰是「已经 commit、工作区干净」→ 于是同一批改动，commit 前报「改了 App，版本号顶了吗」，commit 后变成「本次没改 App，无需变动」。
   现在「本次改动」＝工作区改动 ∪ **将要推送的 commit** 里改过的文件（`@{u}...HEAD`，无上游时退 `origin/<分支>` → `origin/HEAD`），并加 `core.quotepath=false` 让中文路径也能做前缀匹配。
 

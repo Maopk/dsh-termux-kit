@@ -7,11 +7,16 @@
     控制台依旧一个多余权限都不要。
   · 桥有 INTERNET，自己就能查，不必经过这里（见 BridgeService 里的 updatecheck）。
 
+⚠ 两个东西**不是一回事**，别再把它们说成一个（用户 2026-09-28 抓到的原话："你这个推送有问题啊"）：
+    · **发行版**（GitHub Releases）＝真正能下载安装的 APK，`check` 默认比的是它；
+    · **仓库源码**（master 上的 ui/controls.json）＝源码里写的版本号，可能**已经比发行版新**（推了源码但没发版）。
+  所以 `check --json` 会把两者都报出来：`latest_app`（发行版里那个 App 的版本）+ `repo_app`（仓库源码里的版本）。
+
 用法：
     dsh-update check --app console --current 1.11 [--json]
     dsh-update check --app bridge  --current 2.11 [--json]
     dsh-update get console|bridge [--downloads-dir DIR]     # 下载最新 APK（不安装）
-    dsh-update latest [--json]                              # 只看仓库最新发行版
+    dsh-update latest [--json]                              # 只看最新发行版
 
 退出码：0 = 没有更新（或已是最新）；10 = **有更新**；2 = 查不到（没网/限流）。
 把「有更新」单独给一个退出码，调用方不用去解析文字。
@@ -44,6 +49,29 @@ def fetch_release(timeout=20):
             pass
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.load(r)
+
+
+RAW_CONTROLS = 'https://raw.githubusercontent.com/%s/master/ui/controls.json' % REPO
+
+
+def fetch_repo_versions(timeout=15):
+    """仓库 **master 源码** 里 ui/controls.json 的 appVersions ＝"源码推到哪一版了"。
+
+    为什么需要它：发行版（Releases）和源码是两条不同的进度。手机上会出现这种状态 ——
+    源码已经 1.20（推上去了），发行版还停在 1.14（没发版）。只说"仓库只有 v1.14"就是在说假话，
+    用户会当场抓住（2026-09-28）。两个事实各自一个来源，界面才能把话说明白。
+    只读前 4KB：appVersions 就在文件开头，没必要为了一行版本号下整个文件；读不到就返回 {}。
+    """
+    try:
+        req = urllib.request.Request(RAW_CONTROLS, headers={'User-Agent': 'dsh-update (termux kit)'})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            head = r.read(4096).decode('utf-8', 'replace')
+        m = re.search(r'"appVersions"\s*:\s*\{([^}]*)\}', head)
+        if not m:
+            return {}
+        return dict(re.findall(r'"([A-Za-z]+)"\s*:\s*"([^"]+)"', m.group(1)))
+    except Exception:
+        return {}
 
 
 def ver_tuple(v):
@@ -98,18 +126,22 @@ def cmd_check(args):
         m = re.search(r'-v([\d.]+)\.apk$', a['name'])
         latest_app = m.group(1) if m else ''
     has = bool(latest_app) and newer(latest_app, args.current)
+    # 仓库源码里的版本（读不到就是空串 —— 界面必须能区分"没有"和"不知道"）
+    repo_app = fetch_repo_versions().get(args.app, '')
     res = {'ok': True, 'app': args.app, 'current': args.current, 'tag': tag,
-           'latest_app': latest_app, 'update': has,
+           'latest_app': latest_app, 'update': has, 'repo_app': repo_app,
            'asset': (a or {}).get('name', ''), 'url': (a or {}).get('browser_download_url', ''),
            'page': RELEASES_PAGE, 'name': rel.get('name', '')}
     if args.json:
         print(json.dumps(res, ensure_ascii=False))
     else:
         if has:
-            print('⬆ 有新版本：%s %s → %s（%s）' % (args.app, args.current, latest_app, tag))
+            print('⬆ 有新版本：%s %s → %s（发行版 %s）' % (args.app, args.current, latest_app, tag))
             print('   下载：%s' % res['url'])
         else:
-            print('✔ %s %s 已是最新（仓库最新 %s）' % (args.app, args.current, tag or '?'))
+            print('✔ %s %s 已是最新（发行版 %s 里是 %s）' % (args.app, args.current, tag or '?', latest_app or '?'))
+        if repo_app and repo_app != latest_app:
+            print('   仓库源码里写的是 %s（推了源码但没发版时就会这样）' % repo_app)
     return 10 if has else 0
 
 

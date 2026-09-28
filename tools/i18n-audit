@@ -501,8 +501,10 @@ def audit_titles(zh, data):
         ('密码副标题', zh["Now: revoked"]),
         ('密码副标题', zh["Now: unreadable (no reply from Termux; tap Refresh status to retry)"]),
         ('版本行', zh["Version: "] + "v1.16" + zh[" · up to date"]),
-        ('版本行', zh["Version: "] + "v1.16" + zh[" → the repo has "] + "v1.17" + zh[" · tap this line to update"]),
-        ('版本行', zh["Version: "] + "v1.16" + zh[" · local is newer than the repo (the repo only has v"] + "1.15" + zh[")"]),
+        ('版本行', zh["Version: "] + "v1.16" + zh[" → the release channel has "] + "v1.17" + zh[" · tap this line to update"]),
+        # 本地领先发行版：**两个事实都要在**（发行版 / 仓库源码），别再混成一个"仓库"（用户 2026-09-28 抓到的假话）
+        ('版本行', zh["Version: "] + "v1.16" + zh[" · the release channel is still v"] + "1.15"
+                   + zh[" · the repo source is v"] + "1.16" + zh[" (the source is pushed, only the release is missing)"]),
         ('语言副标题', zh["auto follows the system language"] + " · " + zh["the widgets and the page panel follow this too"]),
     ]
     hits = []
