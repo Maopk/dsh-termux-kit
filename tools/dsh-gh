@@ -4,7 +4,9 @@
 # Usage: 
 #   dsh-gh status                     show repo/release status (public info works without a token, but the token is sent to see private data)
 #   dsh-gh push [commit message]             commit local changes and push (with no message it only pushes existing commits)
-#   dsh-gh release <tag> <title> <files...>   create a release and upload assets (**asset names are converted to ASCII**, see below)
+#   dsh-gh release <tag> <title> <files...> [--notes-file FILE]
+#                                    create a release and upload assets (**asset names must be ASCII**, see below)
+#                                    --notes-file：发行说明正文（Markdown）。不写也行，但发行版页面上就只剩标题。
 #   dsh-gh revoke-hint                print how to revoke the token properly (**deleting the file is not enough**)
 #
 # ⚠ Two traps we hit (recorded here so they are not repeated):
@@ -50,11 +52,33 @@ for r in (rs if isinstance(rs,list) else []):
     git -c credential.helper= push "https://x-access-token:$T@github.com/$REPO.git" HEAD:refs/heads/master && printf '✔ pushed\n' ;;
 
   release)
-    T=$(tok); TAG="${2:?Usage: dsh-gh release <tag> <title> <files...>}"; NAME="${3:?missing title}"; shift 3
-    [ "$#" -gt 0 ] || { printf '✘ give at least one asset file\n' >&2; exit 2; }
+    T=$(tok); TAG="${2:?Usage: dsh-gh release <tag> <title> <files...> [--notes-file FILE]}"; NAME="${3:?missing title}"; shift 3
+    # --notes-file 单独摘出来：正文里会有引号/换行/中文，手拼 JSON 一定出事（拼错过一次就够）
+    NOTES=""; ARGS=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --notes-file) shift; NOTES="${1:-}" ;;
+        *) ARGS+=("$1") ;;
+      esac
+      shift
+    done
+    [ "${#ARGS[@]}" -gt 0 ] || { printf '✘ give at least one asset file\n' >&2; exit 2; }
+    set -- "${ARGS[@]}"
+    [ -z "$NOTES" ] || [ -f "$NOTES" ] || { printf '✘ --notes-file %s does not exist\n' "$NOTES" >&2; exit 2; }
+    PAYLOAD=$(python3 - "$TAG" "$NAME" "$NOTES" <<'PYEOF'
+import json, sys
+tag, name = sys.argv[1], sys.argv[2]
+body = ''
+if len(sys.argv) > 3 and sys.argv[3]:
+    with open(sys.argv[3], encoding='utf-8') as fh:
+        body = fh.read()
+print(json.dumps({'tag_name': tag, 'target_commitish': 'master', 'name': name, 'body': body},
+                 ensure_ascii=False))
+PYEOF
+)
     RID=$(curl -s -X POST "$API/repos/$REPO/releases" -H "Authorization: token $T" \
-          -H 'Accept: application/vnd.github+json' \
-          -d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"master\",\"name\":\"$NAME\"}" \
+          -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/json' \
+          --data-binary "$PAYLOAD" \
           | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('id',''))")
     [ -n "$RID" ] || { printf '✘ failed to create the release\n' >&2; exit 5; }
     printf 'release created: %s/releases/tag/%s\n' "https://github.com/$REPO" "$TAG"

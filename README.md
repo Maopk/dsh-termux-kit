@@ -29,6 +29,8 @@ Everything is built on **Termux + an Accessibility service + the official `RUN_C
 
 ## Install
 
+> **Latest release: [`v1.12`](https://github.com/Maopk/dsh-termux-kit/releases/tag/v1.12)** — Console 1.21 · Bridge 2.24 · page panel 0.10.0 (all three artifacts are on the release page, with `SHA256SUMS.txt`). The source on `master` **can be newer than the release** (that is what "pushed but not released" looks like); each number has its own source, and the version line in both apps says which is which.
+
 ```bash
 # 1) Termux (tested on 0.119.0-beta.3) — install dependencies
 pkg install zstd imagemagick tesseract tesseract-lang   # tesseract is optional (local OCR)

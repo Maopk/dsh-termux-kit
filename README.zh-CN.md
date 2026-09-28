@@ -28,6 +28,8 @@
 
 ## 安装
 
+> **最新版本：[`v1.12`](https://github.com/Maopk/dsh-termux-kit/releases/tag/v1.12)** —— 控制台 1.21 · 桥 2.24 · 页面面板 0.10.0（三个产物都在发行版页面，附 `SHA256SUMS.txt`）。本仓库 `master` 上的源码**可能比发行版新**（推了源码还没发版时就是这样），两个数各自一个来源，App 的版本行也会分开写。
+
 ```bash
 # 1) Termux（本仓库在 0.119.0-beta.3 上测过），装依赖
 pkg install zstd imagemagick tesseract tesseract-lang   # tesseract 可选（本地 OCR）

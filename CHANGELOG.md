@@ -3,7 +3,10 @@
 > 格式：[Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) · 版本号规则见 [CONTRIBUTING.md](CONTRIBUTING.md) §六。
 > **2026-09-27 之前的条目是旧的"日期 + 散文"格式，作为历史保留，不再改写。**
 
-## [Unreleased]
+## [v1.12] - 2026-09-28
+
+> 本版三个产物：控制台 **1.21**（versionCode 34）· 桥 **2.24**（versionCode 34）· 页面面板 **0.10.0**。
+> 资产名一律 ASCII，SHA256 见 `dist/SHA256SUMS.txt` 与发行版页面的 `SHA256SUMS.txt`。
 
 ### 新增
 
