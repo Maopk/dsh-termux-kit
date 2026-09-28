@@ -55,6 +55,7 @@ final class Lang {
         ZH.put("(no output this time)", "（这次没有输出）");
         ZH.put("(no result bundle received; Termux may not be authorized or allow-external-apps is off)\n", "(没有收到结果 bundle；可能是 Termux 未授权或 allow-external-apps 未开)\n");
         ZH.put("(no technical detail this time)", "（这次没有技术细节）");
+        ZH.put("(the page address came back on these lines — it carries the token, so it is not written to the log)", "（页面地址就在这几行里 —— 它带着 token，所以不写进日志）");
         ZH.put(")", "）");
         ZH.put(") — the lamps above and the summary line below are updated", "）—— 上面的灯和下面的摘要已更新");
         ZH.put(", took ", "，用时 ");
@@ -95,6 +96,7 @@ final class Lang {
         ZH.put("Connect adb", "连接 adb");
         ZH.put("Copy all", "全部复制");
         ZH.put("Copy failed: ", "复制失败：");
+        ZH.put("Could not open the page: ", "打不开页面：");
         ZH.put("DSH", "DSH");
         ZH.put("DSH Console", "DSH 控制台");
         ZH.put("DSH Console ", "DSH 控制台 ");
@@ -108,6 +110,7 @@ final class Lang {
         ZH.put("Failed to start the Termux command: ", "启动 Termux 命令失败：");
         ZH.put("Four states from one ping plus the state note (no timers): running / just dropped (wakeable, one broadcast brings it back) / long silent (the process went away on its own or is bound but not answering - waking may work, otherwise open DSH Bridge once) / not installed (this install has never been seen alive here).", "四态由**一次 ping 的结果 + 状态记录**判定（不看时间）：运行中 / 刚断（可唤醒，一条广播就能拉回）/ 长时间未响应（进程自己没了，或端口在听却不应答 —— 唤醒可能有效，无效就手动打开一次「DSH 桥」）/ 未安装（这台机器上从没见过它是活的）。");
         ZH.put("Fully stop bridge", "真停桥");
+        ZH.put("Get the page address", "获取页面地址");
         ZH.put("Green = listening and answering, grey = soft-stopped or not installed.", "绿=在听且真应答，灰=软停或未安装。");
         ZH.put("Green = the web service answers, yellow = half-started, red = down, grey = not running.", "绿=网页服务正常应答，黄=半启动，红=挂了，灰=没在跑。");
         ZH.put("Green = usable, yellow = connecting, red = failed, grey = not connected (check Wi-Fi).", "绿=可用，黄=连接中，红=失败，灰=未连接（看 Wi-Fi）。");
@@ -179,6 +182,7 @@ final class Lang {
         ZH.put("Tap Refresh to read status", "点「刷新」读取状态");
         ZH.put("Task", "任务");
         ZH.put("Technical detail (kept out of the subtitle on purpose):", "技术细节（故意不放在副标题里）：");
+        ZH.put("The console opened the page itself (Termux is backgrounded, so Android would have dropped it there)", "页面已由控制台自己打开（Termux 在后台，交给它开会被系统拦掉）");
         ZH.put("This device has no clipboard service", "本机没有剪贴板服务");
         ZH.put("This revokes it: ~/.dsh-auth-pass is deleted.\n", "收回后：~/.dsh-auth-pass 会被删除。\n");
         ZH.put("Turn the switch off at any time to revoke.", "随时把开关关掉即可收回。");
@@ -216,13 +220,16 @@ final class Lang {
         ZH.put("· Tap Refresh status to read the three lamps\n", "· 点「刷新状态」读三个灯\n");
         ZH.put("· Tap any task button to run it: sent, callback, exit code and raw output are all recorded here\n", "· 点任意任务按钮执行：发送、回传、退出码、原始输出都记在这里\n");
         ZH.put("⏳ Running: ", "⏳ 正在执行：");
+        ZH.put("▶ Open the DSH page", "▶ 打开 DSH 页面");
         ZH.put("● Bridge", "● 桥");
         ZH.put("● DSH", "● DSH");
         ZH.put("● adb", "● adb");
         ZH.put("⚠ Failed to start the Termux command.", "⚠ 启动 Termux 命令失败。");
+        ZH.put("⚠ I have the page address but have not verified it this time — tap the row below if you want to open it", "⚠ 页面地址拿到了，但这次没验证它还灵不灵 —— 想打开就点下面那一行");
         ZH.put("⚠ No callback from Termux after ", "⚠ 等了 ");
         ZH.put("⚠ RUN_COMMAND permission not granted yet; a permission prompt was shown.\n", "⚠ 还没拿到 RUN_COMMAND 权限；已弹出授权提示。\n");
         ZH.put("⚠ Termux (com.termux) not found; please install Termux first.", "⚠ 找不到 Termux（com.termux）；请先安装 Termux。");
+        ZH.put("⚠ The console is in the background, where Android would silently drop the start — I did not pretend to open it. Tap the row below to open the page.", "⚠ 控制台现在不在前台，系统会静默拦掉这次启动 —— 我没假装已经打开。点下面那一行即可打开页面。");
         ZH.put("　(tap here for the log)", "　（点这里看日志）");
         ZH.put("　waited ", "　已等待 ");
         ZH.put("　waited 0s", "　已等待 0s");

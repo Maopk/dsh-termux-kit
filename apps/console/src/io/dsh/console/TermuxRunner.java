@@ -79,4 +79,24 @@ final class TermuxRunner {
     static String openUiCmd() {
         return HOME + "/.local/bin/dsh-browser-open \"$(cat " + HOME + "/.dsh-url)\"";
     }
+
+    /**
+     * Ask Termux for the two facts this app needs to open the page **itself**:
+     * the auth URL (~/.dsh-url) and the installed PWA package (~/.dsh-pwa, written by dsh-browser-open —
+     * naming it explicitly avoids the chooser a bare VIEW intent pops when both the vivo browser and the
+     * DSH window can handle 127.0.0.1:8080).
+     *
+     * Why the app opens it and not Termux: when Termux launches another app **as an app**, Android
+     * silently blocks it (dsh-browser-open says so in its own header) — and Termux is in the background
+     * on this path, so the page simply never appeared and the user waited for a window that was never
+     * coming (measured 2026-09-28: "starting from the console feels much slower than the widget").
+     * This app is in the foreground when the user taps, and its startActivity is allowed.
+     *
+     * The two lines are a wire protocol, not UI text: not translated, and the caller strips them from
+     * the log because the URL carries the token.
+     */
+    static String pageInfoCmd() {
+        return "printf 'DSH_AUTH_URL=%s\\n' \"$(cat " + HOME + "/.dsh-url 2>/dev/null)\"; "
+             + "printf 'DSH_PWA_PKG=%s\\n' \"$(head -1 " + HOME + "/.dsh-pwa 2>/dev/null | tr -d '[:space:]')\"";
+    }
 }

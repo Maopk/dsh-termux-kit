@@ -81,6 +81,18 @@ public class MainActivity extends Activity {
     private LinearLayout busyRow;
     private Button logBtn;
 
+    /**
+     * 「打开 DSH 页面」那一行：拿到认证 URL 才出现（拿不到就整行隐藏，不留空白占位）。
+     * 为什么要有它：页面本该由控制台自己开（见 {@link Tasks#consoleOpensPage}），但控制台可能
+     * 已经不在前台 —— 那时 Android 同样会静默拦掉 startActivity，于是这里给一个**手指触发的入口**
+     * （用户点击＝确定的前台动作，一定允许）。地址里的 token 不会写进日志。
+     */
+    private TextView openRow;
+    /** 认证 URL 与桌面那个 PWA 的包名；都从 Termux 回传的协议行里取，没有就是 null。 */
+    private String pageUrl = null, pagePkg = null;
+    /** 本 Activity 是否在前台：决定"我来开页面"是不是一句真话。 */
+    private boolean resumed = false;
+
     // "Install password authorization" switch (user requirement: authorization is a switch, not a button)
     private Switch authSwitch;
     private TextView authLine;
@@ -177,6 +189,11 @@ public class MainActivity extends Activity {
                 showUpdateResult(i.getStringExtra("output"));
                 return;
             }
+            if ("url_query".equals(cmdId)) {
+                // 拿页面地址的退路（脚本没回传协议行时）。不进日志：那两行里带 token。
+                usePageInfo(i.getStringExtra("output"), false);
+                return;
+            }
             if ("installpass_query".equals(cmdId)) {
                 // Auth status query: updates the switch only — no log, no summary, pending untouched
                 setAuthUi(true, code == 0, i.getStringExtra("output"));
@@ -212,13 +229,117 @@ public class MainActivity extends Activity {
                     + (ms > 0 ? Lang.t(", took ") + (ms / 1000.0) + "s" : "") + ")";
             String body = i.getStringExtra("output");
             if (pending) finishPending(null);
-            pushHistory(head + (body == null || body.trim().isEmpty() ? "\n" + Lang.t("(no output this time)") : "\n" + body.trim()));
+            // 协议行（DSH_AUTH_URL= / DSH_PWA_PKG=）里带 token，**先剔掉再进日志** ——
+            // 日志会被复制、会留在 SharedPreferences 里、也可能被贴到别处。
+            String shown = scrubMarkers(body);
+            pushHistory(head + (shown == null || shown.trim().isEmpty() ? "\n" + Lang.t("(no output this time)") : "\n" + shown.trim()));
             setLast(label, code, ms, code == 0);
             render();
             // After revoking / writing authorization, put the switch back to the real state
             if ("installpass_revoke".equals(cmdId) || "installpass_set".equals(cmdId)) refreshAuthState();
+            // 启动类任务：页面由**控制台自己**开（Termux 在后台开不出来，见 Tasks.consoleOpensPage）。
+            if (Tasks.consoleOpensPage(cmdId) && code == 0) {
+                if (!usePageInfo(body, true)) {
+                    // 脚本没回传地址（旧脚本、或这一轮确实拿不到可用 URL）→ 自己问一次。
+                    // 拿到也只把入口亮出来，**不自动开**：这条退路没验证过那个地址是不是还有效。
+                    run("url_query", Lang.t("Get the page address"), TermuxRunner.pageInfoCmd(),
+                            false, true, true, 25, true);
+                }
+            }
         }
     };
+
+    // ---------- Page hand-off: the console opens the page itself ----------
+    // 协议行（Termux → 控制台）。不是给人看的文案，所以不翻译；也正因为带 token，进日志前必须剔掉。
+    private static final String MARK_URL = "DSH_AUTH_URL=", MARK_PKG = "DSH_PWA_PKG=";
+
+    /** 取协议行的值：扫全部行，**最后一次**出现的算数（脚本可能打了两遍，最后那次才是现在这个实例）。 */
+    private static String marker(String out, String key) {
+        if (out == null) return null;
+        String v = null;
+        for (String ln : out.split("\n")) {
+            String s = ln.trim();
+            if (s.startsWith(key)) v = s.substring(key.length()).trim();
+        }
+        return v;
+    }
+
+    /**
+     * 日志里**不能出现**那两行：DSH_AUTH_URL 带着 token。剔掉的同时留一句说明，
+     * 否则用户会以为"脚本根本没回传地址"（日志里凭空少了两行，也是一种说谎）。
+     */
+    private static String scrubMarkers(String out) {
+        if (out == null || (out.indexOf(MARK_URL) < 0 && out.indexOf(MARK_PKG) < 0)) return out;
+        StringBuilder sb = new StringBuilder();
+        boolean noted = false;
+        for (String ln : out.split("\n")) {
+            String s = ln.trim();
+            if (s.startsWith(MARK_URL) || s.startsWith(MARK_PKG)) {
+                if (!noted) {
+                    sb.append(Lang.t("(the page address came back on these lines — it carries the token, so it is not written to the log)")).append('\n');
+                    noted = true;
+                }
+                continue;
+            }
+            sb.append(ln).append('\n');
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 从任务输出里取页面地址。auto=true（刚跑完启动类任务）时顺手把页面开出来；
+     * auto=false（退路 url_query）只把「▶ 打开 DSH 页面」亮出来 —— 那条退路没验证过地址还有没有效。
+     * 返回 true 表示拿到了地址（不代表一定打开了，见 {@link #openPage}）。
+     */
+    private boolean usePageInfo(String out, boolean auto) {
+        String url = marker(out, MARK_URL);
+        if (url == null || url.isEmpty()) return false;
+        String pkg = marker(out, MARK_PKG);
+        pageUrl = url;
+        if (pkg != null && !pkg.isEmpty()) pagePkg = pkg;
+        showOpenRow();
+        if (auto) openPage();
+        else pushHistory("[" + now() + "] " + Lang.t("⚠ I have the page address but have not verified it this time — tap the row below if you want to open it"));
+        return true;
+    }
+
+    private void showOpenRow() {
+        if (openRow == null) return;
+        openRow.setText(Lang.t("▶ Open the DSH page"));
+        openRow.setVisibility(View.VISIBLE);
+    }
+
+    /**
+     * 由**控制台自己**把页面推到前台 —— 为什么不是让 Termux 开，见 {@link Tasks#consoleOpensPage}。
+     *
+     * 诚实条款：控制台不在前台时，Android 同样会**静默**拦掉 startActivity（不抛异常、也不出现）。
+     * 所以这时什么都不做并说清楚，绝不打印一句"已打开"骗人；入口一直亮在下面，用户点一下就成。
+     * 先把包名指定成桌面那个 DSH 窗口：不指定的话，vivo 浏览器和它都能处理 127.0.0.1:8080，
+     * 系统会弹一个选择器（dsh-browser-open 的头注释里管这个叫坑①）。
+     */
+    private void openPage() {
+        if (pageUrl == null || pageUrl.isEmpty()) return;
+        if (!resumed) {
+            pushHistory("[" + now() + "] " + Lang.t("⚠ The console is in the background, where Android would silently drop the start — I did not pretend to open it. Tap the row below to open the page."));
+            render();
+            return;
+        }
+        try {
+            Intent it = new Intent(Intent.ACTION_VIEW, Uri.parse(pageUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (pagePkg != null && !pagePkg.isEmpty()) it.setPackage(pagePkg);
+            try {
+                startActivity(it);
+            } catch (Throwable named) {
+                // 指定的那个窗口不在（PWA 被卸载或换了包名）→ 退回让系统自己挑，别就此放弃
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(pageUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            }
+            pushHistory("[" + now() + "] ✅ " + Lang.t("The console opened the page itself (Termux is backgrounded, so Android would have dropped it there)"));
+            render();
+        } catch (Throwable t) {
+            pushHistory("[" + now() + "] ⚠ " + Lang.t("Could not open the page: ") + t.getMessage());
+            render();
+        }
+    }
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -358,12 +479,22 @@ public class MainActivity extends Activity {
         lastLine.setBackgroundResource(R.drawable.box);
         lastLine.setVisibility(View.GONE);
         lastLine.setOnClickListener(v -> openLog());
+        // 「▶ 打开 DSH 页面」：固定在这一条的上面（同一块 footer），拿到认证 URL 才出现。
+        // 链接色 + 边框，和「关于」里的项目主页同一套视觉 —— 用户一眼知道"这行能点"。
+        openRow = new TextView(this);
+        openRow.setTextSize(13);
+        openRow.setTextColor(Palette.LINK);
+        openRow.setPadding(dp(10), dp(10), dp(10), dp(10));
+        openRow.setBackgroundResource(R.drawable.box);
+        openRow.setVisibility(View.GONE);
+        openRow.setOnClickListener(v -> openPage());
         LinearLayout footer = new LinearLayout(this);
         footer.setOrientation(LinearLayout.VERTICAL);
         footer.setBackgroundColor(Palette.BG);
         footer.setPadding(p, 0, p, dp(10));
         LinearLayout.LayoutParams llp = wideLp();
         llp.setMargins(0, dp(8), 0, 0);
+        footer.addView(openRow, llp);
         footer.addView(lastLine, llp);
 
         LinearLayout page = new LinearLayout(this);
@@ -386,10 +517,16 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        resumed = true;   // 「我来开页面」这句话成立的前提，见 openPage()
         askTermuxLang();   // pick up a change made elsewhere (e.g. `dsh-lang set zh` from a widget)
         render();
         autoStatus();
         refreshAuthState();
+    }
+
+    @Override protected void onPause() {
+        resumed = false;
+        super.onPause();
     }
 
     private long lastAuto = 0;
@@ -739,10 +876,10 @@ public class MainActivity extends Activity {
 
     /** Single entry point: uses each task's own wait window (long tasks like backup/restart no longer raise false alarms). */
     private void sendTask(String id) {
-        Tasks.T task = Tasks.get(id);
         UiControls.C c = UiControls.get(id);
         if (c == null) return;   // 表里没有的 id：不猜文案，也不执行
-        String cmd = task != null && task.cmd != null ? task.cmd : TermuxRunner.taskCmd(id);
+        // 命令走 Tasks.consoleCmd：启动类不让 Termux 开页面（它开不出来）、更新类把自己的版本带上
+        String cmd = Tasks.consoleCmd(id, ver);
         run(id, Lang.t(c.labelEn), cmd,
                 false, false, false, Tasks.waitOf(id), false);
     }

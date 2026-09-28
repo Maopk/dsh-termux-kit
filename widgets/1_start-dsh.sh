@@ -26,8 +26,21 @@ OPENER="$HOME_DIR/.local/bin/dsh-browser-open"
 URLFILE="${DSH_URL_FILE:-$HOME_DIR/.dsh-url}"
 
 open_browser() {   # $1=url
-  [ "$OPEN" = 1 ] || { warn "Not opening the browser, as requested"; return 0; }
+  [ "$OPEN" = 1 ] || { warn "Not opening the browser here: the caller opens the page itself (--no-open)"; return 0; }
   if [ -x "$OPENER" ]; then run "'$OPENER' '$1' >/dev/null 2>&1"; else run "termux-open-url '$1'"; fi
+}
+
+# ── 把页面地址回传给调用方（协议行，不是给人看的文案，所以不走 dsh_msg、不翻译）──────────
+# 为什么需要：Termux 在**后台**发 am start 会被 Android 静默拦掉（dsh-browser-open 里有原话），
+# 于是"从控制台启动 DSH"的页面永远不出现，用户干等 → 觉得"比点小组件慢得多"（2026-09-28 定位）。
+# 控制台 App 自己是前台，它 startActivity 不会被拦 —— 所以由它来开页面，脚本只负责把地址**放在
+# 输出的最后两行**交回去。地址里带 token，控制台那边会把它从日志里剔掉。
+emit_page() {   # $1=url（空则不打印任何东西）
+  [ -n "$1" ] || return 0
+  printf 'DSH_AUTH_URL=%s\n' "$1"
+  local p=""
+  [ -f "$HOME_DIR/.dsh-pwa" ] && p=$(head -1 "$HOME_DIR/.dsh-pwa" 2>/dev/null | tr -d '[:space:]')
+  printf 'DSH_PWA_PKG=%s\n' "$p"
 }
 
 # Also restore the AI channels (a failure here does not affect the startup itself)
@@ -100,6 +113,7 @@ if port_open "$DSH_PORT"; then
     warn "For a usable auth URL, tap \"4_soft-restart-dsh\" or \"6_hard-restart-dsh\" to fetch a fresh one"
   fi
   restore_channels
+  emit_page "$U"   # 放在最后：控制台只截取输出的尾部，协议行必须在尾巴上
   done_; exit 0
 fi
 
@@ -149,4 +163,5 @@ U=$(grep -oE "$TOKEN_RE" "$URLFILE" 2>/dev/null | tail -1)
 [ -n "$U" ] && open_browser "$U" || warn "No usable auth URL, not opening the browser (avoids landing on an error page)"
 
 restore_channels
+emit_page "$U"   # 放在最后：控制台只截取输出的尾部，协议行必须在尾巴上
 done_

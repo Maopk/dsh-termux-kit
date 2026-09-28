@@ -116,6 +116,8 @@ Every widget supports `--dry-run` (print only, execute nothing).
 - Dangerous actions (restart / shutdown / full stop / emergency stop) require confirmation.
 - Timeouts are per task (backup 420s / restart 300s / queries 25s with one automatic resend), and timeout messages state the real reason (e.g. “the phone was busy”).
 - It requests exactly one permission: `com.termux.permission.RUN_COMMAND`. No storage, network, accessibility or overlay permissions.
+- **The console opens the DSH page itself.** Asking Termux to do it does not work on this path: Termux is in the background then, and Android silently drops an activity start from a background app (the same trap documented in `dsh-browser-open`). So the app opens the URL itself — naming the installed DSH window explicitly to avoid a chooser — and the auth URL reaches it over a two-line protocol that is **stripped from the log** (it carries the token). If the console happened to be in the background itself, it says so instead of pretending, and leaves a tappable **▶ Open the DSH page** row at the bottom.
+- **Updating never downgrades.** `Update the two apps` compares each app's *installed* version against the release asset before downloading anything: release newer → install; equal → “up to date”, skip; local newer → refuse (`--force` to override deliberately); version unreadable → skip and say why. (The console passes its own version to the script; the bridge reports its own.)
 
 ### DSH page plugins (`plugins/`)
 
@@ -162,6 +164,7 @@ The PIN is stored only in `~/.dsh-auth-pass` (`chmod 600`) and read only when pa
 - **adb wireless debugging needs a working Wi-Fi network** (flipping the switch is not enough), and after a reboot you must re-enable Wireless debugging once by hand.
 - The **Accessibility bridge gets reclaimed by the system** (it can drop ~10s after you switch to another app). That is normal; a token-carrying broadcast wakes it, and a cold start can take 20–40s.
 - The first APK install asks for your fingerprint/lock-screen PIN — that is Android's own security check; this kit only automates reaching it.
+- **A background app cannot reliably raise another UI.** Android *silently* drops an activity start from a background app (no error, nothing appears), so "open the DSH page" only works from whichever app is **in the foreground** — the Console app itself, or Termux when a widget tap brought it forward. Having Termux do `am start` while it is backgrounded just prints `Starting: Intent …` and nothing happens (measured 2026-09-28).
 
 ---
 

@@ -77,6 +77,37 @@ final class Tasks {
     static List<T> all() { return new ArrayList<T>(java.util.Arrays.asList(ALL)); }
 
     /**
+     * 这两个动作的**页面由控制台自己打开**，不让 Termux 去开。
+     *
+     * 为什么：Termux 在后台以"应用身份"启动别的 App，会被 Android 的后台启动限制**静默拦掉**
+     * （`dsh-browser-open` 的头注释里就写着这一条，实测只打印 "Starting: Intent …"，什么都不发生）。
+     * 从控制台点「启动 DSH」时前台是控制台、Termux 在后台（`oom_score_adj` 实测 945＝缓存档），
+     * 于是页面根本不出现 —— 用户干等，感觉"比点小组件慢得多"（2026-09-28 定位）。
+     * 而控制台是前台 App，它自己的 startActivity 是允许的，所以：命令带 `--no-open`，
+     * 脚本只用两行协议（DSH_AUTH_URL= / DSH_PWA_PKG=）把地址交回来，由控制台开。
+     */
+    static boolean consoleOpensPage(String id) {
+        return "1_start-dsh".equals(id) || "open".equals(id);
+    }
+
+    /**
+     * 控制台这条路上真正要跑的命令。与 {@link #ALL} 的差别只有两处，都在这里说清：
+     * · 启动类：加 `--no-open`（页面由控制台开，见 {@link #consoleOpensPage}）；
+     * · 更新类：把控制台**自己的版本号**带给脚本 —— 本 App 最清楚自己装的是哪一版，
+     *   脚本靠它才能判断"仓库是不是比本机旧"（本机领先就绝不降级；没有这个值它只能读 adb 或跳过）。
+     */
+    static String consoleCmd(String id, String ver) {
+        if ("open".equals(id)) return TermuxRunner.pageInfoCmd();
+        if ("1_start-dsh".equals(id)) return TermuxRunner.taskCmd(id) + " --no-open";
+        if ("11_update-apps".equals(id)) {
+            String v = ver == null ? "" : ver.trim().replaceFirst("^v", "");
+            return TermuxRunner.taskCmd(id) + (v.isEmpty() ? "" : " --console-ver " + v);
+        }
+        T t = get(id);
+        return t != null && t.cmd != null ? t.cmd : TermuxRunner.taskCmd(id);
+    }
+
+    /**
      * Only safe actions go on the home-screen widget: a mis-tap there costs too much.
      * Must stay in step with the `widget` surface in ui/controls.json — check-task-ids verifies that.
      */
