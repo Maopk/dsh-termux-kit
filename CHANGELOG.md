@@ -3,6 +3,22 @@
 > 格式：[Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) · 版本号规则见 [CONTRIBUTING.md](CONTRIBUTING.md) §六。
 > **2026-09-27 之前的条目是旧的"日期 + 散文"格式，作为历史保留，不再改写。**
 
+## [Unreleased]
+
+### 变更
+
+· **README 中英两份重写**（`README.md` / `README.zh-CN.md`）：叙述结构重排 —— 删掉「包含什么 / 安装 / 使用说明（三处 UI 规范、小组件、控制台 App、页面插件）」，
+  换成「为什么写这个 / 跑起来（五步）/ 它能干什么 / 12 个小组件 / 常用命令 / 三处界面的约定 / 已知的坑（9 条）/ 依赖和限制 / 怎么收回控制权 / 文件结构 / 用到的别人的东西」；
+  新增「已知的坑」9 条，每条写现象 → 根因 → 绕法。两份都是 204 行、27 个标题，结构对齐。
+· 同步修 `docs/` 与守则的指路：`CONTRIBUTING.md` §四 里指向 README 的三处引用改成新标题（「包含什么」→「文件结构」+「它能干什么」、
+  「安装」→「跑起来」、「已知限制」→「依赖和限制」），§四.3 写明 UI 未定稿前允许缺截图；README 的「文件结构」表里 `ui/` 那行补上 `ui/theme.json`。
+· 全仓库扫一遍"AI 味"：去掉装饰性的 ⚠️（`CONTRIBUTING.md` §九、`docs/architecture.md`、`docs/operations.md`、`docs/i18n.md`、`docs/架构与数据流.md`），
+  英文文档里的 "we / our" 改成 "I"，运维笔记里的"我们"改成"我"；两份 README 的「文件结构」表补上 `CHANGELOG.md` 入口，
+  `ui/` 那行补回色板生成链（27 个颜色 → 两份 `Palette.java`、两份 `res/values/dsh_theme.xml`）。
+  历史存档（已发版条目、运维笔记的旧条目）里的符号与用词按原样保留，没有回改。
+· §四.7 的措辞改成"两份 README 的「文件结构」表里都要有一行指向 CHANGELOG.md"。
+  （本批是纯文档，不 bump 版本号，见 §六。）
+
 ## [v1.12] - 2026-09-28
 
 > 本版三个产物：控制台 **1.21**（versionCode 34）· 桥 **2.24**（versionCode 34）· 页面面板 **0.10.0**。

@@ -38,6 +38,10 @@ YYYY-MM-DD HH:MM · <一句话标题>
 - 本地：`~/DSH运维笔记.md`
 - 每次 push 时把本地新增段落合并进仓库版本
 
+**副本**（**只在 push 时投递，平时改笔记不投递**）：push 时跑 `~/.local/bin/dsh-out ~/DSH运维笔记.md`，
+覆盖交付目录里的同名文件 `Download/dsh/文档/DSH运维笔记.md` —— **不加日期后缀**。
+`Download/dsh/文档/` 只放最新版；历史版本在 git 和备份里，不在那里堆。
+
 **结构**：分类索引 + **最新在上**。新记录写在开头的「〇、最近改动记录」小节里，老的分节（一、二、三…）保留原样。
 
 **踩过的坑必须写"根因"和"怎么避免"**，不要只写"试了 X 失败了"。
@@ -79,13 +83,13 @@ tools/pre-push-check --strict # 把 ⚠（提醒类）也当失败，用于真�
 README 是长期维护的唯一对外入口，**每次功能变化都要检查这几块**：
 
 1. **一句话项目介绍**：是否还准确？功能范围变了要改。
-2. **功能清单**：新增/删除的功能要同步（本仓库＝[README.zh-CN.md](README.zh-CN.md) 的"包含什么"表格 + 各 App 小节）。
-3. **截图**：UI 改了要换新图（旧图比没图更糟）。**本仓库目前没有截图**，UI 定稿后再补，别放半成品。
-4. **快速开始**：安装步骤、依赖、首次运行命令（`README.zh-CN.md` 的"安装"一节）。
+2. **功能清单**：新增/删除的功能要同步（本仓库＝[README.zh-CN.md](README.zh-CN.md) 的「文件结构」表 +「它能干什么」一节）。
+3. **截图**：UI 改了要换新图（旧图比没图更糟）。**本仓库目前没有截图，UI 未定稿前允许缺图** —— 这一条要求的是"改了 UI 就得换图"，不是"必须有图"；现在如实标"暂无截图"即可，别为了打勾去放半成品。
+4. **快速开始**：安装步骤、依赖、首次运行命令（`README.zh-CN.md` 的「跑起来」一节）。
 5. **目录结构**：新增顶层目录要补说明（`apps/ widgets/ tools/ plugins/ ui/ i18n/ tests/ docs/ dist/`）。
 6. **FAQ / 已知问题**：踩过的坑、系统限制（vivo 后台冻结、无障碍被回收、无线调试依赖 Wi-Fi…）要写进来，
-   别让后来者重复踩 —— 现在放在"已知限制"一节。
-7. **更新日志入口**：指向 [CHANGELOG.md](CHANGELOG.md)。
+   别让后来者重复踩 —— 现在放在「依赖和限制」一节；**「已知的坑」是另一节**（逐条写现象 / 根因 / 绕法），两节别混着改。
+7. **更新日志入口**：两份 README 的「文件结构」表里都要有一行指向 [CHANGELOG.md](CHANGELOG.md)（光在正文里提一句不算）。
 8. **许可证与致谢**：引用了别人代码要注明（本仓库 MIT，见 [LICENSE](LICENSE)）。
 
 **判断标准**：一个陌生人只看 README 能不能跑起来。跑不起来就是 README 没写够。
@@ -205,7 +209,7 @@ tools/pre-push-check             # 顺带扫改动文件里的 key/token/passwor
 6. **推送后报告**：commit hash、push 结果、远端最新 commit、受影响文件清单
 7. 在运维笔记追加一条"推送记录"：时间、commit、改动摘要
 
-> ⚠️ 本仓库的远端是 `Maopk/dsh-termux-kit`。**没有用户明确说"推"，就不要 push**；
+> 注意：本仓库的远端是 `Maopk/dsh-termux-kit`。**没有用户明确说"推"，就不要 push**；
 > 本地提交与推送是两件事，报告时必须分清（本地文件 / 本地提交 / 已推送到远端）。
 
 ---
@@ -250,3 +254,39 @@ tools/i18n-audit && cp plugins/dsh-mobile-local/client.js ~/.dsh/profiles/web/lo
 bash apps/console/build.sh && bash apps/bridge/build.sh
 tools/app-verify console && tools/app-verify bridge
 ```
+
+---
+
+## 十二、新会话交接（下一个会话照着这个写）
+
+交接文档**不算记录**（记录只认 §二的运维笔记），但它决定下一个会话照着什么干。写错一个路径，对方就会沿着错的
+一路做下去 —— 2026-09-28 一天里连错两次（把笔记写成 `docs/运维笔记.md`、把数据源写成不存在的 `ui-controls.json`），
+所以固定成下面这份骨架：
+
+```markdown
+# 新会话交接 · <主题>
+
+## 一、项目速览
+- 仓库：Maopk/dsh-termux-kit（本地 ~/dsh-termux-kit/）
+- 本地运维笔记：~/DSH运维笔记.md
+- 仓库运维笔记：docs/DSH运维笔记.md
+- 交付目录（唯一）：Download/dsh/ —— 用 ~/.local/bin/dsh-out <文件> 按扩展名归类
+- 三条生成链（"单一数据源"说的就是这三份，没有 ui-controls.json 这个文件）：
+  ui/controls.json（文案 / 分类 / 控件 id / appVersions）· ui/theme.json（色板与主题）· i18n/zh.json（翻译）
+
+## 二、三处 UI 与生效方式
+- 控制台 APK：~/dsh-console/ · 桥 APK：~/droid-bridge/（仓库 apps/ 只是 sync-apps.sh 的镜像副本，改它不生效）
+- 页面面板：plugins/dsh-mobile-local → 安装位 ~/.dsh/profiles/web/local/dsh-mobile-local/
+- 面板：pnpm install + 刷新页面（不重启）· APK：重新编译，用户自己装 · host.js：改动要重启 DSH
+
+## 三、这次要做什么（按顺序，一条一条来）
+## 四、约束（不许做什么）
+## 五、做完给我看什么（验收标准）
+```
+
+四条硬要求：
+
+1. **路径先验证再写**：写进交接的路径，先在机器上 `ls` 确认它真的存在。仓库笔记是 `docs/DSH运维笔记.md`。
+2. **数据源写全三条链，不许把 `ui-controls.json` 当文件名**（这个文件不存在）：面板版本号来自 `ui/controls.json` 的 `appVersions`。
+3. **推不推要说清**：默认**不推**。"本地文件 / 本地提交 / 已推送到远端"三档必须分开写（§九）。
+4. **APK 由用户自己装**；要 AI 代装就得写明原因，并且先过 §七的敏感信息扫描。

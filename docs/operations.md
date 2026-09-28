@@ -36,7 +36,7 @@ them apart.
 | Clash home screen says **stopped** (“点此启动”), no `tun` interface, nothing listening on `127.0.0.1:7890` | The VPN core was stopped (the app process may still be alive) | Start it. Then stop the ROM from killing it: allow background activity, battery “unrestricted”, and enable the system **always-on VPN** |
 | Core is running, but every foreign request fails after ~5s and the log shows `dns resolve failed: couldn't find ip` | The generated config / DNS state went bad — the core cannot resolve the **proxy server's own domain** | **Re-generate the config by updating the subscription** (Clash → Profiles → ⋮ → Update, or the circular-arrow button). Restarting the core alone does **not** help |
 
-Because “Update” is the only self-heal, we keep the subscription auto-update interval at **60 minutes**.
+Because “Update” is the only self-heal, the subscription auto-update interval is kept at **60 minutes**.
 Measured baseline: right after a core start the first ~70 s are unreliable (3/10 requests), then it settles to
 20/20 with ~0.3 s TLS handshakes.
 
@@ -132,7 +132,7 @@ Download/dsh/
    ├── 备份/dsh-state-*.tar.gz      state packs (~25 MB each, keep 5) — sessions, settings, plugin list, notes
    ├── 备份/系统备份/dsh-full-*.tar.zst   FULL snapshots (~1.1 GB) — whole Termux prefix + DSH runtime,
    │                                    built by dsh-snapshot, for reinstalling or moving to a new phone.
-   │                                    ⚠ contains credentials; keep it as a sensitive file.
+   │                                    contains credentials; keep it as a sensitive file.
    ├── 图片/                        screenshots the AI takes (now `.nomedia`, invisible to the gallery)
    ├── 文档/ 脚本/ 状态/ 配置/       notes, script copies, status JSON, generated config
    └── 应用/                       built APKs

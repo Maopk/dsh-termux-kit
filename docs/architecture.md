@@ -51,8 +51,8 @@ tools/dsh-status-pub            (collects: DSH / bridge / adb / locks / task tai
    └─ --json: prints to stdout only (for the Console app; **this path writes no file**)
         └─▶ the app's TaskResultReceiver → Last.setStatus → rendered
 ```
-> ⚠ Note that branch: `--json` **does not write a file**. Never use the mtime of `status.json` to decide
-> whether “that refresh from the app actually ran” — a trap we hit in practice (see `docs/DSH运维笔记.md`, 补三十二续).
+> Note that branch: `--json` **does not write a file**. Never use the mtime of `status.json` to decide
+> whether “that refresh from the app actually ran” — a trap I hit in practice (see `docs/DSH运维笔记.md`, 补三十二续).
 
 ## Data flow of installing an APK (the flow specific to this device)
 

@@ -2,175 +2,204 @@
 
 [English](README.md) · **中文**
 
-在一台**未 root 的安卓手机**上，把 DeepSeek Harness（DSH）做成「能自己启动、能自己恢复、坏了会自己说清楚」的东西。
+在一台没 root 的安卓手机上跑 DeepSeek Harness（DSH），而且不用一直盯着它。
 
-全部基于 **Termux + 无障碍服务 + 官方 `RUN_COMMAND` 通道**，不需要 root、不需要电脑。
+在手机上跑 DSH 和电脑上不是一回事：Termux 随时可能被系统冻住，浏览器窗口说没就没，出了问题你在手机上也看不到日志。这个仓库就是补这些的——12 个 Termux 小组件管启停和恢复，一个控制台 App 管点按钮，一个无障碍 App 让 AI 能看屏幕、点按、输入。用到的只有 Termux、Android 的无障碍服务、Termux 官方的 `RUN_COMMAND`，不需要 root，也不需要电脑。
 
----
+## 为什么写这个
 
-## 包含什么
+我自己在手机上用 DSH。手机是 vivo，后台冻结很凶：桥（无障碍服务）会周期性被系统回收，adb 无线调试关一次 Wi-Fi 就断，浏览器窗口偶尔被系统直接丢掉。这些事每次手动救一遍太烦，就都写成了脚本和 App。
 
-| 目录 | 内容 |
-|---|---|
-| `apps/console/` | **DSH 控制台 App** 源码：12 个组件的图形界面 + 桌面小部件 |
-| `apps/bridge/` | **DSH 桥 App** 源码：无障碍服务 + 回环接口，让 AI 能看屏、点按、滑动、输入 |
-| `widgets/` | 12 个 Termux 桌面小组件 + 公共库 `common.sh` |
-| `tools/` | 26 个命令行工具（启动、备份、装包、按文字点界面、Clash 自检…） |
-| `plugins/` | 3 个 DSH 页面插件（手机任务面板 / AI 自看遥控 / 文件面板） |
-| `ui/theme.json` | **两个 App 的唯一色板 + 主题源**：27 个颜色 → 两份 `Palette.java`、两份 `res/values/dsh_theme.xml`（窗口底色/状态栏/导航栏/滚动辉光/对话框）与控制台的形状 drawable。`tools/ui-controls gen` 生成、`tools/i18n-audit` 逐项核对（含「源码与 res 里不许有裸色值」），所以「滚到底露出一块灰」「两处一个深一个浅」这类问题在结构上不可能再出现 |
-| `ui/controls.json` | **三处 UI 的唯一文案源**：分类、控件名、一句话后果、危险标记、出现在哪几处。`tools/ui-controls` 生成页面插件的控件块和两个 App 的 `UiControls.java`；`ui-controls check`（逐个产物比 md5）已进自检 |
-| `tests/selftest.sh` | 自检套件：93 项（语法 → 预演 → 回归 → 真跑 → 沙箱冷启动 → 工具/UI 漂移） |
-| `docs/` | 运维笔记（每次踩坑的证据与复盘）+ 架构与数据流 |
-| `CONTRIBUTING.md` | **动手前先读**：仓库操作守则（每次改动都要记的运维笔记格式、push 前 12 条自检清单、commit / CHANGELOG / 版本号规则、敏感信息扫描、本仓库门禁一览）。`tools/pre-push-check` 是那张清单的脚本化版本 |
-| `dist/` | 已构建的 APK + SHA256 |
+顺手记了一本账：`docs/DSH运维笔记.md` 里是每次踩坑的证据和复盘。下面「已知的坑」大部分是从那里挑出来的，想看细节可以去翻。
 
----
+## 跑起来
 
-## 安装
+最省事是直接用发行版里的 APK。最新版本 **[v1.12](https://github.com/Maopk/dsh-termux-kit/releases/tag/v1.12)**：控制台 1.21、桥 2.24、页面面板 0.10.0，三个产物都在发行版页面，附 `SHA256SUMS.txt`。
 
-> **最新版本：[`v1.12`](https://github.com/Maopk/dsh-termux-kit/releases/tag/v1.12)** —— 控制台 1.21 · 桥 2.24 · 页面面板 0.10.0（三个产物都在发行版页面，附 `SHA256SUMS.txt`）。本仓库 `master` 上的源码**可能比发行版新**（推了源码还没发版时就是这样），两个数各自一个来源，App 的版本行也会分开写。
+`master` 上的源码可能比发行版新——推了源码但还没发版时就是这样，所以 App 的版本行会把「你装的 / 发行版最新的 / 仓库源码里的」三个数分开写。
+
+要自己从源码跑：
 
 ```bash
-# 1) Termux（本仓库在 0.119.0-beta.3 上测过），装依赖
-pkg install zstd imagemagick tesseract tesseract-lang   # tesseract 可选（本地 OCR）
+# 1) Termux 里装依赖。tesseract 可选，只有本地 OCR 用得到
+pkg install zstd imagemagick tesseract tesseract-lang
 
 # 2) 把脚本放到位
-git clone <本仓库> dsh-termux-kit && cd dsh-termux-kit
-install -m755 tools/*   ~/.local/bin/
-mkdir -p ~/.shortcuts/tasks ~/.local/share/dsh-widgets
-install -m755 widgets/*.sh ~/.shortcuts/tasks/
-install -m755 tests/selftest.sh ~/.local/share/dsh-widgets/
-install -m755 widgets/common.sh ~/.local/share/dsh-widgets/
+git clone https://github.com/Maopk/dsh-termux-kit && cd dsh-termux-kit
+install -m755 tools/* ~/.local/bin/
+bash tools/install-widgets      # 装 12 个小组件，同时装它们的中文名
 
-# 3) Termux 里允许外部 App 调用命令（控制台 App 要用）
+# 3) 允许外部 App 调用 Termux 命令（控制台 App 要靠这个）
 grep -q allow-external-apps ~/.termux/termux.properties 2>/dev/null \
   || echo 'allow-external-apps = true' >> ~/.termux/termux.properties
 termux-reload-settings
 
-# 4) 装两个 App（可直接用 dist/ 里的 APK，也可自己构建）
+# 4) 编两个 App（产物在 apps/console/build/ 和 apps/bridge/build/）
 bash apps/console/build.sh && bash apps/bridge/build.sh
-#   产物：apps/console/build/dsh-console.apk、apps/bridge/build/dsh-bridge.apk
 
-# 5) 自检
+# 5) 自检：会把 12 个组件走一遍，破坏性的那几步默认只预演
 bash tests/selftest.sh
 ```
 
 装完还有两件事：
-1. **桌面小组件**：装 Termux:Widget 后，长按桌面 → 小部件 → Termux:Widget，就能看到 `~/.shortcuts/tasks/` 里的 12 个组件。
-2. **桥 App**：打开它，在系统设置里给「DSH 桥」开启**无障碍**，再把 App 里显示的 token 交给 DSH（或写进 `~/.dsh-bridge-token`）。
 
----
+1. 装 Termux:Widget，长按桌面 → 小部件 → Termux:Widget，就能看到那 12 个组件。中文名是转发用的，可以在桌面直接认中文。
+2. 打开桥 App，在系统设置里给它开无障碍，然后把 App 里显示的 token 交给 DSH（或写进 `~/.dsh-bridge-token`）。
 
-## 使用说明
+## 它能干什么
 
-### 三处 UI 的统一规范
+- 启动 DSH，并且等**真正就绪**才开浏览器：日志里出现 token 行、那个 URL 返回 200、进程还活着。DSH 是先绑端口后挂路由的，只看端口会给你开出一个 404 页。
+- 关闭、软重启、硬重启、备份、清理、紧急停止，各是一个小组件。备份会校验归档（`zstd -t` 和条目数），不是打完就算。
+- adb 一条龙：开「无线调试」、找端口、连上、验证；断了能自己修，修不动会说清卡在哪一步。
+- 状态一眼看：DSH、桥、adb 三条通道各自的灯和文字。桥和 adb 是两条独立的东西，坏了要能分清是谁坏了，所以它们从不合并成一个开关。
+- 让 AI 看屏幕、点按、滑动、输入。无障碍桥走回环 8788，不需要网络；adb 走 shell，能力更强但依赖 Wi-Fi。
+- 全自动装 APK：走 vivo 的安装页、点那行蓝色的授权字样、输 6 位锁屏密码。密码只存在 `~/.dsh-auth-pass`（600）。
+- 更新两个 App：从发行版下载、校验 SHA256、安装。只升不降。
+- 网络急救：判断是 Clash 核心停了还是生成的配置坏了，然后修。
+- 三处界面同一套文案：控制台 App、桥 App、网页右下角的面板。改一处，三处一起变。
 
-桥 App / 控制台 App / 页面面板的**分类、控件名、说明文字完全一致**，因为它们出自同一份
-`ui/controls.json`（`tools/ui-controls` 生成，`check` 比三处 md5 并进自检）：
+### 12 个小组件
 
-- **七个分类**（＋桥的「关于本应用」）：启动·停止 / 通道（adb 与桥分开）/ 维护 / 安全 / 设置 / 紧急 / 状态·日志。
-- **类型分清**：按钮＝点一次触发一次动作；开关＝持续状态（桥运行中、闲置自动软停、密码使用权）；状态灯＝只读。
-- **每条都有说明**：控件名下面一行灰字写「做什么 + 代价」，**长按看全文**。危险分三级、靠**形状**区分：紧急类＝实心红底白字；**只有「关闭 DSH」**（不可逆的那一个）＝白底红字 + 红边框；其余危险项＝普通样式 + ⚠（用户 2026-09-27：三个红边框并排反而谁都不像危险动作）。
-- **颜色语义固定**：绿=正常、黄=过渡、红=异常、灰=未启用/未安装；状态灯按 `indexOf('●')` 动态定位上色，不写死索引。
-- **桥有四态**，由一次 ping 加状态记录判定（**不用计时**）：运行中 / 刚断（可唤醒）/ 长时间未响应 / 未安装。
-- **跨 UI 同步**：密码使用权以磁盘上那个 600 文件为准 —— 任一处拨完立刻写、别处刷新即读到，两边都不存缓存。
-
-
-### 桌面小组件（`~/.shortcuts/tasks/`，由 Termux:Widget 调用）
-
-| 组件 | 作用 |
+| 组件 | 干什么 |
 |---|---|
-| `1_start-dsh` | 启动 DSH，并**等真正就绪**（日志出现 token 行 + 该 URL 返回 200 + 进程活着）才开浏览器 |
-| `2_shutdown-dsh` | 停服务 + **关 DSH 窗口**（adb 优先；没 adb 就借无障碍桥按键关，不再假报成功）；默认**保留 Termux**（`--close-termux` 才连它一起关，因为控制台要靠 Termux 才能刷新）。`--keep-bridge` 可保留桥 |
-| `3_backup-dsh` | 打包并校验归档（`zstd -t` + 条目数） |
-| `4_soft-restart-dsh` / `6_hard-restart-dsh` | SIGTERM / -9 后重启（先取锁再动手，连点不会自杀） |
-| `5_cleanup-dsh` | 清工具自己的产物：**我的截图默认全清**、状态包留 5 份、**完整快照留 1 份**；不碰你的文件（名字怪的我产出图写进 `图片/.dsh-images.list` 就会被认领） |
-| `7_reconnect-ai` | adb 与桥一起恢复，失败会分别说清是哪条 |
-| `8_enable-wireless-adb` | 半自动开「无线调试」并接上 adb（Wi-Fi 关着时打开设置页等你点一下，之后自动继续） |
+| `1_start-dsh` | 启动 DSH，等真就绪再开浏览器 |
+| `2_shutdown-dsh` | 停服务并关掉 DSH 窗口；默认保留 Termux（`--close-termux` 才连它一起关） |
+| `3_backup-dsh` | 打包并校验归档 |
+| `4_soft-restart-dsh` | SIGTERM 后重启 |
+| `5_cleanup-dsh` | 清工具自己产生的截图和状态包，不动你的文件 |
+| `6_hard-restart-dsh` | 强杀后重启 |
+| `7_reconnect-ai` | 恢复 adb 和桥，失败会说清是哪一条 |
+| `8_enable-wireless-adb` | 半自动开「无线调试」并接上 adb |
 | `9_revoke-pin` | 收回「AI 可用你的锁屏密码过系统验证」这个授权 |
-| `0_emergency-stop` | 一键撤销 AI 对手机的全部控制（桥、token、adb 无线调试） |
+| `10_net-fix` | 修网络：判断 Clash 核心停了还是配置坏了 |
+| `11_update-apps` | 把控制台和桥更新到发行版，只升不降 |
+| `0_emergency-stop` | 一键撤销 AI 对手机的全部控制：桥、token、adb 无线调试 |
 
-所有组件都支持 `--dry-run`（只打印不执行）。
-
-### DSH 控制台 App
-
-- 顶部三盏灯：DSH / 桥 / adb 的状态，下面一行明细。灯的**颜色和文字同源**：桥那盏由 `status.json` 的 `bridge.state` 一处判定（绿=在听且真应答 / 黄=端口在听却不应答 / 灰=软停·真停·未安装），开关位置也读同一个值，不会再出现「绿灯 + 桥：未知」这种自相矛盾。
-- 最近一次结果那条**固定在窗口底部**，不随分类滚动；没有结果时整条不显示。
-- 按钮**按功能分类**：`启动·停止` / `通道（adb 与桥分开）` / `维护` / `安全`（密码使用权）/ `设置`（语言、项目主页、版本）/ `紧急` / `状态·日志`。「真停桥」不再和开关并排，移进通道里的子分类 `危险操作 · 只能你手动恢复`。
-- **日志**独立一屏：发送、回传、退出码、原始输出都在里面；有未读时按钮带角标。
-- 「密码使用权」是个**开关**（在「安全」类，不再和备份/清理并列）：打开＝AI 可用你的 6 位锁屏密码替你过系统身份验证；关掉＝立刻收回。副标题只写「当前：已授权/已收回」，文件路径、`mode 600`、写入时间这类技术细节**长按**才显示。
-- 危险动作（重启/关闭/紧急停止/收回授权）需要二次确认。
-- 超时按任务给窗口（备份 420s／重启 300s／查询 25s 且自动补发一次），超时文案如实说明「手机当时很忙」这类原因。
-- 权限只有 1 个：`com.termux.permission.RUN_COMMAND`；没有存储、网络、无障碍、悬浮窗权限。
-- **谁开的页面：报事实，不猜**。`dsh web` 启动时自己就会开浏览器（`opening the default browser`），
-  启动脚本也会让 Termux 去开；脚本把"谁开的"当证据回传（`DSH_BOOT_OPEN=server|widget|none`），
-  控制台只在**没人开过**的时候才自己开，而且只说"已请求系统打开"，不说"已经打开"。
-  地址带 token，**进日志前会被剔掉**；底部永远留一行可点的「▶ 打开 DSH 页面」当兜底。
-- **关闭 DSH 不会把你拽到 WebAPK 界面**：`dsh-close-window` 以前"为了按 Back 先把窗口切到前台"，那一下就是跳转本身。
-  现在只在窗口**本来就在前台**时才按 Back；不在前台就什么都不动并如实说明（退出码 3，`2_shutdown-dsh` 照实转述）。
-  有 adb 时改用 `force-stop` 静默关掉，完全不切前台。
-- **版本行把三个事实分开说**：它读的是 GitHub **Releases**（真正能下载安装的那个），不是仓库源码；
-  `dsh-update check` 两个都报，所以这行会说成「版本：v1.21 · 发行版还是 v1.14 · 仓库源码 v1.21（源码已推上去，只差发版）」，
-  而不是以前那句假的「仓库只有 v1.14」。
-- **更新只升不降**：「更新两个 App」先比版本再下载 —— 仓库更新才装、一样新就跳过、**本机领先就拒绝**
-  （要装得显式 `--force`）、版本读不到就跳过并说明；控制台会把自己的版本号传给脚本，桥用自己的 ping 自报版本。
-
-### DSH 页面插件（`plugins/`）
-
-把目录放进 DSH profile 的 `local/` 下，并在 `package.json` 的 `dependencies` 与 `dsh.profile.bundles`
-里都登记，然后 `pnpm install` + 刷新页面：
-
-- `dsh-mobile-local`：页面右下角 ☰ → 与控制台**同一套五分类**的移动端面板（状态灯、带一句话说明的任务按钮、桥运行开关、密码使用权开关；日志面板可复制/清空、带未读角标、忙碌时也能看）。它跟随 `~/.dsh-lang`，一个语言设置同时管住小组件、面板和两个 App；
-  后端是 `tools/dsh-tasksd`（`127.0.0.1:8787`，token + 白名单）。
-- `dsh-selflook-local`：把页面渲成 PNG（供 AI 自看），并把点击/滑动/求值指令下发到页面。
-- `dsh-filepanel-local`：文件面板的本地实现，同时给上面两个插件当 RPC 通道。
+每个组件都支持 `--dry-run`，只打印不执行。
 
 ### 常用命令
 
 ```bash
-dsh-status-pub --json --brief   # 采集状态（DSH/桥/adb/锁/任务）→ JSON
-dsh-restart                     # 安全重启：先判"页面卡"还是"服务死"，只杀 bin.js web，等真就绪
-dsh-bridge status|wake|stop     # 只操作桥（无障碍回环，不需要网络）
-droid conn|shot|ui|tap|text     # 只操作 adb 那条线
-dsh-uitap "刷新状态"            # 按文字点界面（自动滚动，比写死坐标可靠）
+dsh-status-pub --json --brief   # 采集状态（DSH、桥、adb、锁、任务）成 JSON
+dsh-restart                     # 安全重启：先判页面卡还是服务死了，只杀 bin.js web，等真就绪
+dsh-bridge status|wake|stop     # 只操作桥（走回环，不需要网络）
+droid conn|shot|ui|tap|text     # 只操作 adb
+dsh-uitap "刷新状态"            # 按文字点界面，会自动滚动，比写死坐标可靠得多
 dsh-install-apk <apk> --verify  # 全自动装包，装完再开一次 APK 复核
-clash-doctor                    # Clash 五项自检（含"节点域名被 fake-ip 吃掉"这个坑）
-dsh-gh push|release|status      # 维护本仓库：推送 / 发发行版 / 看状态
+clash-doctor                    # Clash 五项自检，含「节点域名被 fake-ip 吃掉」这个坑
+dsh-gh push|release|status      # 维护这个仓库
 ```
 
----
+### 三处界面的约定
 
-## 撤销与安全
+控制台 App、桥 App、网页面板用的是同一套分类和文案，因为它们都从 `ui/controls.json` 生成。控制台和面板显示 7 类，桥 App 显示其中 4 类（底部折叠着「关于本应用」），小组件覆盖 3 类。
 
-每条长期通道都配了「你自己能一键收回」的入口：
+- 按钮点一次触发一次动作，开关表示持续状态（桥运行中、密码使用权），状态灯只读。
+- 每个控件名下面有一行灰字，写清它做什么、代价是什么；长按看全文。
+- 颜色的含义处处一致：绿是正常，黄是过渡，红是异常，灰是未启用或未安装，灯也按这一套上色。
+- 危险用形状区分，不再单独分一类：紧急类动作是实心红底白字；只有「关闭 DSH」（唯一不可逆的那个）是白底红字加红边框；其余危险项是普通样式加一个红色警示记号。
+- 语言只有一个开关（`~/.dsh-lang`），小组件、面板和两个 App 都听它的。
+
+## 已知的坑
+
+每条都是真机上遇到的，写清现象、根因、怎么绕。
+
+### 点了「启动 DSH」，页面半天不出来
+现象：控制台显示启动完成（exit=0），浏览器或桌面上那个 DSH 窗口没动静。
+根因：`dsh web` 启动时自己会去开浏览器，启动脚本也会让 Termux 去开；而 Termux 在后台发 `am start` 有时会被系统丢掉（我实测过：持着 `termux-wake-lock` 时能成功，所以不是"一定不行"）。
+绕法：先等一两秒，多数情况是 `dsh web` 自己开的。还没出现就点底部那行「打开 DSH 页面」——那是你自己点的，属于前台操作，一定能开。
+
+### 桥老是掉线
+现象：状态里桥变灰，或者点唤醒没反应。
+根因：无障碍服务会被系统回收，vivo 上前台切走约 10 秒就可能掉。
+绕法：点一下组件 `1`、`7` 或 `8` 就会带 token 把它唤醒；进程被回收过的话冷启动要 20 到 40 秒，别急着判它死了。这是常态，不是坏了。
+
+### adb 接不上，或者一关 Wi-Fi 就断
+现象：`adb devices` 是空的；`droid conn` 说连不上。
+根因：无线调试要的是**可用的 Wi-Fi 网络**，不只是把开关拨开；Wi-Fi 一断，Android 会顺手把「无线调试」清掉，端口也就没了。
+绕法：跑 `droid-ensure`，它会自己走一遍：看 Wi-Fi 状态、借桥把「无线调试」打开、扫端口、连上、验证，哪一步失败说哪一步。想让它长期可用就别关 Wi-Fi 和「无线调试」；想收回就关掉「无线调试」。
+
+### 装 APK 卡住，或者安装页自己消失了
+现象：`dsh-install-apk` 停在"等授权页"，然后超时。
+根因：vivo 的安装页有个约 50 秒的超时，不操作就自己退；那行「您可授权本次安装」的蓝色后半段不在无障碍树里。
+绕法：再跑一次，通常第二次就成了（第一次常常只是把页面拉起来）。确认状态可以看安装器的原话：如果回「已安装相同版本」，说明已经在目标版本上了。
+
+### 用 `pkill -9 -f node` 重启之后，DSH 再也起不来
+现象：启动脚本报「另一个启动在进行中」，或者一直失败。
+根因：`-9` 会留下一个孤儿写锁（`~/.dsh/.credentials.yaml.lock`），而 DSH 等锁的上限只有 2 秒。
+绕法：别用 `pkill -9 -f node`（它还会顺手杀掉别的 node 进程）。用 `dsh-restart`：它会先判断是"页面卡"还是"服务死了"，只杀 `bin.js web`，重启前清掉孤儿锁，等真就绪再把新的认证 URL 写回 `~/.dsh-url`。
+
+### 页面显示「读取不到」，但服务是活的
+现象：浏览器打开 DSH 页，提示读不到内容。
+根因：多数是 Termux 被系统冻住了，或者你打开的是半启动状态（端口在听、路由还没挂完）。
+绕法：先下拉刷新（浏览器里的登录 cookie 是持久密钥签的，重启 DSH 后不用重新拿 URL）。还不行就点组件 `4` 或 `6` 重启一次。
+
+### 冷启动要等 18 秒左右，不是卡住了
+根因：瓶颈在 `node_modules` 的加载量（我这份现在是 700MB 上下），跟插件多少关系不大。
+绕法：没有捷径，等。启动脚本等的是真就绪，所以到点会自己开页面。
+
+### 关 DSH 时，浏览器窗口没被关掉
+现象：脚本说「窗口没关」。
+根因：这条路线在没有 adb 时只能用无障碍按键去关，而按键要求那个窗口在前台；把它切到前台会把你从正在做的事里拽走。
+绕法：这是故意的取舍——宁可留着窗口也不切你的前台。自己上划掉即可；想要静默关闭就把 adb 接上（有 adb 时用 `force-stop`，完全不影响前台）。
+
+### 版本号那行有三个数，看着像打架
+现象：控制台里写着「版本：v1.21 · 发行版还是 v1.14 · 仓库源码 v1.21」。
+根因：这三个是不同的事实。你装的那份是本地版本，发行版是 GitHub Releases 里能下载的那个，仓库源码是 `master` 上的版本号。推了源码还没发版，三者就会不一致。
+绕法：不用绕，这是如实显示。想让它变成「已是最新」，得发一个发行版。
+
+## 依赖和限制
+
+- 在 Termux 0.119.0-beta.3 上测过。Termux 是 GitHub 预发布版，配套的 addon 要和它同源。
+- 在 vivo V2463A / Android 16 上实测通过。换机型可能要改坐标和匹配的文案，安装器文案、省电策略、后台冻结的力度各家都不一样。
+- 不需要 root，也没有用任何需要 root 的手段。
+- 桥被系统回收是常态，不是故障。
+- adb 那条线依赖可用的 Wi-Fi；桥那条线不需要网络。
+- 装 APK 时需要你的 6 位锁屏密码过一次系统验证。密码只落在 `~/.dsh-auth-pass`（600），只在替你过系统验证时读。
+- 冷启动 18 秒左右是正常的。
+
+## 怎么收回控制权
+
+每条长期通道都有你自己就能收回的入口，不用经过这套工具：
 
 | 通道 | 给了什么 | 怎么收回 |
 |---|---|---|
-| 无障碍桥 | 看屏、点按、滑动、输入 | 组件 `0_emergency-stop`／`dsh-bridge stop`／关掉系统里的无障碍开关 |
+| 无障碍桥 | 看屏、点按、滑动、输入 | 组件 `0_emergency-stop`、`dsh-bridge stop`，或在系统设置里关掉无障碍 |
 | 回环 token | 调用桥的凭证 | 删掉 `~/.dsh-bridge-token` |
-| adb 无线调试 | shell 级能力（最强） | `droid-panic`／关掉「无线调试」／重启手机 |
-| 页面遥控 | 点你的 DSH 页面 | `~/.dsh-mobile-ui.json` 写 `{"enabled": false}` |
-| 密码使用权 | 用你的锁屏密码过系统验证 | 控制台开关／组件 `9_revoke-pin`／`rm ~/.dsh-auth-pass` |
+| adb 无线调试 | shell 级能力，三者里最强的 | `droid-panic`、关掉「无线调试」，或重启手机 |
+| 页面遥控 | 点你的 DSH 页面 | 往 `~/.dsh-mobile-ui.json` 写 `{"enabled": false}` |
+| 密码使用权 | 用你的锁屏密码过系统验证 | 控制台里的开关、组件 `9_revoke-pin`，或 `rm ~/.dsh-auth-pass` |
 
-密码只存在 `~/.dsh-auth-pass`（`chmod 600`），只在替你过系统身份验证时读取，
-不用于解锁手机翻内容、支付/免密或与当次任务无关的场景。
+密码只在替你过系统身份验证时读，不用来解锁手机翻内容，不用于支付，也不用于与当次任务无关的事。
 
----
+## 文件结构
 
-## 已知限制
+| 目录 | 是什么 |
+|---|---|
+| `apps/console/` | 控制台 App：点按钮的那个 |
+| `apps/bridge/` | 无障碍桥 App：让 AI 看屏、点按、输入 |
+| `widgets/` | 12 个 Termux 小组件，加公共库 `common.sh` |
+| `tools/` | 命令行工具：启动、备份、装包、按文字点界面、Clash 自检等 |
+| `plugins/` | 3 个 DSH 页面插件：手机面板、AI 自看遥控、文件面板 |
+| `ui/` | 三处界面的文案与配色的源文件：`ui/controls.json`（分类、控件名、一句话说明、危险标记、`appVersions`）与 `ui/theme.json`（27 个颜色 → 两份 `Palette.java`、两份 `res/values/dsh_theme.xml` 和控制台的形状 drawable）。两者都由 `tools/ui-controls gen` 写出，再由 `tools/i18n-audit` 逐项核对 |
+| `i18n/zh.json` | 唯一的翻译源，三处界面的中文都从它生成 |
+| `tests/selftest.sh` | 自检套件 |
+| `docs/` | [运维笔记](docs/DSH运维笔记.md)、[排障](docs/operations.md)、[架构](docs/architecture.md)、[语言](docs/i18n.md) |
+| `dist/` | 打好的 APK 和 SHA256 |
+| `CONTRIBUTING.md` | 给自己定的规矩：每次改动怎么记录、push 前要过哪些门禁 |
+| `CHANGELOG.md` | 每个版本的改动记录，最新在上，格式按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) |
 
-- 不同 ROM 的安装器文案、无障碍行为、省电策略都不一样。本套件在 **vivo / Android 16** 上实测通过，
-  换机器可能需要改坐标或判定文案。
-- **adb 无线调试依赖可用的 Wi-Fi 网络**（不只是把开关拨开）；重启手机后需要人工再开一次「无线调试」。
-- **无障碍桥会被系统回收**（前台切走约 10 秒可能掉线），属常态；靠带 token 的广播唤醒，冷启动可能等 20~40 秒。
-- 首次安装 APK 时系统会要求指纹/锁屏密码确认——那是系统的安全验证，本套件只是让这个流程可自动化。
-- **"后台 App 一律拉不起界面"——这条 2026-09-28 实测更正**：持着唤醒锁（`termux-wake-lock` 前台服务）时，
-  后台的 Termux **能**把界面拉起来 —— `dsh web` 自己开的浏览器成功了，`am start` 也成功把 WebAPK 窗口拉到了前台
-  （"关闭 DSH 会跳到 WebAPK"那个 bug 就是这么来的）。所以它是"通常行、但不保证"，
-  而不是铁律；**唯一能无跳转关掉别的 App 窗口的办法**仍然是 `adb shell am force-stop`。
+## 用到的别人的东西
 
----
+仓库里没有别人的代码。跑起来依赖这些外面装的东西：
+
+- Termux（GPLv3）以及它的 `RUN_COMMAND` 接口、Termux:Widget 插件。整套东西的地基。
+- DeepSeek Harness（DSH）本身是 DeepSeek 的东西。这个仓库不是官方项目，跟 DeepSeek 没有关系。
+- 构建用 Termux 里的 `aapt2`、`d8`、`apksigner`（Android SDK 构建工具）。
+- 打包用 zstd，图片处理用 imagemagick，本地 OCR 用 tesseract（可选）。
 
 ## 许可
 
-MIT（见 `LICENSE`）。代码按「在某台真机实测可用」交付，不承诺在你的设备上同样可用。
+MIT，见 `LICENSE`。
+
+代码是「在我这台真机上跑通了」交付的，不承诺在你的设备上表现一样。

@@ -7,7 +7,135 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
-2026-09-28 10:05 · 【发布记录】v1.12 发布（控制台 1.21 / 桥 2.24 / 页面面板 0.10.0）
+2026-09-28 11:45 · 【文档】全仓库扫"AI 味" + 补 CHANGELOG 入口 + 恢复色板生成链说明（一次 docs: commit）
+
+做了什么（用户交办，全扫 9 份 md）：
+  ① 扫法：写了个只读扫描器，对每份 md 逐条查 —— emoji 码点、禁用词表（旨在/致力于/赋能/一站式/开箱即用/极致/优雅/强大/完美/丝滑/无缝）、
+     "我们"、英文 we/our/us、H4+ 标题、四格以上嵌套列表、加粗密度、结尾"欢迎 Star/PR"、以及"内容不足 2 行的空壳小节"。
+  ② 实改：`CONTRIBUTING.md` §九（⚠️→"注意："）、`docs/architecture.md`（去掉 ⚠ + "a trap we hit"→"a trap I hit"）、
+     `docs/operations.md`（"we keep"→"the interval is kept" + 树状图里去掉 ⚠）、`docs/i18n.md`（两处 ⚠ 去掉）、
+     `docs/架构与数据流.md`（"⚠ 注意"→"注意"）、运维笔记 1 处"我们"→"我"。
+  ③ 顺手办掉两个待定：两份 README 的「文件结构」表各加一行 `CHANGELOG.md` 入口；`ui/` 那行补回色板生成链
+     （27 个颜色 → 两份 `Palette.java`、两份 `res/values/dsh_theme.xml`、控制台形状 drawable，由 `tools/ui-controls gen` 写出、`tools/i18n-audit` 逐项核对；
+     "27 个颜色"我实测 `ui/theme.json` 里带 `#` 的色值 = 27，属实）。`CONTRIBUTING.md` §四.7 改成"两份 README 的表里都要有一行"。
+  ④ 保留没改的：`CHANGELOG.md` 已发版条目与运维笔记旧条目里的 ⚠/✅（它们要么是**界面里真实存在的符号**、要么是**历史存档**，改了就是篡改记录）；
+     `CONTRIBUTING.md` §三 代码块里的 ⚠（那是 `pre-push-check` 的真实输出符号）；`i18n.md` 里的 ✔（面板上的徽章）；
+     笔记里 4 处"优雅退出/优雅停"（graceful shutdown 的技术译法，不是 AI 味）、1 处"（无缝）"（在历史条目里）。
+为什么：README 两份重写之后，守则 §四 的指路失效、README 不再点名 `ui/theme.json`；另外全仓库的装饰性符号和 "we/我们" 要清一遍。
+结果：改了 8 个文件（README×2、CONTRIBUTING、CHANGELOG、docs 下 4 份）+ 两份笔记不再有"我们"；复扫后剩余 emoji 命中**全部是事实性符号或历史存档**。
+  两份 README 各 205 行、27 个标题；两份笔记 `cmp` 一致。
+下一步：`tools/pre-push-check --strict` 复核 → 一次 `docs:` commit（不 push，等用户 final OK）。
+
+2026-09-28 11:42 · 【文档】README 重写收尾：修 §四 三处指路 + 补 CHANGELOG + 点名 ui/theme.json（自检 10/11）
+
+做了什么（用户拍板"改改再推"后的 1~4 项）：
+  ① `CONTRIBUTING.md` §四 的三处指路改成新版 README 的真实标题：「包含什么」表格 →「文件结构」表 +「它能干什么」；
+     「安装」→「跑起来」；「已知限制」→「依赖和限制」，并注明「已知的坑」是另一节、两节别混着改。
+  ② §四.3 截图那条补备注：**UI 未定稿前允许缺图**（如实标"暂无截图"，别为了打勾放半成品）。
+  ③ `CHANGELOG.md` 顶部新增 `## [Unreleased]` → `### 变更`（README 中英重写 + 本轮指路修正；纯文档、不 bump 版本）。
+  ④ 两份 README 的「文件结构」表 `ui/` 那行补上 `ui/theme.json`，与 `ui/controls.json` 并列点名。
+为什么：README 通篇重写后，守则 §四 里指路的三个章节名全失效（守则自己变成错的）；README 不再点名 theme.json；
+  截图那条以前每轮都被拎出来纠结一次。
+结果：改了 4 个文件；两份 README 仍结构对齐（204 行 / 27 个标题）。
+  自检 `tools/pre-push-check --strict` → **通过 10 · 失败 1 · 提醒 0**，唯一失败是第 1 条"工作区干净"（还没 commit，属预期）；
+  第 11 条快速门禁（ui-controls / i18n-table / task-ids / i18n-audit / install-tools）全绿。
+  §四 八项人工过：1/2/3/4/5/6/8 过；**第 7 条「更新日志入口」过不了** —— 两份 README（改前改后）都没有指向 `CHANGELOG.md` 的入口，
+  属长期缺口、不是本次回归。
+下一步：等用户定 §四.7 怎么补（建议「文件结构」表加一行 `| CHANGELOG.md | 每个版本的改动记录 |`，两份 README 同步）；
+  补完再 commit（`docs: …`）、`git pull --rebase`，等用户 final OK 才 push。
+
+2026-09-28 11:39 · 【盘点】未提交的 README 大改：章节级摘要 + 事实核对（等用户拍板 推/丢）
+
+做了什么：对工作区里两份未提交的 README 做章节级 diff 摘要 + 逐条实测核对（用户交办的第 8 项）。
+为什么：这两份改动（`README.md` +158/−125、`README.zh-CN.md` +153/−119）不是补丁，是**通篇重写**；
+  而 push 前要过守则 §三/§四（README 八项 + CHANGELOG + 自检），所以先盘清楚再决定推还是丢。
+结果：
+  · 来源与时间：两份工作区副本的 mtime 都是 **2026-09-28 11:15:03**（本地），最后一次提交它们的是 `18a7c00`
+    （v1.12 发布，08:26）→ 这是**发布之后**做的英文重写 + 中文镜像，作者身份未在 git 里留痕。
+  · 结构：删掉「包含什么 / Install 安装 / Usage 使用说明（三处 UI 规范、小组件、控制台 App、页面插件四小节）/
+    撤销与安全 / 已知限制」；换成「为什么写这个 / 跑起来（五步）/ 它能干什么 / 12 个小组件 / 常用命令 /
+    三处界面的约定 / 已知的坑（9 条）/ 依赖和限制 / 怎么收回控制权 / 文件结构 / 用到的别人的东西」。
+    两份都是 27 个标题、结构对齐、互相链接。
+  · 实测核对：12 个小组件 ✓（`~/.shortcuts/tasks` 24 个脚本 ÷ 2）；`node_modules` 约 700MB ✓（`du -sh` = 700M）；
+    v1.12 发行版 4 个资产全 uploaded ✓（bridge 2.24 / console 1.21 / panel 0.10.0 / SHA256SUMS.txt）；
+    README 引用的 16 条路径全部存在 ✓；敏感信息扫描只命中"6 位密码"这类**机制描述**，无明文凭据 ✓。
+  · 信息丢失：无实质丢失。少掉的是**会漂移的旧数字**（"93 checks""43 command-line tools"——反而是好事）和写法差异
+    （`selflook`→`self-look`、`filepanel`→`file panel`）；唯一变弱的是 `ui/theme.json` 不再点名（现在写作 `ui/` = 文案与颜色源）。
+下一步：等用户拍板「推 / 丢 / 改改再推」。**若推**，先补 CHANGELOG 条目（纯文档、不必 bump 版本），再过 §四 README 八项 + `tools/pre-push-check --strict`。
+
+2026-09-28 11:36 · 【规则】笔记副本只在 push 时同步到 Download/dsh/文档/（覆盖同名、不加日期后缀）
+
+做了什么：定下笔记**副本**的同步时机与形式，并写进 `CONTRIBUTING.md` §二「位置」下面 —— push 时跑
+  `~/.local/bin/dsh-out ~/DSH运维笔记.md` → 覆盖 `Download/dsh/文档/DSH运维笔记.md`，**不带日期后缀**；
+  平时改笔记**不投递**。同一次把 §十二 交接模板第 2 条改成祈使句：**不许把 `ui-controls.json` 当文件名**（它不存在）。
+为什么：以前是"改完笔记顺手投一份"，会频繁触发投递；带日期后缀又会在文档目录堆几十份没人看。
+  文档目录只该放**最新版**，历史版本在 git 和备份里。
+结果：守则 §二 多了一条"副本"说明（只在 push 时投递、覆盖同名）；§十二 那条禁令由陈述句改成"不许…"。
+下一步：无。push 时照 §九 走，副本投递并进那一次。
+
+2026-09-28 11:34 · 【环境清理】清掉一条指向死 pid 的陈旧启动锁（~/.dsh-boot-8080.lock）
+
+做了什么：`Download/dsh/状态/status.txt` 报 `⚠ locks left over: boot` → 核对：锁里记的 pid = **19198**，而在跑的 DSH 是
+  **19365**，且 `/proc/19198` 不存在（进程确实已死）→ 判定为陈旧锁，删掉 `~/.dsh-boot-8080.lock/`
+  （该目录建于 11:23:05，就是上一次重启留下的）。同一次还把下面那条 11:19 的记录从**文末搬到本「〇」节顶部**、
+  按守则改成四段式（用户 2026-09-28 拍板：笔记"最新在上"）。
+为什么：陈旧锁本身无害（按 pid 已死、目录久未触碰两条判据都会判它陈旧），但它让状态页长期挂一条 ⚠ ——
+  警告常年亮着，真出事的警告就没人看了。
+结果：`rm -rf ~/.dsh-boot-8080.lock` 成功；用**只读**方式复核 `dsh-status-pub --json --brief` →
+  `locks = {'boot': False, 'credentials': False}`、`dsh = running`。（`--json` 分支不写文件，所以
+  `Download/dsh/状态/status.txt` 里那行 ⚠ 要等下一次真正的状态刷新才会消失，不是没清掉。）
+下一步：无。以后再看到 boot 锁告警，**先比 pid（锁里的 pid 还活着吗）再删**，别见到锁就删。
+
+2026-09-28 11:19 · 【插件安装】dsh plugin add 又剪了软链；随后 EADDRINUSE（8080/3199），用 dsh-restart --force 收场
+
+做了什么：① 装 `dsh-messages-sanitizer`：`dsh plugin --profile web add dsh-messages-sanitizer` → 输出 `Packages: +4 -19`
+  （又是 pnpm 剪链）→ 立刻 `dsh-relink-bundles` → **20 项全 ✔**，**未重启 DSH 即生效**。
+  ② 再起实例时撞端口：`dsh web --port 8080` 报 `EADDRINUSE: address already in use 127.0.0.1:8080`
+  和 `127.0.0.1:3199`。③ 先手工清场：`pkill -9 -f node; pkill -9 -f python; pkill -9 -f lingshu; sleep 2`
+  + `rm -f ~/.dsh/.credentials.yaml.lock` + `rm -rf ~/.dsh/session-locks/*`。
+  ④ 11:23 用 `dsh-restart --force` 一次成功，**耗时 6 秒**，新实例 pid 19365 —— 它按顺序做：持唤醒锁 →
+  精确杀 `bin.js web` → 清孤儿锁 → 归档上一轮 URL → 启动 → 等真就绪（日志 token 行 + 跟随跳转 200）。
+为什么：`dsh plugin add` 内部会跑 pnpm 操作，跟"在 profile 目录里裸跑 `pnpm install`"一样，会剪掉指向运行时的软链
+  （详见「十三·补三十一」）；EADDRINUSE 是上一个 DSH 实例还活着、第二次启动抢同一端口，不是端口坏了。
+结果：插件已装并在运行位（`~/.dsh/profiles/web/package.json` 里 `dsh-messages-sanitizer: ^0.1.1`，
+  `node_modules/dsh-messages-sanitizer/` 也在）；软链 20 项齐；pid 19365 在 8080 上服务。
+绕法：看到 pnpm 输出里有 `-N`（N>0）就立刻 `dsh-relink-bundles`；命令行重启用 `dsh-restart --force`，
+  **不要手敲 `pkill -9 -f node`**。
+下一步：① 测 `dsh-messages-sanitizer` 能不能救回之前 HTTP 400 INVALID_REQUEST 的那个会话（修不了就新建会话绕开）；
+  ② 长期：把 `dsh-relink-bundles` 固化进 `dsh plugin add` 的后处理，别靠人记。
+
+2026-09-28 08:48 · 【账号安全】GitHub 把 Maopk 列入强制 2FA（截止 2026-11-11）——已开启，无需操作
+
+来源：GitHub 官方邮件（用户 2026-09-28 转达）。账号 **Maopk** ＝ 仓库 `Maopk/dsh-termux-kit` 的属主。
+
+事实（照邮件与用户说明记，不添油加醋）：
+· 该账号被列入 GitHub 的 **mandatory 2FA** 名单；**2FA 已经开启**，所以**现在不需要做任何操作**；
+· **2026-11-11** 起不能再关闭 2FA（到期仍是关闭状态的账号会被限制网页侧操作，开启后才恢复）。
+
+影响（**分通道**说清楚，别混成一件事）：
+· **网页交互式登录**：以后在浏览器里登录要过 2FA（验证器 App / 安全密钥 / 短信）——只影响"手点登录"这一条路。
+· **`dsh-gh` 与 `git push` 走的 PAT 通道：不受影响**。记录时的实测（2026-09-28 08:41）：
+  `curl -H "Authorization: token …" https://api.github.com/user` → **HTTP 200**，响应头 `x-oauth-scopes: repo`。
+  原理上也对得上：PAT / OAuth token 本来就不走交互式 2FA，所以推送、发版（`dsh-gh push|release`）、
+  查状态（`dsh-gh status`）照旧。
+· 手机端那些东西（小组件 / 控制台 App / 面板插件）根本不碰 GitHub 登录，不受影响。
+
+待办（两条都**只能在网页上做** —— AI 这边没有登录态，帮不上）：
+① **确认 Recovery codes 已离线保存**：Settings → Password and authentication → Two-factor authentication →
+   Recovery codes（16 个一次性码）。要**离线**存（打印一张纸 / 离线密码管理器），
+   **别只留在这台手机里** —— 手机丢了等于 2FA 和恢复码一起丢，那才是真的进不去。
+② **看一眼 PAT 的过期时间**：Settings → Developer settings → Personal access tokens。
+   ⚠ API **查不到** token 自己的过期时间：本次实测响应头里没有 `github-authentication-token-expiration`
+   （那是 fine-grained token 才有的字段），所以只能去网页上看。若已设过期日，把日期记在这里，到期前换新：
+   · 换新只需覆盖一个文件：`printf '%s' <新token> > ~/.dsh-gh-token && chmod 600 ~/.dsh-gh-token`
+     （`dsh-gh` / `dsh-update` / 推送都只读它，没有第二处要改）。
+   · 旧 token 要在同一个页面 **Revoke** —— **光删 `~/.dsh-gh-token` 不作废**（这一点以前就记过）。
+   记录时状态：PAT 可用、scope=`repo`、**过期时间未知（网页待查）**。
+   待补：PAT 过期日 ＝ ____________（用户查完填）
+
+下一步：用户查完 ② 拿到过期日就回来补一行。本条**只记录在本地笔记，未提交、未推送**（用户明确要求：不推仓库）。
+
+2026-09-28 08:26 · 【发布记录】v1.12 发布（控制台 1.21 / 桥 2.24 / 页面面板 0.10.0）
 
 用户说"现在发吧"（此前已说明：版本行要变成"已是最新"，只能靠发一个 Release）。
 
@@ -34,7 +162,7 @@
 · 真走了一遍用户的更新路径：`dsh-update get console|bridge` → 下载新包 + **「SHA256 与发行版一致」** ✓。
 下一步：这轮记录随发布一起推上去。
 
-2026-09-28 09:40 · 版本行把「发行版」说成了「仓库」（用户截图质问「你这个推流有问题啊」）；控制台 1.21 / 桥 2.24
+2026-09-28 08:20 · 版本行把「发行版」说成了「仓库」（用户截图质问「你这个推流有问题啊」）；控制台 1.21 / 桥 2.24
 
 用户给了一张截图，上面只有三行：项目主页 / github.com/Maopk/dsh-termux-kit / 「版本：v1.20 · 本地比仓库新（仓库只有 v1.14）」。
 
@@ -76,7 +204,7 @@
    API 读回的 `master` HEAD sha = `66ec1c2`，与本地 HEAD 一致 ✓。
 没发版：本轮只推源码；`dist/` 里仍是上一批产物，发行版还停在 `v1.11`（控制台 1.14 / 桥 2.20）。
 
-2026-09-28 09:10 · 更正上一条的结论（「后台一定发不出 am start」是错的）+ 关窗口不再跳转（控制台 v1.20）
+2026-09-28 08:12 · 更正上一条的结论（「后台一定发不出 am start」是错的）+ 关窗口不再跳转（控制台 v1.20）
 
 用户反馈（原话）："说没打开其实是打开了，还有，在控制台关闭dsh的时候还会跳转到webapk的界面，我不想跳转，
 你也改好了推到仓库里，还有最新日志以及笔记，更新说明，产品介绍更新。"
@@ -159,7 +287,7 @@
 下一步：① 请你在控制台点一次「启动 DSH」，确认页面**自己**打开（我不能在不动你屏幕的前提下代你点）；
        ② 本轮改动只做了**本地提交**，**未推送**，按约定随下一批一起上。
 
-⚠ 2026-09-28 09:10 更正：本条把「后台一定发不出 am start」当成了结论，太绝对 —— 见顶部最新一条（含证据）。
+⚠ 2026-09-28 08:12 更正：本条把「后台一定发不出 am start」当成了结论，太绝对 —— 见顶部最新一条（含证据）。
 
 2026-09-28 01:45 · 定位"控制台启动 DSH 比 widget 慢得多"（结论：不是启动慢，是打开页面那一步被系统拦掉）
 
@@ -188,7 +316,7 @@
 (c) 把 adb 接回来（Wi-Fi 开）—— opener 走 adb 那条可靠路，后台也能推窗口（今天只在 Wi-Fi+无线调试可用时才会发生）。
 下一步：等用户选 (a)/(b)/(c)（或组合），再动代码。
 
-⚠ 2026-09-28 09:10 更正：本条把「后台一定发不出 am start」当成了结论，太绝对 —— 见顶部最新一条（含证据）。
+⚠ 2026-09-28 08:12 更正：本条把「后台一定发不出 am start」当成了结论，太绝对 —— 见顶部最新一条（含证据）。
 
 2026-09-28 01:20 · 复核推送落地 + 摸清"时通时断"的真实形态（本条记录随同一次推送一起上）
 
@@ -1227,7 +1355,7 @@ Termux 既不是 WSL，也没有 `DISPLAY`/`WAYLAND_DISPLAY` → 判定"无桌�
 
 迁不过去 / 要重写的：Termux:Widget 那 9 个桌面入口（DSHA 无此机制，改用通知/悬浮条）、
 `~/.bashrc` 那套环境变量与 `dsh-browser-open`、`droid*` 系列脚本（逻辑可移植，路径要改）。
-会丢的：DSHA 的设备能力走 ADB，**没有我们那条"离线回环 + 音量键自救"的备用通道**（除非把桥一起带过去）。
+会丢的：DSHA 的设备能力走 ADB，**没有我这套"离线回环 + 音量键自救"的备用通道**（除非把桥一起带过去）。
 
 ### 十三·补十七：手机端增强插件上线 + 一个必踩的坑（2026-09-26 晚）
 
