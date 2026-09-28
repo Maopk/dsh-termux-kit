@@ -90,8 +90,6 @@ public class MainActivity extends Activity {
     private TextView openRow;
     /** 认证 URL 与桌面那个 PWA 的包名；都从 Termux 回传的协议行里取，没有就是 null。 */
     private String pageUrl = null, pagePkg = null;
-    /** 本 Activity 是否在前台：决定"我来开页面"是不是一句真话。 */
-    private boolean resumed = false;
 
     // "Install password authorization" switch (user requirement: authorization is a switch, not a button)
     private Switch authSwitch;
@@ -251,7 +249,8 @@ public class MainActivity extends Activity {
 
     // ---------- Page hand-off: the console opens the page itself ----------
     // 协议行（Termux → 控制台）。不是给人看的文案，所以不翻译；也正因为带 token，进日志前必须剔掉。
-    private static final String MARK_URL = "DSH_AUTH_URL=", MARK_PKG = "DSH_PWA_PKG=";
+    private static final String MARK_URL = "DSH_AUTH_URL=", MARK_PKG = "DSH_PWA_PKG=",
+            MARK_OPEN = "DSH_BOOT_OPEN=";
 
     /** 取协议行的值：扫全部行，**最后一次**出现的算数（脚本可能打了两遍，最后那次才是现在这个实例）。 */
     private static String marker(String out, String key) {
@@ -298,8 +297,21 @@ public class MainActivity extends Activity {
         pageUrl = url;
         if (pkg != null && !pkg.isEmpty()) pagePkg = pkg;
         showOpenRow();
-        if (auto) openPage();
-        else pushHistory("[" + now() + "] " + Lang.t("⚠ I have the page address but have not verified it this time — tap the row below if you want to open it"));
+        if (!auto) {
+            pushHistory("[" + now() + "] " + Lang.t("⚠ I have the page address but have not verified it this time — tap the row below if you want to open it"));
+            return true;
+        }
+        // 谁开了页面：**只念脚本回传的事实**，不猜。
+        // 第一版让控制台无条件自己开（还以"Termux 在后台一定开不出来"为由），结果日志里出现一句
+        // 跟现实相反的话 —— 页面明明被 dsh web 打开了，控制台却说"我没打开"（用户 2026-09-28 08:05 抓到）。
+        String who = marker(out, MARK_OPEN);
+        if ("server".equals(who)) {
+            pushHistory("[" + now() + "] ✅ " + Lang.t("DSH opened the page itself while starting (its boot log says so) — I did not open a second one"));
+        } else if ("widget".equals(who)) {
+            pushHistory("[" + now() + "] ✅ " + Lang.t("The startup script asked Termux to open the page — if it did not appear, tap the row below"));
+        } else {
+            openPage();   // 真的没人开过（新一轮服务没起、脚本也没到第⑦步）→ 控制台自己开
+        }
         return true;
     }
 
@@ -310,20 +322,18 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 由**控制台自己**把页面推到前台 —— 为什么不是让 Termux 开，见 {@link Tasks#consoleOpensPage}。
+     * 由**控制台自己**把页面推到前台（只在脚本回传"没人开过"时才走到这里）。
      *
-     * 诚实条款：控制台不在前台时，Android 同样会**静默**拦掉 startActivity（不抛异常、也不出现）。
-     * 所以这时什么都不做并说清楚，绝不打印一句"已打开"骗人；入口一直亮在下面，用户点一下就成。
+     * 措辞纪律：`startActivity` 没抛异常 **不等于** 页面真到了前台 —— 后台启动被系统丢掉时它同样静默返回。
+     * 所以这句话只说"已经请求系统打开"，不说"已经打开"；下面那行入口一直亮着，没出现就点它。
+     * （第一版反着来：只要 `resumed` 为假就干脆不开，还打印"系统会静默拦掉" —— 实测页面照样出现了，
+     *   于是日志里留下一句与事实相反的话。）
+     *
      * 先把包名指定成桌面那个 DSH 窗口：不指定的话，vivo 浏览器和它都能处理 127.0.0.1:8080，
      * 系统会弹一个选择器（dsh-browser-open 的头注释里管这个叫坑①）。
      */
     private void openPage() {
         if (pageUrl == null || pageUrl.isEmpty()) return;
-        if (!resumed) {
-            pushHistory("[" + now() + "] " + Lang.t("⚠ The console is in the background, where Android would silently drop the start — I did not pretend to open it. Tap the row below to open the page."));
-            render();
-            return;
-        }
         try {
             Intent it = new Intent(Intent.ACTION_VIEW, Uri.parse(pageUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             if (pagePkg != null && !pagePkg.isEmpty()) it.setPackage(pagePkg);
@@ -333,7 +343,7 @@ public class MainActivity extends Activity {
                 // 指定的那个窗口不在（PWA 被卸载或换了包名）→ 退回让系统自己挑，别就此放弃
                 startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(pageUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             }
-            pushHistory("[" + now() + "] ✅ " + Lang.t("The console opened the page itself (Termux is backgrounded, so Android would have dropped it there)"));
+            pushHistory("[" + now() + "] ✅ " + Lang.t("Asked the system to open the page — if it did not appear, tap the row below"));
             render();
         } catch (Throwable t) {
             pushHistory("[" + now() + "] ⚠ " + Lang.t("Could not open the page: ") + t.getMessage());
@@ -517,16 +527,10 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        resumed = true;   // 「我来开页面」这句话成立的前提，见 openPage()
         askTermuxLang();   // pick up a change made elsewhere (e.g. `dsh-lang set zh` from a widget)
         render();
         autoStatus();
         refreshAuthState();
-    }
-
-    @Override protected void onPause() {
-        resumed = false;
-        super.onPause();
     }
 
     private long lastAuto = 0;

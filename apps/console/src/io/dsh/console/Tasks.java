@@ -77,28 +77,29 @@ final class Tasks {
     static List<T> all() { return new ArrayList<T>(java.util.Arrays.asList(ALL)); }
 
     /**
-     * 这两个动作的**页面由控制台自己打开**，不让 Termux 去开。
+     * 这两个动作跑完后，控制台要去读脚本回传的页面协议行（DSH_AUTH_URL= / DSH_PWA_PKG= / DSH_BOOT_OPEN=）。
      *
-     * 为什么：Termux 在后台以"应用身份"启动别的 App，会被 Android 的后台启动限制**静默拦掉**
-     * （`dsh-browser-open` 的头注释里就写着这一条，实测只打印 "Starting: Intent …"，什么都不发生）。
-     * 从控制台点「启动 DSH」时前台是控制台、Termux 在后台（`oom_score_adj` 实测 945＝缓存档），
-     * 于是页面根本不出现 —— 用户干等，感觉"比点小组件慢得多"（2026-09-28 定位）。
-     * 而控制台是前台 App，它自己的 startActivity 是允许的，所以：命令带 `--no-open`，
-     * 脚本只用两行协议（DSH_AUTH_URL= / DSH_PWA_PKG=）把地址交回来，由控制台开。
+     * ⚠ 这里**不**代表"页面由控制台打开"。第一版是这么以为的：当时判断 Termux 在后台发 `am start`
+     * 一定会被系统静默拦掉，于是让脚本 `--no-open`、控制台自己开。2026-09-28 08:05 的日志把这条判断
+     * 推翻了 —— 那次 `--no-open` 照样有页面出现，因为 **`dsh web` 自己就会开浏览器**
+     * （`dsh-web-app/lib/index.js`: "dsh web: opening the default browser; pass --no-open to disable"）；
+     * 同一个上午，后台的 Termux 还靠 `am start` 把 WebAPK 窗口拉到了前台（用户就是被那一下拽过去的）。
+     * 所以现在**不猜谁开得成**：脚本把"有没有开、谁开的"当事实回传，控制台只在没人开的时候才自己开。
      */
     static boolean consoleOpensPage(String id) {
         return "1_start-dsh".equals(id) || "open".equals(id);
     }
 
     /**
-     * 控制台这条路上真正要跑的命令。与 {@link #ALL} 的差别只有两处，都在这里说清：
-     * · 启动类：加 `--no-open`（页面由控制台开，见 {@link #consoleOpensPage}）；
+     * 控制台这条路上真正要跑的命令。与 {@link #ALL} 的差别只有一处，说清如下：
      * · 更新类：把控制台**自己的版本号**带给脚本 —— 本 App 最清楚自己装的是哪一版，
      *   脚本靠它才能判断"仓库是不是比本机旧"（本机领先就绝不降级；没有这个值它只能读 adb 或跳过）。
+     * · 开页面类（`open`）：不跑 `dsh-browser-open`，只取地址，由控制台自己开。
+     * · 启动类：**与 ALL 完全一致**（不加 `--no-open`）—— 让脚本/服务在就绪的那一刻就把页面打开，
+     *   这是最早的时刻；等控制台收到回传再开，要排在 restore_channels（最长 180 秒）后面了。
      */
     static String consoleCmd(String id, String ver) {
         if ("open".equals(id)) return TermuxRunner.pageInfoCmd();
-        if ("1_start-dsh".equals(id)) return TermuxRunner.taskCmd(id) + " --no-open";
         if ("11_update-apps".equals(id)) {
             String v = ver == null ? "" : ver.trim().replaceFirst("^v", "");
             return TermuxRunner.taskCmd(id) + (v.isEmpty() ? "" : " --console-ver " + v);

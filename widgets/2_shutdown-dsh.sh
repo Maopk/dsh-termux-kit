@@ -70,11 +70,20 @@ step "⑥ Close the DSH window (**must come before stopping the bridge**: withou
 #   Now: with adb it uses adb force-stop; without adb it goes through the bridge (bring the window to the front + press Back until it disappears).
 if [ "$KEEP_BROWSER" = 0 ]; then
   if [ "$DRY" = 1 ]; then
-    printf "$(dsh_msg '   · [dry] dsh-close-window (adb first, otherwise key events through the bridge)\n')"; ok "(dry-run)"
-  elif [ -x "$HOME_DIR/.local/bin/dsh-close-window" ] && "$HOME_DIR/.local/bin/dsh-close-window"; then
-    ok "Browser / PWA window closed"
+    printf "$(dsh_msg '   · [dry] dsh-close-window (adb first, otherwise key events through the bridge; never pulls the window to the front)\n')"; ok "(dry-run)"
+  elif [ ! -x "$HOME_DIR/.local/bin/dsh-close-window" ]; then
+    warn "dsh-close-window is not installed — swipe the DSH window away yourself"
   else
-    warn "Could not close the window (see the lines above) — swipe it away from Recents yourself, or turn on adb and let me do it"
+    # 2026-09-28：dsh-close-window 现在会区分「关掉了」和「**故意没关**」（窗口不在前台时，
+    # 把它拉到前台才能按 Back —— 那一下就是把用户拽走，用户明确说不要）。
+    # 两种结果必须说成两句不同的话，否则又变成"日志跟现实不一致"。
+    rc=0; "$HOME_DIR/.local/bin/dsh-close-window" || rc=$?
+    case "$rc" in
+      0) ok "Browser / PWA window closed" ;;
+      3) warn "窗口**没关**：它现在不在前台，而关它就得先把它切到前台（那会把你从当前界面拽走，你说过不要）"
+         warn "  → 自己上划掉它即可；或者把 Wi-Fi +「无线调试」打开，有 adb 时是无跳转的 force-stop" ;;
+      *) warn "Could not close the window (see the lines above) — swipe it away from Recents yourself, or turn on adb and let me do it" ;;
+    esac
   fi
 else
   warn "Keeping the browser window, as requested"

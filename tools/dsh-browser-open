@@ -4,8 +4,13 @@
 # Three traps are handled here:
 #   ① no default browser is set: both com.vivo.browser and the DSH WebAPK can handle http://127.0.0.1:8080/,
 #      a bare VIEW intent pops a chooser → the vivo browser easily takes it. → the package must be named explicitly.
-#   ② when Termux launches another App as an app it is **silently blocked** by Android background start limits
+#   ② when Termux launches another App as an app it **can be silently blocked** by Android background start limits
 #      (it only prints "Starting: Intent …" with no result). → with adb available it always launches through adb (the shell identity has no such limit).
+#      ⚠ 2026-09-28 更正：这不是铁律，而是**概率性**的。实测（那时 Termux 持着 termux-wake-lock 前台服务）
+#        后台的 `am start` 成功把 WebAPK 窗口拉到了前台 —— "关闭 DSH 会跳到 WebAPK 界面"就是这么发生的；
+#        同一天 `dsh web` 自己开浏览器也是从后台发出去的，页面确实出现了（用户看到的就是它）。
+#        所以：别把这条当成"一定发不出去"的借口（我因此写过一句跟事实相反的日志）；
+#        也别指望它一定发得出去 —— 要稳，仍然走 adb。
 #   ③ a WebAPK upgrade changes the package name (with a _vN suffix) → a stale cached name is rediscovered automatically.
 #
 # Usage: dsh-browser-open <url> [--quiet]

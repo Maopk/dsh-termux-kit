@@ -30,17 +30,34 @@ open_browser() {   # $1=url
   if [ -x "$OPENER" ]; then run "'$OPENER' '$1' >/dev/null 2>&1"; else run "termux-open-url '$1'"; fi
 }
 
-# ── 把页面地址回传给调用方（协议行，不是给人看的文案，所以不走 dsh_msg、不翻译）──────────
-# 为什么需要：Termux 在**后台**发 am start 会被 Android 静默拦掉（dsh-browser-open 里有原话），
-# 于是"从控制台启动 DSH"的页面永远不出现，用户干等 → 觉得"比点小组件慢得多"（2026-09-28 定位）。
-# 控制台 App 自己是前台，它 startActivity 不会被拦 —— 所以由它来开页面，脚本只负责把地址**放在
-# 输出的最后两行**交回去。地址里带 token，控制台那边会把它从日志里剔掉。
-emit_page() {   # $1=url（空则不打印任何东西）
+# ── 把页面地址 + "谁去开了浏览器"回传给调用方（协议行：不给人看，所以不走 dsh_msg、不翻译）──
+# 为什么需要：控制台点「启动 DSH」之后要能说一句**真话**。之前它自己猜（"Termux 在后台一定开不出来"），
+# 结果 2026-09-28 08:05 实测打了自己的脸：页面其实是 dsh web 自己开的，控制台却在日志里说"我没打开"。
+# 所以现在不猜了 —— 脚本把它**观察到的事实**回传，控制台只负责念出来。
+#   · dsh web 自己会开浏览器（`@deepseek-ai/dsh-web-app/lib/index.js` 里那行
+#     "dsh web: opening the default browser; pass --no-open to disable"）—— 冷启动时它是真的开了；
+#   · 脚本第④/⑦步也会调 opener；
+#   · 两者都没有（例如这次没有新起 dsh web、脚本又没到第⑦步）→ 交给控制台开。
+# 顺带更正：**"Termux 在后台一律发不出 am start" 这个说法太绝对**。实测 08:05 关闭 DSH 时，
+# `dsh-close-window` 从后台的 Termux 发 am start 把 WebAPK 窗口拉到了前台（用户就是被这一下拽过去的）。
+# 地址里带 token，控制台那边会把它从日志里剔掉。
+emit_page() {   # $1=url（空则不打印任何东西）  $2=1 表示这次真的新起了一个 dsh web
   [ -n "$1" ] || return 0
   printf 'DSH_AUTH_URL=%s\n' "$1"
   local p=""
   [ -f "$HOME_DIR/.dsh-pwa" ] && p=$(head -1 "$HOME_DIR/.dsh-pwa" 2>/dev/null | tr -d '[:space:]')
   printf 'DSH_PWA_PKG=%s\n' "$p"
+  # 谁开了页面 —— 只认**证据**，不猜：
+  #   server = 启动日志里出现了 dsh web 自己那句 "opening the default browser"（只有这次真新起了它才算）
+  #   widget = 脚本调过 opener（OPEN=1）
+  #   none   = 没人开过 → 调用方自己开
+  if [ "${2:-0}" = 1 ] && grep -q 'opening the default browser' "$LOG" 2>/dev/null; then
+    printf 'DSH_BOOT_OPEN=server\n'
+  elif [ "$OPEN" = 1 ]; then
+    printf 'DSH_BOOT_OPEN=widget\n'
+  else
+    printf 'DSH_BOOT_OPEN=none\n'
+  fi
 }
 
 # Also restore the AI channels (a failure here does not affect the startup itself)
@@ -113,7 +130,7 @@ if port_open "$DSH_PORT"; then
     warn "For a usable auth URL, tap \"4_soft-restart-dsh\" or \"6_hard-restart-dsh\" to fetch a fresh one"
   fi
   restore_channels
-  emit_page "$U"   # 放在最后：控制台只截取输出的尾部，协议行必须在尾巴上
+  emit_page "$U" 0   # 0 = 这次没有新起 dsh web（就端口已在服务那条路）
   done_; exit 0
 fi
 
@@ -163,5 +180,5 @@ U=$(grep -oE "$TOKEN_RE" "$URLFILE" 2>/dev/null | tail -1)
 [ -n "$U" ] && open_browser "$U" || warn "No usable auth URL, not opening the browser (avoids landing on an error page)"
 
 restore_channels
-emit_page "$U"   # 放在最后：控制台只截取输出的尾部，协议行必须在尾巴上
+emit_page "$U" 1   # 1 = 这次真的新起了 dsh web（它会自己开浏览器，日志里那句就是证据）
 done_

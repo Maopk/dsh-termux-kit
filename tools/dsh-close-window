@@ -13,21 +13,33 @@
 #
 # ⚠ Ordering: closing the window through the bridge must happen before stopping the bridge (2_shutdown-dsh.sh is ordered that way).
 #
-# Usage: 
-#   dsh-close-window            really close it (adb first, then the bridge)
-#   dsh-close-window --probe    report state only, touch nothing (for self-tests)
-#   dsh-close-window --dry-run  print the plan only
+# ⚠ 2026-09-28 起**默认不再"为了按 Back 先把窗口拉到前台"**：那一下会把正在用手机的你拽到 WebAPK 界面
+#   （用户原话："在控制台关闭 dsh 的时候还会跳转到 webapk 的界面，我不想跳转"）。
+#   现在：窗口本来就在前台 → 直接按 Back；不在前台 → 什么都不做，返回 3 并说明。
+#
+# Usage:
+#   dsh-close-window                 really close it (adb first, then the bridge; never yanks you away)
+#   dsh-close-window --probe         report state only, touch nothing (for self-tests)
+#   dsh-close-window --dry-run       print the plan only
 #   dsh-close-window --keep-chrome   close only the PWA shell, do not force-stop Chrome (when adb is available)
+#   dsh-close-window --allow-jump    allow pulling the window to the front (the old behaviour; expect a jump)
+#
+# Exit codes: 0 = closed · 1 = tried and failed · 3 = **deliberately skipped** (it was not in front)
+#
+# ⚠ 自测**一律用 `--probe` 或 `--dry-run`**：实跑会真的按 Back，把当前在前台的那个窗口关掉。
+#   2026-09-28 我自己踩过：明明刚 probe 过（前台是 systemui），等真跑时用户已经回到页面上了，于是
+#   把他正在看的那一页按 Back 关了。窗口类操作没有"先试试看"这回事。
 set -u
 HOME_DIR=/data/data/com.termux/files/home
 SOCK="$HOME_DIR/.local/bin/droid-sock"
 PWAFILE="$HOME_DIR/.dsh-pwa"
 URLFILE="$HOME_DIR/.dsh-url"
-DRY=0; PROBE=0; KEEP_CHROME=0
+DRY=0; PROBE=0; KEEP_CHROME=0; ALLOW_JUMP=0
 for a in "$@"; do case "$a" in
   --dry-run) DRY=1 ;;
   --probe) PROBE=1 ;;
   --keep-chrome) KEEP_CHROME=1 ;;
+  --allow-jump) ALLOW_JUMP=1 ;;
 esac; done
 say() { printf '%s\n' "$*"; }
 
@@ -83,11 +95,19 @@ close_via_bridge() {
   # and if we do not put it back you end up on the home screen (hit this on the real device). So we restore it afterwards (except Termux or the home screen).
   prev=$(fg_pkg)
   if [ "$prev" = "com.android.chrome" ]; then prev=""; fi
-  # the window must be in front to receive the Back key
+  # the window must be in front to receive the Back key —— 但**不再**为此把它拉到前台：
+  # 那一下就是把用户从当前界面拽走（2026-09-28 用户明确不要）。不在前台就不动它。
   if [ "$(fg_pkg)" != "com.android.chrome" ]; then
-    say "   · bringing the DSH window to the front (so Back can be sent to it)"
-    timeout 15 am start -a android.intent.action.VIEW -d "$(dsh_url)" ${PWA:+-p "$PWA"} >/dev/null 2>&1
-    sleep 2
+    if [ "$ALLOW_JUMP" = 1 ]; then
+      say "   · bringing the DSH window to the front (--allow-jump: this is the step that pulls you away)"
+      timeout 15 am start -a android.intent.action.VIEW -d "$(dsh_url)" ${PWA:+-p "$PWA"} >/dev/null 2>&1
+      sleep 2
+    else
+      say "   · the DSH window is not in front right now → **skipping**"
+      say "     (opening it just to press Back would yank you out of whatever you are doing — say --allow-jump if you want that)"
+      say "     close it yourself: swipe it away in Recents; or turn on adb (Wi-Fi + Wireless debugging) and it can be force-stopped with no jump at all"
+      return 3
+    fi
   fi
   # restore the previous App to the front
   restore_prev() {
@@ -111,7 +131,9 @@ close_via_bridge() {
 }
 
 if [ "$DRY" = 1 ]; then
-  say "· [dry] $(adb_ready && echo 'adb shell am force-stop com.android.chrome' || echo 'via bridge: bring to front + press Back repeatedly')"
+  if adb_ready; then say "· [dry] adb shell am force-stop com.android.chrome (no jump)"
+  elif [ "$(fg_pkg)" = "com.android.chrome" ]; then say "· [dry] the window is in front → press Back through the bridge (no jump)"
+  else say "· [dry] the window is not in front → would skip (exit 3) rather than pull it to the front"; fi
   exit 0
 fi
 
@@ -121,6 +143,8 @@ if adb_ready; then
   say "   adb closed it but Chrome is still in front → trying the bridge"
 fi
 say "→ closing via the bridge (accessibility)"
-if close_via_bridge; then exit 0; fi
+rc=0; close_via_bridge || rc=$?
+[ "$rc" = 3 ] && { say "⏭ deliberately not closed (it was not in front) — nothing was touched"; exit 3; }
+[ "$rc" = 0 ] && exit 0
 say "✘ could not close it. Alternatives: ① swipe it away from recents by hand; ② turn on wireless debugging once so I can close it with adb"
 exit 1

@@ -72,6 +72,7 @@ final class Lang {
         ZH.put("8_enable-wireless-adb", "8_自动开无线调试");
         ZH.put("About this app", "关于本应用");
         ZH.put("Afterwards the AI can no longer use those 6 digits to pass any identity check for you (the security check when installing an APK, ", "之后 AI 就不能再用那 6 位替你过任何身份验证了（装 APK 时的安全验证、");
+        ZH.put("Asked the system to open the page — if it did not appear, tap the row below", "已请求系统打开页面 —— 要是没出现，就点下面那一行");
         ZH.put("Authorize", "授权");
         ZH.put("Authorize the AI to use your password", "授权 AI 使用你的密码");
         ZH.put("Auto refresh status", "自动刷新状态");
@@ -101,6 +102,7 @@ final class Lang {
         ZH.put("DSH Console", "DSH 控制台");
         ZH.put("DSH Console ", "DSH 控制台 ");
         ZH.put("DSH Console log", "DSH 控制台日志");
+        ZH.put("DSH opened the page itself while starting (its boot log says so) — I did not open a second one", "页面是 DSH 启动时自己打开的（它的启动日志里写着），我没有再开第二个");
         ZH.put("Danger zone · only you can undo it by hand", "危险操作 · 只能你手动恢复");
         ZH.put("Deletes only this kit's own artifacts. Your files are not touched.", "只删本工具自己的产物，不碰你的文件。");
         ZH.put("Downloads the two APKs from GitHub Releases, verifies SHA256, then installs them.", "从 GitHub Releases 下载两个 APK，校验 SHA256 后安装。");
@@ -182,7 +184,7 @@ final class Lang {
         ZH.put("Tap Refresh to read status", "点「刷新」读取状态");
         ZH.put("Task", "任务");
         ZH.put("Technical detail (kept out of the subtitle on purpose):", "技术细节（故意不放在副标题里）：");
-        ZH.put("The console opened the page itself (Termux is backgrounded, so Android would have dropped it there)", "页面已由控制台自己打开（Termux 在后台，交给它开会被系统拦掉）");
+        ZH.put("The startup script asked Termux to open the page — if it did not appear, tap the row below", "启动脚本已经让 Termux 去开页面了 —— 要是没出现，就点下面那一行");
         ZH.put("This device has no clipboard service", "本机没有剪贴板服务");
         ZH.put("This revokes it: ~/.dsh-auth-pass is deleted.\n", "收回后：~/.dsh-auth-pass 会被删除。\n");
         ZH.put("Turn the switch off at any time to revoke.", "随时把开关关掉即可收回。");
@@ -229,7 +231,6 @@ final class Lang {
         ZH.put("⚠ No callback from Termux after ", "⚠ 等了 ");
         ZH.put("⚠ RUN_COMMAND permission not granted yet; a permission prompt was shown.\n", "⚠ 还没拿到 RUN_COMMAND 权限；已弹出授权提示。\n");
         ZH.put("⚠ Termux (com.termux) not found; please install Termux first.", "⚠ 找不到 Termux（com.termux）；请先安装 Termux。");
-        ZH.put("⚠ The console is in the background, where Android would silently drop the start — I did not pretend to open it. Tap the row below to open the page.", "⚠ 控制台现在不在前台，系统会静默拦掉这次启动 —— 我没假装已经打开。点下面那一行即可打开页面。");
         ZH.put("　(tap here for the log)", "　（点这里看日志）");
         ZH.put("　waited ", "　已等待 ");
         ZH.put("　waited 0s", "　已等待 0s");
