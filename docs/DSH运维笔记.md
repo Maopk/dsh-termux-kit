@@ -7,6 +7,33 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-09-28 10:05 · 【发布记录】v1.12 发布（控制台 1.21 / 桥 2.24 / 页面面板 0.10.0）
+
+用户说"现在发吧"（此前已说明：版本行要变成"已是最新"，只能靠发一个 Release）。
+
+按承诺的清单逐条走：
+① 三处版本号：`ui/controls.json` 的 appVersions（console 1.21 / bridge 2.24 / panel 0.10）+ 两份 AndroidManifest
+   （versionCode 34，versionName 1.21 / 2.24）+ CHANGELOG 标题 `## [v1.12] - 2026-09-28`。
+   另外把面板插件的 `package.json` 从 **0.1.0 改成 0.10.0** —— 它和 appVersions.panel(0.10) 一直对不上，
+   而 0.1.0 看起来比 0.10 **还旧**，属于"一个版本号两种说法"。
+② CHANGELOG 定稿：`[Unreleased]` → `[v1.12]`，顶上写明三个产物与校验方式。
+③ 三个产物：`dsh-console-v1.21.apk`、`dsh-bridge-v2.24.apk`、`dsh-mobile-local-v0.10.0.tgz`
+   （`npm pack` 打的包共 4 个文件：client.js / host.js / package.json / cordis.patch.yml）。
+④ SHA256：`dist/SHA256SUMS.txt`（三个产物）+ 发行版页面的同名资产。
+⑤ 发行说明：`~/.smoke/release-notes-v1.12.md`（1968 字符）—— 用**新加的** `--notes-file` 传上去。
+⑥ tag + GH Release：`v1.12`，target master，4 个资产全部 201。
+⑦ README（中英）「最新版本」指向 v1.12，并写明"master 的源码可能比发行版新"。
+
+顺手给工具补了一处能力：`dsh-gh release` 以前只能发 tag + 标题、**发不了正文**；
+现在支持 `--notes-file FILE`（正文里有引号/换行/中文，用 python 拼 JSON，绝不手拼）。
+
+复核（三条独立证据，不只信自己的输出）：
+· GitHub API：`releases/latest` = `v1.12`，4 个资产 state=uploaded，body 1968 字符，target master；
+· `dsh-update check` 现在的读数：控制台 发行版 **1.21** / 仓库源码 1.21 / 本地 1.21 → 界面那行会显示「已是最新」；
+  桥 发行版 **2.24** / 仓库源码 2.24 / 本地 2.24 → 同样「已是最新」（用户最初就是拿这一行质问的）；
+· 真走了一遍用户的更新路径：`dsh-update get console|bridge` → 下载新包 + **「SHA256 与发行版一致」** ✓。
+下一步：这轮记录随发布一起推上去。
+
 2026-09-28 09:40 · 版本行把「发行版」说成了「仓库」（用户截图质问「你这个推流有问题啊」）；控制台 1.21 / 桥 2.24
 
 用户给了一张截图，上面只有三行：项目主页 / github.com/Maopk/dsh-termux-kit / 「版本：v1.20 · 本地比仓库新（仓库只有 v1.14）」。
