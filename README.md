@@ -73,7 +73,7 @@ Two things left after that:
 | `9_revoke-pin` | Revokes "the AI may use my lock-screen PIN for system verification" |
 | `10_net-fix` | Repairs the network: Clash core stopped, or bad generated config |
 | `11_update-apps` | Updates the Console and Bridge apps from the release, upgrades only |
-| `0_emergency-stop` | One tap to revoke all AI control: bridge, token, adb wireless debugging |
+| `0_emergency-stop` | Emergency stop: revoke AI control of the phone — bridge, token, adb wireless debugging |
 
 Every widget supports `--dry-run`, which prints and executes nothing.
 
@@ -184,7 +184,7 @@ The PIN is read only when passing system verification on your behalf. It is neve
 | `ui/` | The wording and colour sources for all three surfaces: `ui/controls.json` (categories, control names, one-line consequences, danger flags, `appVersions`) and `ui/theme.json` (27 colours → two `Palette.java`, two `res/values/dsh_theme.xml` and the console's shape drawables). `tools/ui-controls gen` writes both out, and `tools/i18n-audit` checks the result item by item |
 | `i18n/zh.json` | The only translation source; every Chinese string in all three surfaces is generated from it |
 | `tests/selftest.sh` | The self-test suite |
-| `docs/` | [Engineering journal](docs/DSH运维笔记.md) · [troubleshooting](docs/operations.md) · [architecture](docs/architecture.md) · [languages](docs/i18n.md) |
+| `docs/` | [Engineering journal](docs/DSH运维笔记.md) · [troubleshooting](docs/operations.md) · [architecture](docs/architecture.md) · [languages](docs/i18n.md) · [glossary](docs/术语表.md) |
 | `dist/` | Built APKs and their SHA256 |
 | `CONTRIBUTING.md` | The rules I hold myself to: how every change gets logged, and which gates run before a push |
 | `CHANGELOG.md` | Every version's changes, newest first, in [Keep a Changelog](https://keepachangelog.com/) form |

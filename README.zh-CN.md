@@ -50,7 +50,7 @@ bash tests/selftest.sh
 
 - 启动 DSH，并且等**真正就绪**才开浏览器：日志里出现 token 行、那个 URL 返回 200、进程还活着。DSH 是先绑端口后挂路由的，只看端口会给你开出一个 404 页。
 - 关闭、软重启、硬重启、备份、清理、紧急停止，各是一个小组件。备份会校验归档（`zstd -t` 和条目数），不是打完就算。
-- adb 一条龙：开「无线调试」、找端口、连上、验证；断了能自己修，修不动会说清卡在哪一步。
+- adb 全流程：开「无线调试」、找端口、连上、验证；断了能自己修，修不动会说清卡在哪一步。
 - 状态一眼看：DSH、桥、adb 三条通道各自的灯和文字。桥和 adb 是两条独立的东西，坏了要能分清是谁坏了，所以它们从不合并成一个开关。
 - 让 AI 看屏幕、点按、滑动、输入。无障碍桥走回环 8788，不需要网络；adb 走 shell，能力更强但依赖 Wi-Fi。
 - 全自动装 APK：走 vivo 的安装页、点那行蓝色的授权字样、输 6 位锁屏密码。密码只存在 `~/.dsh-auth-pass`（600）。
@@ -73,7 +73,7 @@ bash tests/selftest.sh
 | `9_revoke-pin` | 收回「AI 可用你的锁屏密码过系统验证」这个授权 |
 | `10_net-fix` | 修网络：判断 Clash 核心停了还是配置坏了 |
 | `11_update-apps` | 把控制台和桥更新到发行版，只升不降 |
-| `0_emergency-stop` | 一键撤销 AI 对手机的全部控制：桥、token、adb 无线调试 |
+| `0_emergency-stop` | 紧急停止：撤销 AI 对手机的控制（桥、token、adb 无线调试） |
 
 每个组件都支持 `--dry-run`，只打印不执行。
 
@@ -184,7 +184,7 @@ dsh-gh push|release|status      # 维护这个仓库
 | `ui/` | 三处界面的文案与配色的源文件：`ui/controls.json`（分类、控件名、一句话说明、危险标记、`appVersions`）与 `ui/theme.json`（27 个颜色 → 两份 `Palette.java`、两份 `res/values/dsh_theme.xml` 和控制台的形状 drawable）。两者都由 `tools/ui-controls gen` 写出，再由 `tools/i18n-audit` 逐项核对 |
 | `i18n/zh.json` | 唯一的翻译源，三处界面的中文都从它生成 |
 | `tests/selftest.sh` | 自检套件 |
-| `docs/` | [运维笔记](docs/DSH运维笔记.md)、[排障](docs/operations.md)、[架构](docs/architecture.md)、[语言](docs/i18n.md) |
+| `docs/` | [运维笔记](docs/DSH运维笔记.md)、[排障](docs/operations.md)、[架构](docs/architecture.md)、[语言](docs/i18n.md)、[术语表](docs/术语表.md) |
 | `dist/` | 打好的 APK 和 SHA256 |
 | `CONTRIBUTING.md` | 给自己定的规矩：每次改动怎么记录、push 前要过哪些门禁 |
 | `CHANGELOG.md` | 每个版本的改动记录，最新在上，格式按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) |
