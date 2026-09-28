@@ -49,7 +49,13 @@ for r in (rs if isinstance(rs,list) else []):
       git add -A && git -c core.quotepath=false commit -q -m "$MSG" || exit 5
       printf '＋ committed: %s\n' "$MSG"
     fi
-    git -c credential.helper= push "https://x-access-token:$T@github.com/$REPO.git" HEAD:refs/heads/master && printf '✔ pushed\n' ;;
+    if git -c credential.helper= push "https://x-access-token:$T@github.com/$REPO.git" HEAD:refs/heads/master; then
+      # push 走的是显式 URL，git **不会**顺手更新 refs/remotes/origin/master；
+      # 于是任何按 origin/<分支> 判断"领先几个 commit"的地方（tools/pre-push-check 第 10 条）
+      # 会一直拿旧引用算账 —— 实测报过"领先 11 个"，其实全推上去了。push 成功后自己把引用对齐。
+      git update-ref refs/remotes/origin/master HEAD 2>/dev/null || true
+      printf '✔ pushed\n'
+    fi ;;
 
   release)
     T=$(tok); TAG="${2:?Usage: dsh-gh release <tag> <title> <files...> [--notes-file FILE]}"; NAME="${3:?missing title}"; shift 3
