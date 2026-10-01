@@ -125,9 +125,9 @@ switch, or `rm ~/.dsh-auth-pass`) revokes it instantly.
 ## 9. Where things live, and what is worth keeping
 
 ```
-~/.local/bin/            26 tools
-~/.shortcuts/tasks/      the 9 home-screen widgets
-~/.local/share/dsh-widgets/  common.sh + selftest.sh
+~/.local/bin/            the kit's command-line tools
+~/.shortcuts/tasks/      the 12 home-screen widgets
+~/.local/share/dsh-widgets/  common.sh + i18n.sh
 Download/dsh/
    ├── 备份/dsh-state-*.tar.gz      state packs (~25 MB each, keep 5) — sessions, settings, plugin list, notes
    ├── 备份/系统备份/dsh-full-*.tar.zst   FULL snapshots (~1.1 GB) — whole Termux prefix + DSH runtime,
