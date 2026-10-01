@@ -31,6 +31,11 @@
   顺带把 `CONTRIBUTING.md` §四里指向 README 的引用换成新标题（「文件结构」→「仓库结构」、「它能干什么」→「功能」、「跑起来」→「快速开始」、
   「依赖和限制」→「环境要求与限制」、「已知的坑」→「故障排查」），§四.6 的「现象 / 根因 / 绕法」改成「现象 / 原因 / 解决方案」
   ——只换引用，不改规矩、流程与门禁条目。（本批是纯文档，不 bump 版本号，见 §六。）
+· **修正文档里的旧数字与旧路径**：`docs/operations.md` §9 的「26 tools」改成不带数字的写法（工具数会漂移，README 这次也已去掉这类数字）、
+  「the 9 home-screen widgets」→「the 12 home-screen widgets」、`~/.local/share/dsh-widgets/` 的内容由「common.sh + selftest.sh」
+  改成实际安装的「common.sh + i18n.sh」；`docs/i18n.md` 的「the 10 widgets」→「the 12 widgets」。
+  数字以 `widgets/` 的 12 个任务脚本与 `tools/install-widgets` 的映射表为准。历史存档（`docs/DSH运维笔记.md` 的旧条目与已发版条目）
+  按原样保留，没有回改。（本批是纯文档，不 bump 版本号，见 §六。）
 
 ## [v1.12] - 2026-09-28
 
