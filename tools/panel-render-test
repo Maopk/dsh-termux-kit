@@ -22,10 +22,12 @@
  *   panel-render-test <client.js 路径>      测指定文件（用来验证旧版本确实会挂）
  */
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const vm = require('vm');
 
-const kitRoot = process.env.DSH_KIT_REPO || path.join(process.env.HOME || '.', 'dsh-termux-kit');
+// 仓库不一定住在 $HOME/dsh-termux-kit：DSH_KIT_REPO 优先，其次 $HOME，没有 HOME（Windows 常见）时用 os.homedir()
+const kitRoot = process.env.DSH_KIT_REPO || path.join(process.env.HOME || os.homedir(), 'dsh-termux-kit');
 const file = process.argv[2] || path.join(kitRoot, 'plugins/dsh-mobile-local/client.js');
 let src = fs.readFileSync(file, 'utf8');
 

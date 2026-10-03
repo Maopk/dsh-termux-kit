@@ -39,10 +39,14 @@ ROOT = os.path.expanduser(os.environ.get('DSH_KIT_REPO') or os.path.join(HOME, '
 CONTROLS = os.path.join(ROOT, 'ui', 'controls.json')
 THEME = os.path.join(ROOT, 'ui', 'theme.json')
 ZH = os.path.join(ROOT, 'i18n', 'zh.json')
-CONSOLE_SRC = os.path.join(HOME, 'dsh-console', 'src', 'io', 'dsh', 'console')
-BRIDGE_SRC = os.path.join(HOME, 'droid-bridge', 'src', 'io', 'dsh', 'bridge')
-CONSOLE_MANIFEST = os.path.join(HOME, 'dsh-console', 'AndroidManifest.xml')
-BRIDGE_MANIFEST = os.path.join(HOME, 'droid-bridge', 'AndroidManifest.xml')
+# 真源码不一定要住在 $HOME：DSH_CONSOLE_DIR / DSH_BRIDGE_DIR 可以把它们指到别处，
+# 不设时回退到 ~/dsh-console、~/droid-bridge（和 DSH_KIT_REPO 一样的规矩）。
+CONSOLE = os.path.expanduser(os.environ.get('DSH_CONSOLE_DIR') or os.path.join(HOME, 'dsh-console'))
+BRIDGE = os.path.expanduser(os.environ.get('DSH_BRIDGE_DIR') or os.path.join(HOME, 'droid-bridge'))
+CONSOLE_SRC = os.path.join(CONSOLE, 'src', 'io', 'dsh', 'console')
+BRIDGE_SRC = os.path.join(BRIDGE, 'src', 'io', 'dsh', 'bridge')
+CONSOLE_MANIFEST = os.path.join(CONSOLE, 'AndroidManifest.xml')
+BRIDGE_MANIFEST = os.path.join(BRIDGE, 'AndroidManifest.xml')
 STATUS_PUB = os.path.join(ROOT, 'tools', 'dsh-status-pub')
 
 # 术语不翻译（用户 2026-09-27 明确）：这些词出现在中文里是**故意**的
@@ -283,8 +287,8 @@ def audit_palette():
     # 允许自带色值的：前四个是 ui/theme.json 生成的；ic_launcher 是**图标图形**（有自己的识别色，
     # 不是界面配色，硬塞进 UI 色板只会逼着图标改色）。
     gen_ok = {'dsh_theme.xml', 'box.xml', 'btn.xml', 'btn_danger.xml', 'ic_launcher.xml'}
-    for app_dir in ('dsh-console', 'droid-bridge'):
-        base = os.path.join(HOME, app_dir, 'res')
+    for app_dir, app_root in (('dsh-console', CONSOLE), ('droid-bridge', BRIDGE)):
+        base = os.path.join(app_root, 'res')
         for root, _dirs, files in os.walk(base):
             for name in sorted(files):
                 if not name.endswith('.xml') or name in gen_ok:

@@ -17,8 +17,8 @@ WHY（这条是用户 2026-09-27 那次投诉的直接产物）
 
 用法
 ----
-  tools/app-verify console [apk]    默认 ~/dsh-console/build/dsh-console.apk
-  tools/app-verify bridge  [apk]    默认 ~/droid-bridge/build/dsh-bridge.apk
+  tools/app-verify console [apk]    默认 $DSH_CONSOLE_DIR 或 ~/dsh-console/build/dsh-console.apk
+  tools/app-verify bridge  [apk]    默认 $DSH_BRIDGE_DIR 或 ~/droid-bridge/build/dsh-bridge.apk
 """
 import hashlib
 import io
@@ -32,13 +32,17 @@ import zipfile
 HOME = os.path.expanduser('~')
 ROOT = os.path.expanduser(os.environ.get('DSH_KIT_REPO') or os.path.join(HOME, 'dsh-termux-kit'))
 THEME = os.path.join(ROOT, 'ui', 'theme.json')
+# 真源码不一定要住在 $HOME：DSH_CONSOLE_DIR / DSH_BRIDGE_DIR 可以把它们指到别处，
+# 不设时回退到 ~/dsh-console、~/droid-bridge（和 DSH_KIT_REPO 一样的规矩）。
+CONSOLE = os.path.expanduser(os.environ.get('DSH_CONSOLE_DIR') or os.path.join(HOME, 'dsh-console'))
+BRIDGE = os.path.expanduser(os.environ.get('DSH_BRIDGE_DIR') or os.path.join(HOME, 'droid-bridge'))
 APPS = {
-    'console': dict(apk=os.path.join(HOME, 'dsh-console', 'build', 'dsh-console.apk'),
-                    lang=os.path.join(HOME, 'dsh-console', 'src', 'io', 'dsh', 'console', 'Lang.java'),
-                    manifest=os.path.join(HOME, 'dsh-console', 'AndroidManifest.xml')),
-    'bridge': dict(apk=os.path.join(HOME, 'droid-bridge', 'build', 'dsh-bridge.apk'),
-                   lang=os.path.join(HOME, 'droid-bridge', 'src', 'io', 'dsh', 'bridge', 'Lang.java'),
-                   manifest=os.path.join(HOME, 'droid-bridge', 'AndroidManifest.xml')),
+    'console': dict(apk=os.path.join(CONSOLE, 'build', 'dsh-console.apk'),
+                    lang=os.path.join(CONSOLE, 'src', 'io', 'dsh', 'console', 'Lang.java'),
+                    manifest=os.path.join(CONSOLE, 'AndroidManifest.xml')),
+    'bridge': dict(apk=os.path.join(BRIDGE, 'build', 'dsh-bridge.apk'),
+                   lang=os.path.join(BRIDGE, 'src', 'io', 'dsh', 'bridge', 'Lang.java'),
+                   manifest=os.path.join(BRIDGE, 'AndroidManifest.xml')),
 }
 bad = 0
 

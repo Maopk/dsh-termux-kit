@@ -4,10 +4,13 @@
 # 但脚本本身此前并不存在，是手工 cp 的 —— 手工就会漂移，2026-09-27 这次就漂了：仓库里的
 # UiControls.java / Lang.java 还是旧的，而手机装的是另一份）。
 #
-# 规则：真源码住 $HOME（build.sh 只认那里），仓库 apps/ 是**只读镜像**，方向永远是
-#       $HOME → 仓库，绝不反向。ks.jks / build/ 不镜像（签名密钥与产物不进仓库）。
+# 规则：真源码的默认位置是 $HOME，但可以用 DSH_CONSOLE_DIR / DSH_BRIDGE_DIR 指到别处
+#       （build.sh 认这两个变量，所以两边要指同一份）；仓库 apps/ 是**只读镜像**，方向永远是
+#       真源码 → 仓库，绝不反向。ks.jks / build/ 不镜像（签名密钥与产物不进仓库）。
 set -eu
 ROOT="${DSH_KIT_REPO:-$HOME/dsh-termux-kit}"
+CONSOLE_DIR="${DSH_CONSOLE_DIR:-$HOME/dsh-console}"
+BRIDGE_DIR="${DSH_BRIDGE_DIR:-$HOME/droid-bridge}"
 sync_one() {
   local name="$1" src="$2"
   [ -d "$src" ] || { echo "✘ 没有 $src"; return 1; }
@@ -20,6 +23,6 @@ sync_one() {
   echo "   ✔ apps/$name ← $src"
 }
 echo "把真源码镜像进仓库（$ROOT/apps/）："
-sync_one console "$HOME/dsh-console"
-sync_one bridge  "$HOME/droid-bridge"
+sync_one console "$CONSOLE_DIR"
+sync_one bridge  "$BRIDGE_DIR"
 echo "完成。核对：git -C $ROOT status --short apps/"

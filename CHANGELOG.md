@@ -20,6 +20,12 @@
   `tools/dsh-gh`、`tools/i18n-audit`、`tools/i18n-table`、`tools/ui-controls`、`tools/sync-apps`、
   `tools/panel-render-test` 与 `tests/selftest.sh` 统一认 `DSH_KIT_REPO`（`pre-push-check`、`install-tools`
   本来就认它），不设时仍回退到 `$HOME/dsh-termux-kit`；规矩写进 `CONTRIBUTING.md` §八 的工具表下面。
+· **读 App 真源码的 5 个工具不再假设源码住在 `$HOME`**：`tools/app-verify`、`tools/i18n-audit`、
+  `tools/i18n-table`、`tools/ui-controls`、`tools/sync-apps` 统一认 `DSH_CONSOLE_DIR` 与 `DSH_BRIDGE_DIR`
+  （不设时回退 `~/dsh-console`、`~/droid-bridge`）；规矩与 `DSH_KIT_REPO` 并列写在同一处。
+  （本批不改三个产物的内容，不 bump 版本号，见 §六。）
+· **`tools/panel-render-test` 的兜底更稳**：没有 `HOME` 时回退到 `os.homedir()`（Windows 上很常见），
+  不再落到相对路径 `./dsh-termux-kit` 而在别的目录报 `ENOENT`。
   以前在仓库副本里跑这些自检，它们会去读一个不存在的 `$HOME/dsh-termux-kit` 然后报错 ——
   实测（在副本里设 `DSH_KIT_REPO`）：`ui-controls check`、`i18n-table check`、`i18n-audit --quiet`、
   `check-task-ids` 四个自检全绿，`panel-render-test` 三遍渲染通过。

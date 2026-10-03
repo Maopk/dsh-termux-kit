@@ -245,8 +245,9 @@ tools/pre-push-check             # 顺带扫改动文件里的 key/token/passwor
 
 > 仓库不一定住在 `$HOME/dsh-termux-kit`：`tools/` 里的脚本都认 `DSH_KIT_REPO`
 > （例：`DSH_KIT_REPO=/path/to/dsh-termux-kit tools/ui-controls check`），不设时回退到 `$HOME/dsh-termux-kit`。
-> 例外：`tools/sync-apps` 与三个读 App 源码的工具（`i18n-audit` / `i18n-table` / `ui-controls`）仍按设计去
-> `$HOME/dsh-console`、`$HOME/droid-bridge` 读**真源码** —— 仓库 `apps/` 是只读镜像，不是编译源。
+> 同理，读 App **真源码**的工具（`sync-apps` / `i18n-audit` / `i18n-table` / `ui-controls` / `app-verify`）认
+> `DSH_CONSOLE_DIR` 与 `DSH_BRIDGE_DIR`（不设时回退 `$HOME/dsh-console`、`$HOME/droid-bridge`）—— 仓库 `apps/`
+> 是只读镜像，不是编译源，改了不生效。
 
 改完东西的最短路径：
 
