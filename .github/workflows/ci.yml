@@ -1,0 +1,183 @@
+# checks - everything this repo can prove about itself without the phone.
+#
+# The five jobs below are the offline half of the push checklist in CONTRIBUTING §三: Bash and
+# Python syntax, shellcheck, ruff and mypy, the gates that compare the apps/ mirror against the
+# data sources, the unit tests for widgets/common.sh, and tests/selftest.sh itself. The suite runs
+# in a container with a throw-away HOME, so it cannot read or write anything of yours, and it
+# records its tally (passed/failed/skipped) in the run summary.
+#
+# What is deliberately NOT here:
+#   - tools/sync-apps: it rm -rf's and copies over apps/, so it never runs in CI.
+#   - apps/*/build.sh: they need aapt2/javac/d8/apksigner and an android.jar, so they get a syntax
+#     check (job "static") and nothing more.
+#   - anything that needs adb, the DSH bridge service, the installed DSH page plugin or the Termux
+#     interpreter path: those checks are listed in tests/ci-selftest.sh as OFF_PHONE and are
+#     reported without turning the run red.
+name: checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: shell syntax and shellcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install the pinned dev tools
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: bash -n on every shell script
+        run: bash tools/ci-shellcheck.sh --syntax-only
+      - name: shellcheck on every shell script
+        run: bash tools/ci-shellcheck.sh
+
+  python:
+    name: ruff, mypy and compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # mypy imports the files it checks; without this it drops tools/__pycache__ into the checkout.
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install the pinned dev tools
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: ruff
+        run: ruff check --no-cache tools tests
+      - name: compile every tool (ast.parse, so no __pycache__ appears)
+        run: |
+          python - <<'PY'
+          import ast, pathlib, sys
+          bad = 0
+          files = [p for p in pathlib.Path('tools').iterdir() if p.is_file()]
+          for p in files:
+              head = p.open('rb').read(256)
+              if b'python' not in head.split(b'\n', 1)[0]:
+                  continue
+              try:
+                  ast.parse(p.read_bytes(), filename=str(p))
+              except SyntaxError as e:
+                  print(f'{p}: {e}')
+                  bad += 1
+          print(f'{len(files)} files in tools/, {bad} with a syntax error')
+          sys.exit(1 if bad else 0)
+          PY
+      - name: "mypy, one file at a time (separate scripts all look like __main__)"
+        run: |
+          fail=0
+          count=0
+          for f in tools/*; do
+            [ -f "$f" ] || continue
+            head="$(head -c 256 "$f" | tr -d '\000' | head -n 1)"
+            case "$head" in *python*) ;; *) continue ;; esac
+            count=$((count + 1))
+            python -m mypy --config-file mypy.ini --cache-dir "${TMPDIR:-/tmp}/dsh-mypy-cache" "$f" || fail=1
+          done
+          echo "$count python tools checked"
+          exit "$fail"
+
+  gates:
+    name: repo gates (task ids, i18n, UI, panel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # No fixtures and no network: the gates read the in-repo apps/ mirror and i18n/zh.json, so
+      # the same commit always produces the same verdict.
+      - name: Run the nine gates
+        run: bash tools/ci-gates.sh
+
+  unit:
+    name: unit tests for widgets/common.sh
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run tests/lib-tests.sh
+        run: bash tests/lib-tests.sh
+
+  selftest:
+    name: selftest.sh in a container (recorded)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: ubuntu:24.04
+    steps:
+      - name: Install what the suite needs
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends bash curl ca-certificates git python3 nodejs
+      # The scripts carry Termux shebangs (#!/data/data/com.termux/files/usr/bin/bash). Off-phone,
+      # executing one is "bad interpreter", which would misreport several checks. Inside this
+      # container we can give that path the interpreters it names - a compatibility symlink, not a
+      # claim that Termux is installed.
+      - name: Point the Termux interpreter path at the container's interpreters
+        run: |
+          mkdir -p /data/data/com.termux/files/usr/bin
+          ln -sf "$(command -v bash)" /data/data/com.termux/files/usr/bin/bash
+          ln -sf "$(command -v python3)" /data/data/com.termux/files/usr/bin/python3
+          ln -sf "$(command -v node)" /data/data/com.termux/files/usr/bin/node
+          ls -l /data/data/com.termux/files/usr/bin
+      - uses: actions/checkout@v4
+      - name: Run the suite against a throw-away HOME
+        env:
+          DSH_CI_WORK: ${{ github.workspace }}/ci-selftest-work
+        run: bash tests/ci-selftest.sh "$GITHUB_WORKSPACE/ci-selftest-work/report.txt"
+      # The checklist the contributor guide asks for before a push. It is recorded, never a gate:
+      # it reports "no origin remote" or a missing phone as failures, which says nothing about the
+      # commit. Inside this container the Termux interpreter symlinks above let it run the tools.
+      - name: "Pre-push checklist (recorded, never a gate)"
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p ci-selftest-work
+          bash tools/pre-push-check > ci-selftest-work/pre-push-check.txt 2>&1 || true
+          tail -n 25 ci-selftest-work/pre-push-check.txt
+      - name: Put the tally in the run summary
+        if: always()
+        run: |
+          {
+            echo '### tests/selftest.sh (container, throw-away HOME)'
+            echo
+            echo '```'
+            cat ci-selftest-work/report.txt 2>/dev/null || echo '(no report was produced)'
+            echo '```'
+            echo
+            echo '### tools/pre-push-check (recorded, never a gate)'
+            echo
+            echo '```'
+            tail -n 40 ci-selftest-work/pre-push-check.txt 2>/dev/null || echo '(not run)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the report and the raw suite log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-report
+          path: ci-selftest-work/
+          if-no-files-found: warn
