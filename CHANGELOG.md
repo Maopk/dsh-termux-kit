@@ -25,6 +25,10 @@
   `check-task-ids` 四个自检全绿，`panel-render-test` 三遍渲染通过。
   仍然按设计去 `$HOME/dsh-console`、`$HOME/droid-bridge` 读 App 真源码（仓库 `apps/` 是只读镜像）。
   （同上：本批不 bump 版本号，见 §六。）
+· **收掉上一次发布误带进仓库的 `tools/__pycache__/*.pyc`**：编译检查会在工具旁边留下 Python 编译缓存，
+  而发布脚本是遍历文件系统、不读 `.gitignore`，于是把 5 个 `.pyc` 一起提交了（`f08b5b76`）。
+  已从仓库删除（`feb4580a`），并让发布脚本跳过 `__pycache__` 目录与 `*.pyc`，避免再犯。
+  仓库历史里那次提交仍留着这几个文件 —— 没有改写历史，代价是 clone 时会多几 KB。
 
 ### 变更
 
