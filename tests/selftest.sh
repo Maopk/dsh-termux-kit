@@ -19,6 +19,28 @@ TMPLOG="$HOME_DIR/.smoke/selftest.log"
 TMPD="$HOME_DIR/.smoke/selftest-tmp"; rm -rf "$TMPD"; mkdir -p "$TMPD"
 SAVED=0   # cleanup may restore only after this run really saved the log/URL
 
+# ── One self-check at a time ──
+# Two overlapping runs fight over the same backup, the same 8099 sandbox and the same bridge, and the reds
+# they produce look like widget failures (2026-10-03: a second self-check started while the first was still
+# finishing; the console's own hint for a stuck task is "the phone was busy at the time"). mkdir is atomic,
+# so it is the lock. This block sits **before** the trap is installed on purpose: when another run holds the
+# lock we exit without running cleanup_all, so we never kill that run's sandbox or delete its lock.
+LOCKD="$HOME_DIR/.smoke/selftest.lock"
+mkdir -p "$HOME_DIR/.smoke" 2>/dev/null
+if ! mkdir "$LOCKD" 2>/dev/null; then
+  HOLDER="$(cat "$LOCKD/pid" 2>/dev/null)"
+  if [ -n "$HOLDER" ] && kill -0 "$HOLDER" 2>/dev/null; then
+    printf '  ⏸ another self-check is already running (pid %s, started %s)\n' "$HOLDER" "$(cat "$LOCKD/started" 2>/dev/null)"
+    printf '     Wait for it to finish, then run this one again. Two overlapping runs fight over the same\n'
+    printf '     backup, the same 8099 sandbox and the same bridge — and the reds look like widget failures.\n'
+    exit 3
+  fi
+  rm -rf "$LOCKD" 2>/dev/null   # the holder is gone (killed / rebooted): take the lock over instead of blocking forever
+  mkdir "$LOCKD" 2>/dev/null || { printf '  ⏸ cannot create the lock %s\n' "$LOCKD"; exit 3; }
+fi
+printf '%s\n' "$$" > "$LOCKD/pid" 2>/dev/null
+date '+%Y-%m-%d %H:%M:%S' > "$LOCKD/started" 2>/dev/null
+
 # ── Force a deterministic language for this run ──
 # The widgets now speak whatever ~/.dsh-lang says (via widgets/i18n.sh). Assertions below match on
 # text, so the suite pins the language to English for its own runs instead of depending on the
@@ -46,6 +68,7 @@ kill_sandbox() {
 # Clean up even when interrupted by pkill / restart: sandbox processes, the sandbox boot lock, the touched log and .dsh-url
 cleanup_all() {
   kill_sandbox
+  rm -rf "$LOCKD" 2>/dev/null   # only the lock owner ever gets here: the "another run is in progress" path exits before the trap is installed
   [ -d "$HOME_DIR/.dsh-boot-8099.lock" ] && rm -rf "$HOME_DIR/.dsh-boot-8099.lock" 2>/dev/null
   if [ "$SAVED" = 1 ]; then
     cp -f "$HOME_DIR/.smoke/restart.log.save" "$HOME_DIR/.dsh-restart.log" 2>/dev/null

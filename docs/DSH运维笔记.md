@@ -7,6 +7,21 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-10-03 · 【自检】88/0/9 全绿，并加了一道"同时在跑就不再起第二个"的锁
+
+做了什么：先确认第三跑那两条红的修法真的生效 —— 手机最后一跑 `════ 88 passed / 0 failed / 9 skipped ════`、
+  `Verdict: every testable item passed ✅`（17:43:42 → 17:45:30，107.968s，exit=0）：`v1.8 soft stop durable` 这次
+  真关住了、`1_start-dsh.sh cold start` 真跑了（took 11s）、`7_reconnect-ai.sh` 的明细回来且整条输出里再无
+  `binary file matches`（`grep -a` 生效了）。随后按"两跑叠加"的观察加了互斥锁。
+为什么：17:35–17:39 之间出现过 `86 passed / 2 failed / 9 skipped` 与 `83 passed / 5 failed / 9 skipped` 两种红
+  （含 `✘ 3_backup-dsh.sh real run failed`），而同一时段还有一条 `[17:37:11] 自动刷新状态 已完成（exit=5)`；
+  两条自检叠在一起会抢同一份备份、同一个 8099 沙箱、同一个桥，呈现出来却像组件坏了 —— 这种假红比真红更耗人。
+结果：`tests/selftest.sh` 顶部加 `mkdir` 原子锁 `~/.smoke/selftest.lock`（记 pid 与开始时间）：持有者还活着就打印
+  `another self-check is already running (pid …)` 并 `exit 3`（不是 0 —— 这一跑什么都没验，控制台会原样打出来）；
+  持有者已死（被杀/重启）就接管锁继续；锁的获取放在 `trap` 安装之前，所以这条路径不跑 `cleanup_all`，
+  不会误杀对方的沙箱、也不会删掉对方的锁。
+下一步：这条还没在手机上跑过（CI 容器里 HOME 是一次性目录，锁互不影响）；下次连点两次自检就能看到它。
+
 2026-10-03 · 【自检】第三次自检的两条红项：不是组件坏，是判定不会区分
 
 做了什么：分诊手机上第三跑（`exit=2`、`86 passed / 2 failed / 9 skipped`）的两条红 ——
