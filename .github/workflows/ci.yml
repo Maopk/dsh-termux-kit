@@ -11,8 +11,10 @@
 #   - apps/*/build.sh: they need aapt2/javac/d8/apksigner and an android.jar, so they get a syntax
 #     check (job "static") and nothing more.
 #   - anything that needs adb, the DSH bridge service, the installed DSH page plugin or the Termux
-#     interpreter path: those checks are listed in tests/ci-selftest.sh as OFF_PHONE and are
-#     reported without turning the run red.
+#     interpreter path: every assertion carries a category (tests/lib/categories.tsv, a reviewed file
+#     in the repo) and the device ones the table allows are recorded without turning the run red.
+#     tests/report_check.py reads the suite's JSON report and decides — the policy is a file the
+#     reviewer can read, not a regex in this workflow.
 name: checks
 
 on:
@@ -90,6 +92,10 @@ jobs:
             python -m mypy --config-file mypy.ini --cache-dir "${TMPDIR:-/tmp}/dsh-mypy-cache" "$f" || fail=1
           done
           echo "$count python tools checked"
+          # The report policy is Python too, and it is pure functions over the suite's JSON report -
+          # the one part of the self-check a runner can judge without a phone.
+          python -m mypy --config-file mypy.ini --cache-dir "${TMPDIR:-/tmp}/dsh-mypy-cache" tests/report_check.py || fail=1
+          python -m mypy --config-file mypy.ini --cache-dir "${TMPDIR:-/tmp}/dsh-mypy-cache" tests/unit || fail=1
           exit "$fail"
 
   gates:
@@ -110,7 +116,7 @@ jobs:
         run: bash tools/ci-gates.sh
 
   unit:
-    name: unit tests for widgets/common.sh
+    name: unit tests (shell and python)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -118,8 +124,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Run tests/lib-tests.sh
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install the pinned dev tools
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: Run tests/lib-tests.sh (widgets/common.sh and the report writer)
         run: bash tests/lib-tests.sh
+      # The test-layer policy: pure functions over the report document, no device involved.
+      - name: Run tests/unit (the report policy)
+        run: python -m pytest tests/unit -q
 
   selftest:
     name: selftest.sh in a container (recorded)
@@ -173,6 +186,12 @@ jobs:
         if: always()
         run: |
           {
+            echo '### test-layer policy (tests/report_check.py)'
+            echo
+            echo '```'
+            python3 tests/report_check.py --verbose ci-selftest-work/home/.smoke/selftest.json 2>&1 || true
+            echo '```'
+            echo
             echo '### tests/selftest.sh (container, throw-away HOME)'
             echo
             echo '```'

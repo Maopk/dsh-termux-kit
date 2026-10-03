@@ -18,10 +18,12 @@
   `unexpected_failures`、`unclassified`；报告自称的数字与逐项重算不一致时，检查器按"报告不可用"处理（退出码 2）。
   控制台「自检」按钮跑的就是带 `--json` 的那条命令 —— 手机上的一次运行可以原样交给
   `python3 tests/report_check.py <json> [--verbose]` 复核（`--verbose` 会把"这台机器答不了"的失败逐条列出来）。
-· **CI 侧**：`unit` job 增加 pytest（`tests/unit` 19 个用例：既验报告策略本身 —— 哪类失败算回归、哪些放行、
-  自相矛盾的报告要被拒 —— 也验一次真实自检的输出），mypy 也覆盖 `tests/report_check.py`；容器 selftest 的退出码改由
-  `tests/report_check.py` 决定，run summary 里多一段策略结论；`tests/lib-tests.sh` 增加 20 条断言（层默认、表的覆盖、
-  JSON 转义与结构、键不陈旧）。
+· **CI 侧**：`unit` job 装 `requirements-dev.txt` 并跑 `python -m pytest tests/unit -q`（`tests/unit` 19 个用例：既验
+  报告策略本身 —— 哪类失败算回归、哪些放行、自相矛盾的报告要被拒 —— 也验一次真实自检的输出），mypy 也覆盖
+  `tests/report_check.py` 与 `tests/unit`；容器 selftest 的退出码改由 `tests/report_check.py` 决定，run summary 里多一段
+  策略结论；`tests/lib-tests.sh` 增加 20 条断言（层默认、表的覆盖、JSON 转义与结构、键不陈旧）。
+  这一条要改 `.github/workflows/ci.yml`，而改 workflow 文件要求 token 带 `workflow` 权限 —— 拖到最后才推上来；
+  在那之前报告策略只在 `gates` job 的第 10 道门禁里跑（见下一条）。
 · **报告有一份"真家伙"当契约**：`tests/fixtures/selftest-report.json` 是一次真实自检的完整输出（70 项、三类齐全、
   含 11 条"只记录不豁免"的 device 失败；临时 HOME 与工作副本的路径已洗成 `~` / `$KIT`），
   `tests/unit/test_report_fixture.py` 拿它喂检查器 —— 手写构造的报告钉不住检查器面对**真实产物**时的行为
