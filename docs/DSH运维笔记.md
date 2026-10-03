@@ -7,6 +7,18 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-10-03 · 【自检】手机更新后的首跑全绿（83/0/11），顺手修掉两处印空的明细
+
+做了什么：手机 `dsh-kit-update` 到 `cd495d7` 后点「自检」——`83 passed / 0 failed / 11 skipped`、
+  `Assertions: logic 37 · simulable 31 · device 26`，报告落在 `~/.smoke/selftest.json`。同一份输出里两处明细是坏的：
+  `3_backup-dsh.sh` 只剩 `real run passed: `（它在日志里找 `<N> archives kept`，而 `widgets/3_backup-dsh.sh` 今天印的是
+  `Archive readable, N entries`）、`1_start-dsh.sh cold start` 印成 `(took took 14s)`。
+为什么：两处都只是**结论之外的装饰**写错了 —— 判定的门（`grep -q 'Archive readable'`、退出码）本身是对的，
+  所以"全绿"是真的；但明细是给人看的证据，印空就等于没有证据，下一跑的人会以为组件没输出东西。
+结果：`tests/selftest.sh` 按真实措辞取条目数并加"最后一行非空内容"兜底；`took` 去掉重复；
+  失败分支从 `tail -n 3` 改成取最后三行**非空**内容。
+下一步：手机上再跑一次（`dsh-kit-update` 之后），明细应显示 `real run passed: Archive readable, N entries`。
+
 2026-10-03 · 【自检】给报告配一份"真家伙"当契约（真实自检输出进仓库）
 
 做了什么：把一次真实自检的完整输出（70 项）存成 `tests/fixtures/selftest-report.json`（临时 HOME 洗成 `~`、

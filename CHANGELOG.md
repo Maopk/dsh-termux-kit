@@ -60,6 +60,14 @@
   顺带：5 处读自检日志的 `grep -oE` 加了 `-a` —— 日志里混进二进制后 GNU grep 只回一句 `binary file matches`，
   诊断明细整条消失（第三次自检里 `real run passed: ` 后面空着就是这个）。
 
+· **两处"明细印成空/印重"的地方补上来源**（`tests/selftest.sh`）：2026-10-03 手机上更新后的那一跑
+  （`83 passed / 0 failed / 11 skipped`、`Assertions: logic 37 · simulable 31 · device 26`）里两处细节是坏的，
+  都不是组件问题：① `3_backup-dsh.sh` 的结论只剩 `real run passed: ` —— 它去日志里找 `<N> archives kept`，
+  而这个说法在 `widgets/3_backup-dsh.sh` 里早就不存在了（今天是 `Archive readable, N entries`），匹配不到就印了空串；
+  现在按真实措辞取条目数，另留一条"日志最后一行非空内容"的兜底，措辞再变也不会又印成空的。
+  ② `1_start-dsh.sh cold start` 印成 `(took took 14s)` —— 括号里那段文本自己已经带了 `took`，外面又写了一遍；
+  同一条的失败分支原本取日志 `tail -n 3`（末尾可能是空行），也一并改成取最后三行**非空**内容。
+
 · **自检同一时间只允许跑一个**（`tests/selftest.sh`）：2026-10-03 手机上出现过两跑叠加的情况（一条还没结束、
   下一条已经开始），两条会抢同一份备份、同一个 8099 沙箱和同一个桥 —— 呈现出来却像组件坏了（那一时段的
   `86 passed / 2 failed` 与 `83 passed / 5 failed` 就是这么来的，同一时间还有一条 `自动刷新状态 已完成（exit=5)`）。

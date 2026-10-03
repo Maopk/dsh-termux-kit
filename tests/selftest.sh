@@ -496,7 +496,13 @@ else
   rec SKIP "real authorisation untouched" "there is no authorisation file right now (not authorised)"
 fi
 if timeout 180 bash "$T/3_backup-dsh.sh" > "$TMPLOG" 2>&1 && grep -q 'Archive readable' "$TMPLOG"; then
-  rec PASS "3_backup-dsh.sh" "real run passed: $(grep -aoE '[0-9]+ archives? kept[^,]*' "$TMPLOG" | head -1)"
+  # The detail must come from what the widget actually prints today ("Archive readable, N entries").
+  # The old pattern looked for "<N> archives kept", which no longer exists anywhere, so the detail
+  # silently went empty (seen on the phone 2026-10-03). The fallback keeps *some* evidence if the
+  # wording changes again, instead of printing nothing.
+  D3=$(grep -aoE 'Archive readable, [0-9]+ entries' "$TMPLOG" | head -1)
+  [ -n "$D3" ] || D3=$(grep -av '^[[:space:]]*$' "$TMPLOG" | tail -1 | cut -c1-60)
+  rec PASS "3_backup-dsh.sh" "real run passed: $D3"
 else rec FAIL "3_backup-dsh.sh" "real run failed (see $TMPLOG)"; fi
 if timeout 180 bash "$T/5_cleanup-dsh.sh" > "$TMPLOG" 2>&1; then
   rec PASS "5_cleanup-dsh.sh" "real run passed: $(grep -aoE 'Download/dsh: [0-9]+MB → [0-9]+MB' "$TMPLOG" | head -1)"
@@ -706,11 +712,11 @@ sandbox_listener() {
 }
 SBURL=$(grep -aoE 'http://127\.0\.0\.1:8099/\?token=[A-Za-z0-9_-]+' "$TMPLOG" | tail -1)
 if grep -q 'Startup complete' "$TMPLOG"; then
-  rec PASS "1_start-dsh.sh cold start" "waited for real readiness and passed the 200 check (took $(grep -aoE 'took [0-9]+s' "$TMPLOG" | tail -1))"
+  rec PASS "1_start-dsh.sh cold start" "waited for real readiness and passed the 200 check ($(grep -aoE 'took [0-9]+s' "$TMPLOG" | tail -1))"
 elif grep -q 'already on 8099' "$TMPLOG"; then
   rec SKIP "1_start-dsh.sh cold start" "8099 was already served when the sandbox started, so widget 1 took its idempotent path ($(sandbox_listener)) — the cold start was not exercised this round and no widget failed"
 else
-  rec FAIL "1_start-dsh.sh cold start" "never finished the real readiness check (exit=$WRC; last widget lines: $(tail -n 3 "$TMPLOG" 2>/dev/null | tr '\n' ' ' | cut -c1-200))"
+  rec FAIL "1_start-dsh.sh cold start" "never finished the real readiness check (exit=$WRC; last widget lines: $(grep -av '^[[:space:]]*$' "$TMPLOG" 2>/dev/null | tail -n 3 | tr '\n' ' ' | cut -c1-200))"
 fi
 # Evidence: the sequence of HTTP codes seen during the cold start. The old logic only looked for 'not 000' and took the first code as ready.
 SEQ=$(printf '%s' "$SAMPLES" | sed 's/^ //')
