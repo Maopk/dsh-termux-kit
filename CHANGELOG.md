@@ -5,7 +5,14 @@
 
 ## [Unreleased]
 
-（暂无。）
+### 修复
+
+· **自检不再把"DSH Web 没在跑"判成失败**（`tests/selftest.sh` 的 L4 段）：`7_reconnect-ai.sh` 那一项原来要求输出里出现
+  `DSH Web : running` 才给过 —— 可自检**随时**都该能跑，包括刚关完 DSH 之后，那时它**当然**没在跑。
+  2026-10-03 手机上的首跑就是这么红的（`82 passed / 1 failed / 11 skipped`，唯一红项正是它；同段的
+  `8_enable-wireless-adb.sh`、`bridge soft stop/wake` 都正确记成了 ○「preconditions unmet」）。
+  现在只看组件有没有跑完（exit 0），三个通道的真实状态照原样留在结论里；超时窗 120s → 180s
+  （冷跑会转交给 `8_` 与 `droid conn`/`discover`，它们自带 40s+30s 的超时），失败时连退出码和日志路径一起报出来。
 
 ## [v1.13] - 2026-10-03
 

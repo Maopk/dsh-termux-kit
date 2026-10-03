@@ -442,9 +442,14 @@ else rec FAIL "3_backup-dsh.sh" "real run failed (see $TMPLOG)"; fi
 if timeout 180 bash "$T/5_cleanup-dsh.sh" > "$TMPLOG" 2>&1; then
   rec PASS "5_cleanup-dsh.sh" "real run passed: $(grep -oE 'Download/dsh: [0-9]+MB → [0-9]+MB' "$TMPLOG" | head -1)"
 else rec FAIL "5_cleanup-dsh.sh" "real run failed"; fi
-if timeout 120 bash "$T/7_reconnect-ai.sh" > "$TMPLOG" 2>&1 && grep -q 'DSH Web : running' "$TMPLOG"; then
+# Verdict = did the widget run to completion, not what it found. It deliberately does **not** require
+# "DSH Web : running": the self-check is meant to be run any time, including right after 2_shutdown-dsh.sh,
+# when DSH Web is *supposed* to be down — a truthful "not running" line is a pass. (2026-10-03: the old
+# assertion called exactly that case a failure.) 180s because a cold run may hand off to 8_ and then to
+# `droid conn`/`discover`, which carry their own 40+30s timeouts.
+if timeout 180 bash "$T/7_reconnect-ai.sh" > "$TMPLOG" 2>&1; then
   rec PASS "7_reconnect-ai.sh" "real run passed: $(grep -oE 'adb     : .*' "$TMPLOG" | head -1 | cut -c1-40)"
-else rec FAIL "7_reconnect-ai.sh" "real run failed"; fi
+else rec FAIL "7_reconnect-ai.sh" "real run failed (exit $?; see $TMPLOG)"; fi
 if [ "$BRIDGE_OK" = 0 ]; then
   rec SKIP "8_enable-wireless-adb.sh" "depends on the bridge channel; preconditions unmet (not a widget problem)"
 else

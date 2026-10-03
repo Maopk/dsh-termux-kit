@@ -7,6 +7,19 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-10-03 · 【自检首跑】控制台新按钮第一次跑：82 passed / 1 failed / 11 skipped
+
+做了什么：装好控制台 1.22（同签名，直接覆盖安装）后点维护区的 🩺「自检」，91.7 秒跑完，结果行落在控制台历史里
+（`[17:11:42] 自检 已完成（exit=1，用时 91.763s)` / `════ Result: 82 passed / 1 failed / 11 skipped ════` /
+`Verdict: 1 item(s) failed`）。唯一红项是 L4 真跑段的 `✘ 7_reconnect-ai.sh real run failed`；同一段里
+`8_enable-wireless-adb.sh` 与 `bridge soft stop/wake` 都正确地记成了 ○「preconditions unmet」——当时的手机状态是
+**adb 没连、Wi-Fi 不通（`online=?`）、桥刚被上一步关掉**。
+为什么红：不是组件的问题，是**判定写错了** —— 那一项要求输出里出现 `DSH Web : running` 才给过，而这次自检是在
+16:42 关掉 DSH（`2_shutdown-dsh.sh`，备份 53M、端口已释放）之后跑的，DSH Web 本来就该是"没在跑"。
+结果：`tests/selftest.sh` 的 L4 判定改成**只看组件有没有跑完**（exit 0），三个通道的真实状态照原样报出来；
+超时窗 120s → 180s（冷跑会转交 `8_` 与 `droid conn`/`discover`，它们自带 40s+30s），失败时把退出码和日志路径一起打出来。
+下一步：手机上下次 `dsh-kit-update`（或手工三步）拿到这次修复后重跑自检，预期 `83 passed / 0 failed / 11 skipped`。
+
 2026-10-03 · 【发布】v1.13 发出：控制台 1.22 / 桥 2.24 / 页面面板 0.10.1
 
 做了什么：仓库侧 `91d2c19d`（控制台「自检」按钮 + 三个生成器的 CRLF 修复 + 版本号 bump）→ CI run `37111115102` 5 个 job 全绿；
