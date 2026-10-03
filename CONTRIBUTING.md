@@ -253,10 +253,12 @@ tools/pre-push-check             # 顺带扫改动文件里的 key/token/passwor
 > （不设时是手机上那个 `/data/data/com.termux/files/home`）；`tools/install-tools` 的安装位跟 `$HOME` 走。
 
 > **CI**（`.github/workflows/ci.yml`）跑的就是上面这一批里"不碰手机也能跑"的部分：
-> `bash tools/ci-shellcheck.sh`（全量 `bash -n` + shellcheck）、`ruff check tools tests`、逐文件 `mypy`（含
-> `tests/report_check.py` 与 `tests/unit`）、`bash tools/ci-gates.sh`（9 道数据源门禁）、`bash tests/lib-tests.sh`
-> （`widgets/common.sh` 与 `tests/lib/report.sh` 的 55 条单元断言）、`python -m pytest tests/unit -q`（报告策略的
-> 12 个用例），以及在容器里 `bash tests/ci-selftest.sh`（一次性 HOME + 手机同款目录布局；判定交给
+> `bash tools/ci-shellcheck.sh`（全量 `bash -n` + shellcheck）、`ruff check tools tests`、逐文件 `mypy`
+> （目前只覆盖 `tools/*`；`tests/report_check.py` 与 `tests/unit` 本地已过、接进 CI 要改 workflow，见
+> [`docs/test-layers.md`](docs/test-layers.md) 末节）、`bash tools/ci-gates.sh`（10 道门禁：9 道数据源 +
+> `python -m pytest tests/unit -q`）、`bash tests/lib-tests.sh`（`widgets/common.sh` 与 `tests/lib/report.sh`
+> 的 55 条单元断言）、`python -m pytest tests/unit -q`（报告策略的 19 个用例：14 个手写 + 5 个真实报告），
+> 以及在容器里 `bash tests/ci-selftest.sh`（一次性 HOME + 手机同款目录布局；判定交给
 > `tests/report_check.py`，结论写进 run summary）。
 > 本地跑同一套：`python -m pip install -r requirements-dev.txt`，然后照抄上面这几行命令。
 > 自检的每一项都带 `logic` / `simulable` / `device` 三类之一（表在 `tests/lib/categories.tsv`，每行都写了理由）：
@@ -271,7 +273,7 @@ tools/pre-push-check             # 顺带扫改动文件里的 key/token/passwor
 | `tools/ci-shellcheck.sh` | `static` job：全量 `bash -n` + shellcheck（55 个脚本） |
 | `tools/check-task-ids` · `tools/check-no-secrets.sh` · `tools/ui-controls check` · `tools/i18n-table check` · `tools/i18n-java-fix --check` ×2 · `tools/install-tools --check` · `tools/panel-render-test` · `tools/i18n-audit --quiet` | `gates` job（`tools/ci-gates.sh` 这 9 道） |
 | `tests/lib-tests.sh` | `unit` job（`widgets/common.sh` 与 `tests/lib/report.sh` 的 55 条断言） |
-| `tests/unit/`（pytest）· `tests/report_check.py` | `unit` job（报告策略的 12 个用例）；检查器本身还给 `selftest` job 里容器那一跑下判定 |
+| `tests/unit/`（pytest）· `tests/report_check.py` | `gates` job（`tools/ci-gates.sh` 的第 10 道，缺 pytest 时自己装同一个 pin）—— 报告策略的 19 个用例：14 个手写 + 5 个真实报告；检查器本身还给 `selftest` job 里容器那一跑下判定 |
 | `tests/selftest.sh` | `selftest` job（容器 + 一次性 HOME，经 `tests/ci-selftest.sh`；每次跑都会写 `~/.smoke/selftest.json`，按 `tests/lib/categories.tsv` 分类） |
 | `tools/pre-push-check` | `selftest` job 末尾，**只记录不判红**（容器里实测 12 通过 · 0 失败 · 0 提醒） |
 | `tools/app-verify` · `apps/*/build.sh` | **不进**：要编好的 APK / Android SDK（aapt2、javac、d8、apksigner 与 `$DSH_AJ` 的 `android.jar`）；`build.sh` 在这里只做语法检查 |

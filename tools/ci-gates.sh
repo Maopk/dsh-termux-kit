@@ -65,6 +65,23 @@ gate 'i18n java fix: bridge Lang.java is clean' \
 gate 'install tools: report only, against a throw-away HOME' \
   env HOME="$GATE_HOME" bash tools/install-tools --check
 
+# The report checker's unit tests are Python, so they need pytest. CI has it from
+# requirements-dev.txt; anywhere else install the same pin (tools/ci-shellcheck.sh does the
+# same for its wheel) and say so honestly if even that is not possible.
+if ! need "$PY"; then
+  skip 'python unit tests' 'python3 is not on PATH'
+else
+  if ! "$PY" -c 'import pytest' >/dev/null 2>&1; then
+    PIN="$(sed -n 's/^pytest==\(.*\)$/\1/p' requirements-dev.txt | head -1)"
+    [ -n "$PIN" ] && "$PY" -m pip install --quiet --disable-pip-version-check "pytest==$PIN" >/dev/null 2>&1
+  fi
+  if "$PY" -c 'import pytest' >/dev/null 2>&1; then
+    gate 'python unit tests: the report checker against a real report' "$PY" -m pytest tests/unit -q
+  else
+    skip 'python unit tests' 'pytest is not installed and could not be installed'
+  fi
+fi
+
 # These two need node: the audit shells out to the panel render test.
 if need "$NODE"; then
   gate 'panel render: three passes, the panel must not vanish on tap' "$NODE" tools/panel-render-test

@@ -73,5 +73,9 @@ CI 变红 —— 这是「新增断言必须有归属」的兜底。
 * device 报告还没有「上传/链接」那一步：CI 只能校验交给它的报告。手机跑完把
   `~/.smoke/selftest.json` 拿上来，用同一条命令复核即可（合并策略见
   `.github/workflows/ci.yml` 的 `selftest` job）。
+* `.github/workflows/ci.yml` 还有两处待接：`mypy` 覆盖 `tests/report_check.py` 与 `tests/unit/`，
+  `selftest` job 的 run summary 打印分类统计。两者都要改 workflow 文件，而当前那枚 token 没有
+  `workflow` 权限 —— 改动已备好，等权限。**`tests/unit/` 本身已经在 CI 里跑**：`gates` job 的第 10 道
+  门禁（`tools/ci-gates.sh`）会跑 pytest，缺 pytest 时自己装 `requirements-dev.txt` 里那个 pin。
 * `apps/*/build.sh`（aapt2/javac/d8）与 `tools/sync-apps` 仍然只能在真机上跑，见
   `CONTRIBUTING.md` §三 的手工清单。

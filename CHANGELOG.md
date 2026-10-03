@@ -27,6 +27,10 @@
   `tests/unit/test_report_fixture.py` 拿它喂检查器 —— 手写构造的报告钉不住检查器面对**真实产物**时的行为
   （字段、计数、放行语义、文案都可能悄悄变）。写入端自己的形状由 `tests/lib-tests.sh` 逐字段断言，写入端 ↔
   检查器的端到端由容器那一跑（套件 → 报告 → `report_check.py`）覆盖。
+· **`tools/ci-gates.sh` 多一道第 10 道门禁**：跑 `python -m pytest tests/unit -q`；没有 pytest 时自己装
+  `requirements-dev.txt` 里那个 pin（和 `tools/ci-shellcheck.sh` 装 shellcheck 轮子同一个做法），
+  装不上就报 `· skipped`，不假装通过。于是检查器与那份真实报告的用例**现在就在 CI 里跑**，
+  不必等 `ci.yml` 的权限。
 · **背景与偏差**：老师看过这个仓库后给的是「断言分类 + 结构化报告 + 薄封装 + 渐进迁移」的路子。按仓库实际做的
   三处偏差（类别按层默认而不是逐条分类、断言函数留在 shell 而不是改写成 Python、放行清单从正则升级为被审阅的
   表）连同理由都写在 `docs/test-layers.md`。

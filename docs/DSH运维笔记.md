@@ -24,9 +24,11 @@
   run 37116458125）打印同样的形状 —— `device 8/7/11` 正好是历史上被 `OFF_PHONE` 放行的那 7 条，
   一条不多一条不少。
 
-下一步：`ci.yml` 的三处改动还在本地等 token 的 `workflow` 权限（`unit` job 跑 pytest、mypy 覆盖
-  `tests/report_check.py` 与 `tests/unit`、selftest 的 run summary 加分类统计）；手机端 `dsh-kit-update`
-  之后跑自检会多一行 `Assertions:` 并留下 `~/.smoke/selftest.json`。
+下一步：`ci.yml` 的两处改动还在本地等 token 的 `workflow` 权限（mypy 覆盖 `tests/report_check.py` 与
+  `tests/unit`、selftest 的 run summary 加分类统计）—— 但 pytest 那条已经绕过去了：`tools/ci-gates.sh`
+  加了第 10 道门禁，`gates` job 现在就在跑 `tests/unit`（缺 pytest 时自己装 `requirements-dev.txt` 里
+  同一个 pin，装不上就报 `· skipped`，不假装通过）。手机端 `dsh-kit-update` 之后跑自检会多一行
+  `Assertions:` 并留下 `~/.smoke/selftest.json`。
 
 2026-10-03 · 【自检】测试分成三类（logic / simulable / device），报告变成 JSON 并由 CI 校验
 
