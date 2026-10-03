@@ -26,6 +26,8 @@
   （本批不改三个产物的内容，不 bump 版本号，见 §六。）
 · **`tools/panel-render-test` 的兜底更稳**：没有 `HOME` 时回退到 `os.homedir()`（Windows 上很常见），
   不再落到相对路径 `./dsh-termux-kit` 而在别的目录报 `ENOENT`。
+· **`tests/selftest.sh` 里读控制台源码的断言也不再写死 `$HOME`**：9 处 `$HOME_DIR/dsh-console/...` 改成
+  `$CONSOLE_DIR`（`${DSH_CONSOLE_DIR:-$HOME_DIR/dsh-console}`），和 `tools/` 同一套规矩。
   以前在仓库副本里跑这些自检，它们会去读一个不存在的 `$HOME/dsh-termux-kit` 然后报错 ——
   实测（在副本里设 `DSH_KIT_REPO`）：`ui-controls check`、`i18n-table check`、`i18n-audit --quiet`、
   `check-task-ids` 四个自检全绿，`panel-render-test` 三遍渲染通过。

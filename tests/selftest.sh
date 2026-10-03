@@ -11,6 +11,8 @@
 #   SKIP          a real run would kill this session (2/4/6) or needs manual recovery (0) → dry-run only, user picks the moment
 HOME_DIR="/data/data/com.termux/files/home"
 KIT="${DSH_KIT_REPO:-$HOME_DIR/dsh-termux-kit}"   # 仓库不一定住在 $HOME（测试副本、别的机器）
+CONSOLE_DIR="${DSH_CONSOLE_DIR:-$HOME_DIR/dsh-console}"   # 真源码也不一定住在 $HOME（和 tools/ 同一套规矩）
+BRIDGE_DIR="${DSH_BRIDGE_DIR:-$HOME_DIR/droid-bridge}"
 T="$HOME_DIR/.shortcuts/tasks"
 L="$HOME_DIR/.local/share/dsh-widgets/common.sh"
 PASS=0; FAIL=0; SKIP=0; REPORT=""
@@ -155,9 +157,9 @@ else rec FAIL "2_shutdown-dsh default" "the default never reached the bridge-sto
 # History: offsets were hard-coded for CJK labels, then "fixed" with "Bridge".length() — which overran in
 # Chinese ("● DSH　● 桥　● adb") and painted the adb DOT with the bridge colour while its label stayed red.
 # Verified by pixel analysis on the device: dot #41B351 (green) next to a red label.
-if grep -q 'setSpan' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" 2>/dev/null; then
-  if grep -qE '"[^"]+"\.length\(\)' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" \
-     && ! grep -q 'names\[k\]\.length()' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java"; then
+if grep -q 'setSpan' "$CONSOLE_DIR/src/io/dsh/console/MainActivity.java" 2>/dev/null; then
+  if grep -qE '"[^"]+"\.length\(\)' "$CONSOLE_DIR/src/io/dsh/console/MainActivity.java" \
+     && ! grep -q 'names\[k\]\.length()' "$CONSOLE_DIR/src/io/dsh/console/MainActivity.java"; then
     rec FAIL "lamp offsets measured" "the lamp spans use a hard-coded label length again → colours desync per language"
   else
     rec PASS "lamp offsets measured" "lamp spans compute offsets from the actual label lengths (language-proof)"
@@ -324,10 +326,10 @@ else
   rec FAIL "revoke password rights (widget)" "helper missing, or widget 9 is not wired to revoke"
 fi
 #    User request 2026-09-26: authorisation must be a **switch**, not a button → the check point moved to that line in MainActivity
-if grep -q 'dsh-auth-pass revoke' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" 2>/dev/null \
-   && grep -q 'dsh-auth-pass status' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" 2>/dev/null \
-   && grep -q 'authSwitch' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" 2>/dev/null \
-   && grep -qE '密码使用权|Password access' "$HOME_DIR/dsh-console/src/io/dsh/console/MainActivity.java" "$HOME_DIR/dsh-console/src/io/dsh/console/L.java" 2>/dev/null; then
+if grep -q 'dsh-auth-pass revoke' "$CONSOLE_DIR/src/io/dsh/console/MainActivity.java" 2>/dev/null \
+   && grep -q 'dsh-auth-pass status' "$CONSOLE_DIR/src/io/dsh/console/MainActivity.java" 2>/dev/null \
+   && grep -q 'authSwitch' "$CONSOLE_DIR/src/io/dsh/console/MainActivity.java" 2>/dev/null \
+   && grep -qE '密码使用权|Password access' "$CONSOLE_DIR/src/io/dsh/console/MainActivity.java" "$CONSOLE_DIR/src/io/dsh/console/L.java" 2>/dev/null; then
   rec PASS "password-rights switch (console)" "a Switch in the maintenance class: on = the AI may use your password to pass verification, off = revoked at once (not just for installs)"
 else
   rec FAIL "password-rights switch (console)" "the console does not make "password rights" a switch (or is not wired to the helper)"
@@ -399,8 +401,8 @@ fi
 
 # (15) Status pushback must not be "cut from the head": the app truncates only task output (tail); status JSON must stay whole (head).
 #    Hit for real: a 6463-byte status payload > the old 4000 cap → the head was cut → the app showed 'status parse failed'.
-if grep -q 'dsh-status-pub --json --brief' "$HOME_DIR/dsh-console/src/io/dsh/console/TermuxRunner.java" 2>/dev/null \
-   && grep -q 'isStatus ? 200000 : 4000' "$HOME_DIR/dsh-console/src/io/dsh/console/TaskResultReceiver.java" 2>/dev/null; then
+if grep -q 'dsh-status-pub --json --brief' "$CONSOLE_DIR/src/io/dsh/console/TermuxRunner.java" 2>/dev/null \
+   && grep -q 'isStatus ? 200000 : 4000' "$CONSOLE_DIR/src/io/dsh/console/TaskResultReceiver.java" 2>/dev/null; then
   BRIEF=$(~/.local/bin/dsh-status-pub --json --brief 2>/dev/null | wc -c | tr -d ' ')
   FULL=$(~/.local/bin/dsh-status-pub --json 2>/dev/null | wc -c | tr -d ' ')
   if [ "${BRIEF:-99999}" -lt 4000 ]; then
