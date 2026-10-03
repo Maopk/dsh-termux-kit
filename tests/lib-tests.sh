@@ -77,6 +77,22 @@ python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$WORK/www" >"$WORK/
 SRV_PID=$!
 CLOSED="$(free_port)"
 
+# Wait until the server is really listening before asking anything about it: a cold
+# python3 takes a moment (a slow CI runner much more than a warm laptop), and the
+# assertions below are about port_open, not about how fast http.server starts.
+# This poll is deliberately independent of the library under test.
+ready=0
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+  if python3 -c 'import socket,sys; s=socket.socket(); s.settimeout(0.5); sys.exit(0 if s.connect_ex(("127.0.0.1", int(sys.argv[1]))) == 0 else 1)' "$PORT" 2>/dev/null; then
+    ready=1
+    break
+  fi
+  sleep 0.2
+done
+if [ "$ready" -ne 1 ]; then
+  printf '   ! the local server never came up on port %s (see %s)\n' "$PORT" "$WORK/srv.log"
+fi
+
 printf '\n▶ token_from_log: read the auth URL back out of a boot log\n'
 printf 'noise\nhttp://127.0.0.1:8080/?token=AbC-123_xyz\nmore noise\n' > "$WORK/boot.log"
 assert_eq "the token URL comes out of the log" 'http://127.0.0.1:8080/?token=AbC-123_xyz' "$(token_from_log "$WORK/boot.log")"
