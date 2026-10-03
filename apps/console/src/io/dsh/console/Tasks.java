@@ -48,6 +48,13 @@ final class Tasks {
         // ── Maintenance ──────────────────────────────────────────────
         new T("11_update-apps", 420),
         new T("3_backup-dsh", 420),
+        // The self-test suite (tests/selftest.sh) checks this phone: widget syntax, every widget's
+        // --dry-run, the readiness regressions, real runs that are safe and reversible, then a
+        // throwaway cold start on port 8099. It takes minutes and does load the phone, so it is a
+        // console-only button and the wait window is generous — that window is only a UI guard, the
+        // suite keeps running in Termux even after the dialog gives up. The kit path follows the same
+        // default as the rest of the suite (DSH_KIT_REPO, else ~/dsh-termux-kit).
+        new T("selftest", "bash \"${DSH_KIT_REPO:-$HOME/dsh-termux-kit}/tests/selftest.sh\"", 900),
         new T("5_cleanup-dsh", 300),
         // Full stop is a one-way door on this ROM; it is dangerous but belongs to Maintenance (user's call).
         new T("bridge_full_stop", TermuxRunner.HOME + "/.local/bin/dsh-bridge off", 60),

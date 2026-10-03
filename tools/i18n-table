@@ -91,7 +91,7 @@ def load_source():
 
 def save_source(tbl):
     os.makedirs(os.path.dirname(SOURCE), exist_ok=True)
-    with open(SOURCE, 'w', encoding='utf-8') as fh:
+    with open(SOURCE, 'w', encoding='utf-8', newline='\n') as fh:
         json.dump(dict(sorted(tbl.items())), fh, ensure_ascii=False, indent=1)
         fh.write('\n')
 
@@ -194,7 +194,7 @@ def gen(check_only=False):
     if new != cur:
         problems.append(BASH_TARGET)
         if not check_only:
-            open(BASH_TARGET, 'w', encoding='utf-8').write(new)
+            open(BASH_TARGET, 'w', encoding='utf-8', newline='\n').write(new)
     total_java = 0
     for path in JAVA_TARGETS:
         # Scan the app's own sources, but NOT Lang.java itself — counting the table's own
@@ -211,7 +211,7 @@ def gen(check_only=False):
         if new != cur:
             problems.append(path)
             if not check_only:
-                open(path, 'w', encoding='utf-8').write(new)
+                open(path, 'w', encoding='utf-8', newline='\n').write(new)
     total_js = 0
     for path in JS_TARGETS:
         present = js_literals(path)
@@ -222,7 +222,7 @@ def gen(check_only=False):
         if new != cur:
             problems.append(path)
             if not check_only:
-                open(path, 'w', encoding='utf-8').write(new)
+                open(path, 'w', encoding='utf-8', newline='\n').write(new)
     if check_only:
         if problems:
             print('❌ out of date:')

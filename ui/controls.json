@@ -10,8 +10,8 @@
   ],
   "appVersions": {
     "bridge": "2.24",
-    "console": "1.21",
-    "panel": "0.10"
+    "console": "1.22",
+    "panel": "0.10.1"
   },
   "cats": [
     {
@@ -406,6 +406,25 @@
       "danger": false,
       "surfaces": [
         "panel",
+        "console"
+      ],
+      "task": true
+    },
+    {
+      "id": "selftest",
+      "kind": "button",
+      "cat": "maintenance",
+      "icon": "🩺",
+      "label": {
+        "en": "Self-check",
+        "zh": "自检"
+      },
+      "hint": {
+        "en": "Runs the whole self-test suite in Termux (70 checks: syntax, dry-runs, regression, real runs, a cold-start sandbox); the last line is the verdict. It takes minutes and loads the phone — pick a quiet moment. Script: ~/dsh-termux-kit/tests/selftest.sh",
+        "zh": "在 Termux 里跑完整自检套件（70 项：语法、预演、回归、真跑、冷启动沙箱），最后一行就是结论。要几分钟且会压负载，挑空闲时跑。脚本路径：~/dsh-termux-kit/tests/selftest.sh"
+      },
+      "danger": false,
+      "surfaces": [
         "console"
       ],
       "task": true

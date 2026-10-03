@@ -553,6 +553,7 @@ declare -A DSH_ZH=(
   ['Running: ']='正在执行：'
   ['Running: X']='正在执行：X'
   ['Runs as a foreground service so system/vendor battery savers cannot freeze it and lose contact.']='以前台服务方式常驻，系统/厂商省电策略无法冻结它、导致失联。'
+  ['Runs the whole self-test suite in Termux (70 checks: syntax, dry-runs, regression, real runs, a cold-start sandbox); the last line is the verdict. It takes minutes and loads the phone — pick a quiet moment. Script: ~/dsh-termux-kit/tests/selftest.sh']='在 Termux 里跑完整自检套件（70 项：语法、预演、回归、真跑、冷启动沙箱），最后一行就是结论。要几分钟且会压负载，挑空闲时跑。脚本路径：~/dsh-termux-kit/tests/selftest.sh'
   ['Saved %s']='已保存 %s'
   ['Security']='安全'
   ['Self-check']='自检'

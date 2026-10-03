@@ -96,8 +96,10 @@ def main():
     # Legitimate exceptions, each with its reason. A check that cries wolf gets ignored, so
     # anything intentionally outside the allowlist is named here rather than tolerated silently.
     #   'open'      the Console's "Open Web UI" carries its own command and never calls tasksd
+    #   'selftest'  the Console's "Self-check" button runs tests/selftest.sh directly (a repo path,
+    #               not a widget shortcut), so there is nothing for tasksd's allowlist to route
     #   virtual ids bridge_wake / bridge_status have no script by design (tasksd runs the tool)
-    NOT_ROUTED = {'console app (apps/console Tasks.java)': {'open'}}
+    NOT_ROUTED = {'console app (apps/console Tasks.java)': {'open', 'selftest'}}
     NO_SCRIPT = {'widgets     (widgets/*.sh)': virtual}
     # Deliberately not a button in that surface:
     DELIBERATE_GAP = {'console app (apps/console Tasks.java)': {

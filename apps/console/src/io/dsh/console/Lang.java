@@ -166,7 +166,9 @@ final class Lang {
         ZH.put("Run", "执行");
         ZH.put("Run ", "运行 ");
         ZH.put("Running: ", "正在执行：");
+        ZH.put("Runs the whole self-test suite in Termux (70 checks: syntax, dry-runs, regression, real runs, a cold-start sandbox); the last line is the verdict. It takes minutes and loads the phone — pick a quiet moment. Script: ~/dsh-termux-kit/tests/selftest.sh", "在 Termux 里跑完整自检套件（70 项：语法、预演、回归、真跑、冷启动沙箱），最后一行就是结论。要几分钟且会压负载，挑空闲时跑。脚本路径：~/dsh-termux-kit/tests/selftest.sh");
         ZH.put("Security", "安全");
+        ZH.put("Self-check", "自检");
         ZH.put("Sends one token-carrying broadcast. Never takes your screen. Can take 20-40s if the process was reclaimed.", "发一条带 token 的广播把它唤回，绝不抢你的屏幕。进程被回收时要 20-40 秒。");
         ZH.put("Sent: ", "已发送：");
         ZH.put("Sent: Wake bridge", "已发送：唤醒桥");

@@ -12,7 +12,7 @@ import java.util.List;
  * still works; the Chinese side lives in i18n/zh.json, the kit's single translation source.
  */
 final class UiControls {
-    static final String VERSION = "1.21";
+    static final String VERSION = "1.22";
 
     static final class C {
         final String id, kind, cat, group, icon, labelEn, hintEn;
@@ -49,6 +49,7 @@ final class UiControls {
         new C("10_net-fix", "button", "maintenance", "", "🩺", "Network first aid", "When foreign sites die: decides whether the Clash core stopped or the config went bad, then repairs.", false, false),
         new C("11_update-apps", "button", "maintenance", "", "⬆", "Update the two apps", "Downloads the two APKs from GitHub Releases, verifies SHA256, then installs them.", false, false),
         new C("3_backup-dsh", "button", "maintenance", "", "💾", "Backup", "Packs DSH state and verifies the archive; the result goes to Download/dsh/.", false, false),
+        new C("selftest", "button", "maintenance", "", "🩺", "Self-check", "Runs the whole self-test suite in Termux (70 checks: syntax, dry-runs, regression, real runs, a cold-start sandbox); the last line is the verdict. It takes minutes and loads the phone — pick a quiet moment. Script: ~/dsh-termux-kit/tests/selftest.sh", false, false),
         new C("5_cleanup-dsh", "button", "maintenance", "", "🧹", "Cleanup", "Deletes only this kit's own artifacts. Your files are not touched.", false, false),
         new C("lang", "switch", "settings", "", "🌐", "Language", "System / Chinese / English. The widgets and the page panel follow this too.", false, false),
         new C("project-page", "button", "settings", "", "🔗", "Project page", "Opens github.com/Maopk/dsh-termux-kit - source, releases and docs.", false, false),

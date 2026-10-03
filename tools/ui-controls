@@ -219,7 +219,10 @@ def merge_zh(data, apply):
             zh[en] = z
             changed += 1
     if apply and (added or changed):
-        with io.open(ZH, 'w', encoding='utf-8') as f:
+        # newline='\n': the repo is LF-only. Without it Python translates '\n' to the host's
+        # line ending, so generating on Windows would rewrite every line of the file (CRLF)
+        # and produce a whole-file diff that has nothing to do with the change.
+        with io.open(ZH, 'w', encoding='utf-8', newline='\n') as f:
             f.write(json.dumps(zh, ensure_ascii=False, indent=2) + '\n')
         subprocess.run(['python3', os.path.join(ROOT, 'tools', 'i18n-table'), 'gen'],
                        capture_output=True, text=True, cwd=ROOT)
@@ -395,7 +398,8 @@ def main():
     if cmd == 'gen':
         for path, content, label in items:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with io.open(path, 'w', encoding='utf-8') as f:
+            # newline='\n' — see merge_zh(): generated files stay LF whatever host wrote them.
+            with io.open(path, 'w', encoding='utf-8', newline='\n') as f:
                 f.write(content)
             print('   ✔ %-26s md5 %s' % (label, md5(content[:0] + content)[:12]))
         added, changed = merge_zh(data, True)

@@ -5,7 +5,23 @@
 
 ## [Unreleased]
 
+（暂无。）
+
+## [v1.13] - 2026-10-03
+
+控制台 **1.22** · 桥 **2.24** · 页面面板 **0.10.1** —— 三个产物都在发行版页面，并附 `SHA256SUMS.txt`。
+
 ### 新增
+
+· **控制台多了「自检」按钮**（🩺，维护区，只出现在控制台）：一键在 Termux 里跑完整的 `tests/selftest.sh`
+  —— 70 项（语法、每个组件的 `--dry-run`、就绪回归、安全可逆的真跑、8099 端口上的一次性冷启动），
+  `════ Result: … ════` 那行会直接落在控制台的历史里（结果回传保留尾部 4000 字符，这行正好在尾部）。
+  为什么放控制台而不是桌面组件：它要跑几分钟、会压手机负载，放桌面一次误触代价太大；
+  按钮**不带危险标记**——那套红框确认是给重启/停机的口径，而套件自己会把会话杀手类检查标成 SKIP。
+  命令按套件的口径解析仓库位置（`DSH_KIT_REPO`，不设时用 `~/dsh-termux-kit`）；
+  `tools/check-task-ids` 的例外表新增一条，写明它为什么不经过 tasksd 的白名单。
+
+### 新增（CI）
 
 · **CI（`.github/workflows/ci.yml`）**：5 个 job 跑这个仓库自己能证的离线部分 ——
   `bash -n` 全量 + shellcheck（`tools/ci-shellcheck.sh`）、`ruff` + 逐文件 `mypy` + 编译检查、
@@ -30,6 +46,11 @@
 
 ### 修复
 
+· **三个生成器不再写出 CRLF**（`tools/ui-controls`、`tools/i18n-table`、`tools/i18n-build-table`）：写入时显式
+  `newline='\n'`。不写这一条时 Python 会把 `\n` 翻译成宿主平台的行尾 —— 在 Windows 上重生成 `i18n/zh.json`、
+  两份 `Lang.java`、`widgets/i18n.sh`、面板 `client.js` 和几个主题/控件文件，会把**每一行**都改掉（整文件 diff），
+  而仓库是 LF-only。`widgets/i18n.sh` 尤其危险：CRLF 的 bash 库会让每条文案带一个尾随 `\r`。
+  CI 在 Linux 上跑不出这个问题（那边本来就写 LF），所以是"只有在一台 Windows 机器上重生成才会踩到"的坑。
 · **两个 App 的构建脚本不再写死路径**（`apps/console/build.sh` / `apps/bridge/build.sh`）：改为从脚本自身所在目录
   取 `SRC`、从 `$SRC/../..` 取仓库根目录，仓库 clone 到任意位置都能编译；`android.jar` 可用 `DSH_AJ` 覆盖
   （默认仍是 `$HOME/.smoke/android.jar`），缺它时先打印它是什么、从哪取、怎么指过来，而不是编到一半报一句

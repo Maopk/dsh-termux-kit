@@ -1,6 +1,6 @@
 {
   "name": "dsh-mobile-local",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "private": true,
   "type": "module",
   "description": "Mobile UI enhancements: touch hit areas / bottom safe area + task shortcut buttons (wired to the dsh-tasksd allowlist runner)",
