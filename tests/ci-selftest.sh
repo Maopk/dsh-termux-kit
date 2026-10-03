@@ -12,14 +12,16 @@
 #   widgets/common.sh     →  $HOME/.local/share/dsh-widgets/   (plus i18n.sh and this suite)
 #   tools/*               →  $HOME/.local/bin/
 #
-# A few checks cannot pass without the phone: adb, the DSH bridge service, an installed
-# DSH page plugin, or the Termux interpreter path that the scripts' shebangs point at
-# (executing a tool directly off-phone is "bad interpreter", not a code defect). Those
-# are listed in OFF_PHONE below: they are reported, but they do not fail the run. Any
-# OTHER failure does - that is the whole point of running this in CI.
+# The verdict is not a grep over the log. The suite writes ~/.smoke/selftest.json, where every
+# assertion carries a category and an "off-phone allowed" flag taken from tests/lib/categories.tsv
+# (a reviewed file in the repo); tests/report_check.py reads that report and decides:
+#   · a logic or simulable failure is a regression — red, always;
+#   · a device failure with no reviewed allow-row is unexpected — red;
+#   · a device failure the table allows is recorded here, and still has to be checked on the phone.
+# The categories are the contract; see docs/test-layers.md.
 #
 # Usage:
-#   bash tests/ci-selftest.sh                 # record the run; fail only on unexpected failures
+#   bash tests/ci-selftest.sh                 # record the run; fail when the policy check fails
 #   bash tests/ci-selftest.sh --strict        # exit with the suite's own code (no failed check at all)
 #   bash tests/ci-selftest.sh /path/out.txt   # also choose where the report goes
 set -u
@@ -41,6 +43,7 @@ T="$H/.shortcuts/tasks"
 LIBDIR="$H/.local/share/dsh-widgets"
 BINDIR="$H/.local/bin"
 LOG="$WORK/selftest.log"
+JSON="$H/.smoke/selftest.json"
 [ -n "$REPORT" ] || REPORT="$WORK/ci-selftest-report.txt"
 
 mkdir -p "$T" "$LIBDIR" "$BINDIR" "$H/.smoke" "$H/storage/shared/Download" "$WORK/tmp"
@@ -50,9 +53,6 @@ cp "$ROOT/tests/selftest.sh" "$LIBDIR/"            # L1 checks the installed cop
 for f in "$ROOT"/tools/*; do
   [ -f "$f" ] && cp "$f" "$BINDIR/" && chmod +x "$BINDIR/$(basename "$f")"
 done
-
-# Checks that need the phone itself (or its Termux interpreter path). Everything else must pass.
-OFF_PHONE='installed tools match the repo|dsh-close-window|task plugin \(page\) matches|runtime bundle symlinks|revoke password rights|1_start-dsh\.sh *cold start|sandbox URL usable|real run failed|3_backup-dsh\.sh *dry-run|8_enable-wireless-adb\.sh *dry-run|11_update-apps\.sh *dry-run'
 
 TMPDIR="$WORK/tmp" \
 DSH_HOME_DIR="$H" \
@@ -67,25 +67,24 @@ PYTHONUTF8=1 PYTHONIOENCODING=utf-8 \
 RC=$?
 
 SUMMARY="$(grep -E 'Result: [0-9]+ passed' "$LOG" | tail -1)"
-FAILED="$(grep -E '^  ✘' "$LOG" || true)"
-N_FAILED=$(printf '%s' "$FAILED" | grep -c '✘' || true)
-N_OFF=$(printf '%s\n' "$FAILED" | grep -cE "$OFF_PHONE" || true)
-UNEXPECTED="$(printf '%s\n' "$FAILED" | grep -vE "$OFF_PHONE" | grep '✘' || true)"
-N_UNEXPECTED=$(printf '%s' "$UNEXPECTED" | grep -c '✘' || true)
 
 {
   printf 'kit:     %s\nhome:    %s\nlog:     %s\n' "$ROOT" "$H" "$LOG"
   printf 'widgets: %s installed, tools: %s installed\n\n' "$(ls "$T" | wc -l)" "$(ls "$BINDIR" | wc -l)"
   printf '%s\n\n' "${SUMMARY:-（没有拿到 Result 汇总行 —— 套件自己中途断了）}"
-  printf 'selftest.sh exit: %s\n' "$RC"
-  printf 'failed: %s (needs the phone: %s · unexpected: %s)\n\n' "$N_FAILED" "$N_OFF" "$N_UNEXPECTED"
-  printf -- '--- 需要真机的失败（记录，不算红）---\n%s\n\n' "$(printf '%s\n' "$FAILED" | grep -E "$OFF_PHONE" || true)"
-  printf -- '--- 预期之外的失败（这些会让 CI 变红）---\n%s\n' "${UNEXPECTED:-（无）}"
+  printf 'selftest.sh exit: %s\n\n' "$RC"
 } | tee "$REPORT"
 
-if [ -f "$H/.smoke/selftest-report.txt" ]; then
-  printf '\nreport:  %s\n' "$H/.smoke/selftest-report.txt"
+# The policy check owns the exit code. --verbose lists the device failures it recorded, so the
+# log still says what the phone has to answer instead of hiding it behind a green build.
+POLICY=2
+if [ -f "$JSON" ]; then
+  python3 "$ROOT/tests/report_check.py" --verbose "$JSON" 2>&1 | tee -a "$REPORT"
+  POLICY=${PIPESTATUS[0]}
+else
+  printf '✘ no report at %s — the suite did not reach the end of its run\n' "$JSON" | tee -a "$REPORT"
 fi
+printf '\nreport:  %s\njson:    %s\n' "$REPORT" "$JSON"
 
 if [ -z "$SUMMARY" ]; then
   exit 1          # the suite did not reach its summary: that is a real break
@@ -93,5 +92,4 @@ fi
 if [ "$STRICT" = 1 ]; then
   exit "$RC"
 fi
-[ "$N_UNEXPECTED" = 0 ] || exit 1
-exit 0
+exit "$POLICY"

@@ -14,10 +14,43 @@ KIT="${DSH_KIT_REPO:-$HOME_DIR/dsh-termux-kit}"   # 仓库不一定住在 $HOME�
 CONSOLE_DIR="${DSH_CONSOLE_DIR:-$HOME_DIR/dsh-console}"   # 真源码也不一定住在 $HOME（和 tools/ 同一套规矩；本套件只读控制台源码，桥目录变量是给 tools/ 的）
 T="$HOME_DIR/.shortcuts/tasks"
 L="$HOME_DIR/.local/share/dsh-widgets/common.sh"
-PASS=0; FAIL=0; SKIP=0; REPORT=""
+PASS=0; FAIL=0; SKIP=0; REPORT=""; REPORT_ROWS=""
 TMPLOG="$HOME_DIR/.smoke/selftest.log"
 TMPD="$HOME_DIR/.smoke/selftest-tmp"; rm -rf "$TMPD"; mkdir -p "$TMPD"
 SAVED=0   # cleanup may restore only after this run really saved the log/URL
+
+# ── options ──
+# --json [path] picks where the machine-readable report goes (default ~/.smoke/selftest.json). The
+# JSON is written on every run: a device runner or CI can then read the categories without parsing
+# the human output.
+JSON_OUT="$HOME_DIR/.smoke/selftest.json"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --json)   shift; [ -n "${1:-}" ] && JSON_OUT="$1" ;;
+    --json=*) JSON_OUT="${1#--json=}" ;;
+    *) printf 'selftest: unknown option %s (usage: selftest.sh [--json [path]])\n' "$1"; exit 2 ;;
+  esac
+  shift
+done
+
+# ── the report's decision half ──
+# Which layer can answer an assertion, and how the report is serialised, live in tests/lib/report.sh,
+# where tests/lib-tests.sh unit-tests them in CI. This suite only fills the rows in.
+REPORT_LIB=""
+for _d in "$KIT/tests/lib" "$HOME_DIR/.local/share/dsh-widgets/lib"; do
+  if [ -f "$_d/report.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$_d/report.sh"
+    REPORT_LIB="$_d"
+    break
+  fi
+done
+if [ -z "$REPORT_LIB" ]; then
+  printf '  ⏸ tests/lib/report.sh is missing (looked in %s/tests/lib and %s/.local/share/dsh-widgets/lib)\n' "$KIT" "$HOME_DIR"
+  printf '     Update the checkout (dsh-kit-update) or install the suite with tools/install-widgets.\n'
+  exit 4
+fi
+REPORT_STARTED="$(date '+%FT%T%z')"
 
 # ── One self-check at a time ──
 # Two overlapping runs fight over the same backup, the same 8099 sandbox and the same bridge, and the reds
@@ -91,6 +124,9 @@ rec()  { # $1=status $2=widget $3=description
     SKIP) SKIP=$((SKIP+1)); printf '  ○ %-24s %s\n' "$2" "$3" ;;
   esac
   REPORT="${REPORT}${1}|${2}|${3}\n"
+  # The machine-readable twin: one tab-separated row per assertion, category looked up from the
+  # current tier and the reviewed table by tests/lib/report.sh.
+  REPORT_ROWS="${REPORT_ROWS}$(report_item "$1" "$2" "" "$3")"$'\n'
 }
 
 dryrun_ok() { # $1=script
@@ -105,7 +141,7 @@ dryrun_ok() { # $1=script
 line "════ Widget selftest $(date '+%F %T') ════"
 
 # ── L0: preconditions ──
-line "[L0] Preconditions"
+line "[L0] Preconditions"; report_level L0
 BRIDGE_OK=0; ADB_OK=0; WEB_OK=0
 (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null && BRIDGE_OK=1
 if [ "$BRIDGE_OK" = 0 ]; then
@@ -131,7 +167,7 @@ fi
 [ "$WEB_OK" = 1 ] && rec PASS "precheck: 8080" "this session is running" || rec SKIP "precheck: 8080" "no session is running right now"
 
 # ── L1: syntax ──
-line "[L1] Syntax check"
+line "[L1] Syntax check"; report_level L1
 for f in "$T"/*.sh "$L" "$HOME_DIR/.local/share/dsh-widgets/selftest.sh"; do
   n=$(basename "$f")
   if bash -n "$f" 2>/dev/null; then rec PASS "$n" "syntax OK"; else rec FAIL "$n" "syntax error"; fi
@@ -162,7 +198,7 @@ else
 fi
 
 # ── L2: --dry-run ──
-line "[L2] --dry-run full-flow rehearsal"
+line "[L2] --dry-run full-flow rehearsal"; report_level L2
 for f in "$T"/*.sh; do
   n=$(basename "$f")
   if dryrun_ok "$f"; then rec PASS "$n" "dry-run completed and exited 0"; else rec FAIL "$n" "dry-run failed (see $TMPLOG)"; fi
@@ -191,7 +227,7 @@ else
 fi
 
 # ── L3: regression tests for the readiness check / boot lock (the core of the 404 fix) ──
-line "[L3] Readiness check and boot lock (regression tests)"
+line "[L3] Readiness check and boot lock (regression tests)"; report_level L3
 # The common library is already loaded (DRY=0); assertions run in a separate subshell
 
 # (1) A stale token must be rejected: exactly what caused the 'error page on open' in the screenshot
@@ -437,7 +473,7 @@ else
 fi
 
 # ── L4: real runs ──
-line "[L4] Real runs (safe and reversible)"
+line "[L4] Real runs (safe and reversible)"; report_level L4
 
 # Revoke install-password authorisation: **sandbox paths only**; the real authorisation file is never touched (and is re-checked afterwards)
 if [ -f "$HOME_DIR/.dsh-auth-pass" ]; then HAD_REAL_PASS=1; else HAD_REAL_PASS=0; fi
@@ -631,7 +667,7 @@ else
 fi
 
 # ── L5: widget 1 cold-start sandbox + half-start evidence ──
-line "[L5] Widget 1 cold start (8099 sandbox) + 'port opens first, routes mount later' evidence"
+line "[L5] Widget 1 cold start (8099 sandbox) + 'port opens first, routes mount later' evidence"; report_level L5
 cp -f "$HOME_DIR/.dsh-restart.log" "$HOME_DIR/.smoke/restart.log.save" 2>/dev/null
 cp -f "$HOME_DIR/.dsh-url" "$HOME_DIR/.smoke/dsh-url.save" 2>/dev/null   # the sandbox overwrites it, so it must be restored
 SAVED=1   # from here on, cleanup (including when interrupted) may restore these two files
@@ -694,7 +730,7 @@ P8099=$( (exec 3<>/dev/tcp/127.0.0.1/8099) 2>/dev/null && echo open || echo clos
 line "     sandbox cleanup: 8099 = $P8099 (should be closed); boot log and .dsh-url restored"
 
 # ── SKIP ──
-line "[SKIP] A real run would kill this session or needs manual recovery"
+line "[SKIP] A real run would kill this session or needs manual recovery"; report_level SKIP
 rec SKIP "0_emergency-stop.sh" "a real run revokes the token + disables accessibility + drops adb and needs manual recovery; indirectly verified by the volume-key drill"
 rec SKIP "2_shutdown-dsh.sh" "a real run stops this session; every step has been run for real on its own (backup/rotation/port wait/bridge stop), and window closing was run for real via dsh-close-window"
 rec SKIP "4_soft-restart-dsh.sh" "a real run restarts the service and drops this session"
@@ -703,6 +739,24 @@ rec SKIP "6_hard-restart-dsh.sh" "same as above; this is the only way to verify 
 line ""
 line "════ Result: $PASS passed / $FAIL failed / $SKIP skipped ════"
 [ "$FAIL" = 0 ] && line "Verdict: every testable item passed ✅" || line "Verdict: $FAIL item(s) failed, needs fixing ❌"
+# Which layer could answer each assertion. This is not a verdict: a device check that only this
+# phone can answer is expected to be red in a container and green here.
+printf '%s' "$REPORT_ROWS" | awk -F'\t' '
+  { cat=$4
+    if (cat != "logic" && cat != "simulable" && cat != "device") { un++; next }
+    n[cat]++ }
+  END { printf "Assertions: logic %d · simulable %d · device %d", n["logic"]+0, n["simulable"]+0, n["device"]+0
+        if (un) printf " · unclassified %d ⚠", un
+        print "" }'
+UNCLASSIFIED="$(report_unclassified "$REPORT_ROWS")"
+if [ -n "$UNCLASSIFIED" ]; then
+  line "⚠ unclassified assertions (give each one a row in tests/lib/categories.tsv): $(printf '%s' "$UNCLASSIFIED" | tr '\n' ' ')"
+fi
 printf '%b' "$REPORT" > "$HOME_DIR/.smoke/selftest-report.txt"
+mkdir -p "$(dirname "$JSON_OUT")" 2>/dev/null
+if ! report_json "$REPORT_ROWS" "$REPORT_STARTED" "$(date '+%FT%T%z')" > "$JSON_OUT" 2>/dev/null; then
+  line "⚠ could not write the JSON report to $JSON_OUT"
+fi
+line "Report: $HOME_DIR/.smoke/selftest-report.txt · JSON: $JSON_OUT"
 rm -rf "$TMPD"
 exit "$FAIL"

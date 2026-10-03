@@ -5,6 +5,27 @@
 
 ## [Unreleased]
 
+### 变更
+
+· **测试分成三类，类别落在仓库里、由 CI 校验**（新增 `tests/lib/categories.tsv`、`tests/lib/report.sh`、
+  `tests/report_check.py`、`tests/unit/`、`docs/test-layers.md`）：自检的每一项现在都带 `logic`（任何机器都能回答）/
+  `simulable`（本机 + 临时 HOME 就能模拟）/ `device`（只有手机能回答）三类之一。logic 与 simulable 的失败在 CI 里
+  **必须为 0**；device 的失败要有一条**被审阅过的放行行**才不算红，否则算 unexpected。判定不再靠
+  `tests/ci-selftest.sh` 里那条按消息匹配的 `OFF_PHONE` 正则（它会顺带吞掉同一类的**别的**失败），而是
+  `tests/lib/categories.tsv` 里一条条 id + 类别 + 理由 —— 改判断要过 review，放行的失败仍会在日志里逐条列出。
+· **每次自检都留下一份机器可读报告**：`$HOME_DIR/.smoke/selftest.json`（schema `dsh-selftest/1`，`--json [路径]`
+  可改），每项含 `status/tier/id/category/ci_allowed/detail`，`summary` 按类别×状态计数并给出 `total`、
+  `unexpected_failures`、`unclassified`；报告自称的数字与逐项重算不一致时，检查器按"报告不可用"处理（退出码 2）。
+  控制台「自检」按钮跑的就是带 `--json` 的那条命令 —— 手机上的一次运行可以原样交给
+  `python3 tests/report_check.py <json> [--verbose]` 复核（`--verbose` 会把"这台机器答不了"的失败逐条列出来）。
+· **CI 侧**：`unit` job 增加 pytest（`tests/unit` 12 个用例，验的是报告策略本身：哪类失败算回归、哪些放行、
+  自相矛盾的报告要被拒），mypy 也覆盖 `tests/report_check.py`；容器 selftest 的退出码改由 `tests/report_check.py`
+  决定，run summary 里多一段策略结论；`tests/lib-tests.sh` 增加 20 条断言（层默认、表的覆盖、JSON 转义与结构、
+  键不陈旧）。
+· **背景与偏差**：老师看过这个仓库后给的是「断言分类 + 结构化报告 + 薄封装 + 渐进迁移」的路子。按仓库实际做的
+  三处偏差（类别按层默认而不是逐条分类、断言函数留在 shell 而不是改写成 Python、放行清单从正则升级为被审阅的
+  表）连同理由都写在 `docs/test-layers.md`。
+
 ### 修复
 
 · **自检不再把"DSH Web 没在跑"判成失败**（`tests/selftest.sh` 的 L4 段）：`7_reconnect-ai.sh` 那一项原来要求输出里出现

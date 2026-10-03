@@ -6,3 +6,6 @@
 shellcheck-py==0.11.0.1
 ruff==0.16.10
 mypy==2.4.0
+# Runs tests/unit: the report policy in tests/report_check.py. The suite that has to answer on
+# the phone stays shell (see docs/test-layers.md); this is the half CI can judge by itself.
+pytest==9.1.1

@@ -177,6 +177,72 @@ parse_args --dry-run >/dev/null 2>&1
 assert_eq "parse_args turns --dry-run into DRY=1" '1' "$DRY"
 DRY=0
 
+printf '\n▶ report.sh: which layer can answer an assertion, and the JSON document\n'
+# shellcheck source=/dev/null
+. "$ROOT/tests/lib/report.sh"
+
+assert_eq "L1 syntax is logic"          'logic'     "$(report_category L1 '1_start-dsh.sh')"
+assert_eq "L2 rehearsal is simulable"   'simulable' "$(report_category L2 '1_start-dsh.sh')"
+assert_eq "L0 prechecks need the phone" 'device'    "$(report_category L0 'precheck: adb channel')"
+assert_eq "L5 cold start needs the phone" 'device'  "$(report_category L5 '1_start-dsh.sh cold start')"
+assert_eq "a tier nobody knows has no category" ''  "$(report_category L9 'anything')"
+assert_eq "a table row beats the tier default" 'device' "$(report_category L1 'installed tools match the repo')"
+assert_eq "a rehearsal stays simulable (L2)" 'simulable' "$(report_category L2 '5_cleanup-dsh.sh')"
+assert_eq "the same id needs the phone when run for real (L4)" 'device' "$(report_category L4 '5_cleanup-dsh.sh')"
+assert_eq "an L4 real run is allowed to fail off-phone" '1' "$(report_ci_allowed L4 '3_backup-dsh.sh')"
+assert_eq "a plain syntax check is never allowed to fail" '0' "$(report_ci_allowed L1 '1_start-dsh.sh')"
+assert_eq "escaping keeps the JSON honest" 'a\"b\\c' "$(report_escape 'a"b\c')"
+assert_eq "a multi-line detail collapses to one line" 'a b c' "$(report_flatten "$(printf 'a\tb\nc')")"
+
+assert_eq "every categories.tsv row has four fields" '0' \
+  "$(awk -F'\t' '!/^#/ && NF && NF != 4 { bad++ } END { print bad + 0 }' "$ROOT/tests/lib/categories.tsv")"
+# A row for an assertion that no longer exists would silently stop protecting anything. The L1/L2
+# widget checks are named after the file they run, so their id never appears as a literal.
+assert_eq "no categories.tsv key is stale" '0' \
+  "$(awk -F'\t' '!/^#/ && NF == 4 { print $1 }' "$ROOT/tests/lib/categories.tsv" \
+     | sed 's/^[A-Z0-9]*://' \
+     | while IFS= read -r k; do
+         grep -qF "\"$k\"" "$ROOT/tests/selftest.sh" && continue
+         [ -f "$ROOT/widgets/$k" ] && continue
+         printf '%s\n' "$k"
+       done \
+     | wc -l | tr -d '[:space:]')"
+
+# A six-row fixture that exercises every decision the summary makes: a logic pass and fail, a
+# quoted/backslashed detail, a device failure the table allows, a device skip, and an assertion
+# nobody classified. "$(...)" eats a trailing newline, so each row is appended with its own.
+ROWS=""
+row() { ROWS="${ROWS}$(report_item "$@")"$'\n'; }
+
+report_level L3
+row PASS 'a logic pass' '' 'ok'
+row FAIL 'a logic fail' '' 'boom'
+report_level L1
+row PASS 'a quoted detail' '' 'he said "hi" and C:\path'
+report_level L4
+row FAIL '7_reconnect-ai.sh' '' 'real run failed'
+row SKIP 'v1.8 wake recovery' '' 'the bridge is not running'
+report_level L9
+row FAIL 'mystery assertion' '' 'nobody classified me'
+report_level
+
+assert_eq "a row has six tab-separated fields" '6' \
+  "$(printf '%s' "$(report_item PASS 'x' '' 'd')" | awk -F'\t' '{ print NF }')"
+assert_eq "the unclassified assertion is named" 'L9	mystery assertion' "$(report_unclassified "$ROWS")"
+
+printf '%s' "$(report_summary "$ROWS")" > "$WORK/summary.json"
+assert_eq "the summary tallies logic" '2/1/0' \
+  "$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1]))["logic"]; print("%d/%d/%d" % (s["pass"], s["fail"], s["skip"]))' "$WORK/summary.json")"
+# The allowed device failure must not count, the unclassified one must not hide in it either.
+assert_eq "unexpected failures and unclassified rows" '1/1' \
+  "$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print("%d/%d" % (s["unexpected_failures"], s["unclassified"]))' "$WORK/summary.json")"
+
+printf '%s' "$(report_json "$ROWS" '2026-10-03T00:00:00Z' '2026-10-03T00:00:05Z')" > "$WORK/report.json"
+assert_eq "the document parses and carries every item" '6 dsh-selftest/1' \
+  "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("%d %s" % (len(d["items"]), d["schema"]))' "$WORK/report.json")"
+assert_eq "quotes and backslashes survive the round trip" 'he said "hi" and C:\path' \
+  "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([i["detail"] for i in d["items"] if i["id"] == "a quoted detail"][0])' "$WORK/report.json")"
+
 printf '\n════ Result: %s passed / %s failed / %s skipped ════\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" = 0 ] || exit 1
 printf '✔ widgets/common.sh behaves (no phone involved)\n'

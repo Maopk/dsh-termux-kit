@@ -7,6 +7,28 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-10-03 · 【自检】测试分成三类（logic / simulable / device），报告变成 JSON 并由 CI 校验
+
+做了什么：把自检从"一个会红的列表 + 一条按消息匹配的正则"改成可被机器判定的三层。①新增 `tests/lib/report.sh`
+  （纯函数：层级→类别默认、查表覆盖、JSON 转义、`report_item`/`report_summary`/`report_json`）与
+  `tests/lib/categories.tsv`（24 行例外：id + 类别 + 是否放行 + 理由）；②`tests/selftest.sh` 的 `rec()` 现在同时
+  攒一份制表符报告，跑完写 `~/.smoke/selftest.json`（schema `dsh-selftest/1`，`--json [路径]` 可改），并打印
+  `Assertions: logic … · simulable … · device …`；③新增 `tests/report_check.py` 读这份报告下判定（logic/simulable
+  失败 = 红；device 里没有放行行的失败 = unexpected；报告自相矛盾 = 不可用，退出码 2），配 `tests/unit/` 12 个
+  pytest 用例；④`tests/ci-selftest.sh` 的退出码交给它，原来那条 `OFF_PHONE` 正则删掉；⑤CI：`unit` job 加 pytest、
+  mypy 覆盖 `tests/report_check.py`、容器 job 的 run summary 多一段策略结论；⑥`docs/test-layers.md` 写清分类规则、
+  报告 schema 与三处与老师方案的偏差。
+为什么：老师给的是一套通用方案（断言分类 + 结构化报告 + 薄封装 + 渐进迁移）。这个仓库的实际情况有三处不同 ——
+  断言要在 Termux 上跑，Python 不是手机的前提；同一个 id 会跨层重名（`3_backup-dsh.sh` 在 L2 与 L4 各一条）；
+  device 的"预期缺席"原本藏在一条正则里，而它按**消息**匹配，会顺带吞掉同一类的别的失败。所以做成了
+  「类别按层默认 + 例外进表 + 放行必须写理由」。
+结果：`bash tests/lib-tests.sh` = 55 passed / 0 failed / 0 skipped（新增 20 条）；`pytest tests/unit -q` = 12 passed；
+  `mypy` 三个文件无问题；`ruff check --no-cache tools tests` 通过；`tools/ci-shellcheck.sh` = 55 files, 0 findings；
+  `tools/ci-gates.sh` = 9 passed / 0 failed；端到端跑一次 `tests/ci-selftest.sh`（Windows + 假 HOME）得到
+  `47 passed / 11 failed / 12 skipped`，`report_check.py` 判 **rc=0** —— 11 条 device 失败全部在表中放行，
+  `unexpected 0 · unclassified 0`。
+下一步：手机更新后跑一次自检，确认 `~/.smoke/selftest.json` 里 logic/simulable 全绿；这批推上 master 后盯 CI。
+
 2026-10-03 · 【自检】88/0/9 全绿，并加了一道"同时在跑就不再起第二个"的锁
 
 做了什么：先确认第三跑那两条红的修法真的生效 —— 手机最后一跑 `════ 88 passed / 0 failed / 9 skipped ════`、

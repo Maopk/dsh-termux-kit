@@ -1,0 +1,40 @@
+# Where each self-check assertion can be answered — the reviewed exception table.
+#
+# The *tier* a check lives in already decides its category (see tests/lib/report.sh):
+#     L1 syntax     → logic        L2 rehearsal → simulable
+#     L3 verdicts   → logic        L0 / L4 / L5 / trailing SKIP → device
+# This file only names the ones that differ, so it stays short enough to review, and
+# tests/lib/report.sh treats an unknown tier as "unclassified" — which fails CI, so a
+# new assertion cannot quietly escape classification.
+#
+# Format: <key>\t<category>\t<ci>\t<why>
+#   key      an assertion id, or "<tier>:<id>" when the same id appears in two tiers
+#   category logic | simulable | device
+#   ci       "allow" = a container run is allowed to fail this (it needs the phone)
+#            "-"     = failing it in CI is a real regression
+#
+# Keep this list honest: "allow" means "this machine cannot answer that question",
+# never "this check is allowed to be broken".
+installed tools match the repo	device	allow	L1 lists the *installed* copies; a throw-away CI home cannot judge that
+L2:3_backup-dsh.sh	device	allow	the rehearsal reaches for the device's storage (tar, du, Download/dsh)
+L2:8_enable-wireless-adb.sh	device	allow	needs the system settings provider
+L2:11_update-apps.sh	device	allow	needs the installed package list
+dsh-close-window	device	allow	--probe asks the bridge whether the window is foreground
+task plugin (page) matches the UI source	device	allow	reads the deployed page plugin out of the running DSH
+runtime bundle symlinks	device	allow	only meaningful after pnpm install in the real profile
+revoke password rights (widget)	device	allow	the helper reaches into the console's app-private files
+revoke password rights (real run)	device	allow	writes the real device file (sandboxed, but still the device)
+client bundle really fetches	device	-	skips itself when the local DSH is not running
+L4:3_backup-dsh.sh	device	allow	real backup run against device storage
+L4:5_cleanup-dsh.sh	device	allow	real cleanup of the device's Download/dsh
+L4:7_reconnect-ai.sh	device	allow	real adb reconnect
+L4:8_enable-wireless-adb.sh	device	allow	real wireless-debugging toggle
+1_start-dsh.sh cold start	device	allow	starts the real DSH Web on 8099
+sandbox URL usable	device	allow	needs the token URL that a real cold start prints
+stale token rejected	simulable	-	a localhost listener plus a cached-URL fixture
+half-started 404 rejected	simulable	-	a localhost listener that answers 404
+boot exclusion lock	simulable	-	a lock directory in a throw-away home plus a child process
+boot lock idempotence	simulable	-	same fixture, run twice
+orphan credentials lock	simulable	-	a stubbed dsh_alive()
+exited process fails fast	simulable	-	a child process that is gone by the time it is probed
+dsh_pids does not self-match	simulable	-	the process list of this machine
