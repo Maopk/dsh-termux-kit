@@ -259,6 +259,21 @@ tools/pre-push-check             # 顺带扫改动文件里的 key/token/passwor
 > 需要 adb、桥服务、装好的 DSH 页面插件或 Termux 解释器路径的检查，在 `tests/ci-selftest.sh` 的 `OFF_PHONE`
 > 里列着，只记录、不判红；**其余任何失败都会让 CI 变红**。`tools/sync-apps` 会覆写 `apps/`，CI 里不跑。
 
+**仓库里每个自检/工具在 CI 里的去向**（免得下次再问"这个跑了吗"）：
+
+| 脚本 | CI 里在哪跑 |
+|---|---|
+| `tools/ci-shellcheck.sh` | `static` job：全量 `bash -n` + shellcheck（53 个脚本） |
+| `tools/check-task-ids` · `tools/check-no-secrets.sh` · `tools/ui-controls check` · `tools/i18n-table check` · `tools/i18n-java-fix --check` ×2 · `tools/install-tools --check` · `tools/panel-render-test` · `tools/i18n-audit --quiet` | `gates` job（`tools/ci-gates.sh` 这 9 道） |
+| `tests/lib-tests.sh` | `unit` job（`widgets/common.sh` 的 35 条断言） |
+| `tests/selftest.sh` | `selftest` job（容器 + 一次性 HOME，经 `tests/ci-selftest.sh`；70 项里需真机的记 `OFF_PHONE`） |
+| `tools/pre-push-check` | `selftest` job 末尾，**只记录不判红**（容器里实测 12 通过 · 0 失败 · 0 提醒） |
+| `tools/app-verify` · `apps/*/build.sh` | **不进**：要编好的 APK / Android SDK（aapt2、javac、d8、apksigner 与 `$DSH_AJ` 的 `android.jar`）；`build.sh` 在这里只做语法检查 |
+| `tools/ui-bg-check` | **不进**：输入是一张真机截图 |
+| `tools/sync-apps` | **不进**：它会覆写 `apps/`，而 CI 里 `apps/` 是只读镜像 |
+| `tools/i18n-build-table` · `tools/verify-i18n-patch` | **不进**：翻译流程的助手，要人给的输入（git diff / 补丁 JSON）；它们生成的表由 `i18n-table check` 把关 |
+| 其余 `tools/dsh-*` · `tools/droid*` · `tools/clash-*` · `tools/install-widgets`（不带 `--dry-run`） | **不进**：都是在手机上操作 DSH / 桥 / adb / 代理的**运行期**工具，不是测试；`install-widgets --dry-run` 那 12 条在 selftest 的 L2 里跑 |
+
 改完东西的最短路径：
 
 ```bash

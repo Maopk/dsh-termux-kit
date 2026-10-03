@@ -16,8 +16,10 @@
   门禁读仓库里的 `apps/` 镜像与 `i18n/zh.json`，不联网、不碰手机，同一个 commit 永远同一结论；
   `tools/sync-apps` 会覆写 `apps/`，CI 里不跑。
   同一个 job 里还把 `tools/pre-push-check` 的整份输出录进产物（只记录、不判红）——容器里那份清单
-  实测能跑到"通过 9 · 失败 0 · 提醒 0"（第一次跑出来的两个 ✘ 是环境造成的：git 不信任容器里的工作目录、
-  python3 按 ASCII 输出撞上工具打的 ✔/✘）。
+  实测能跑到"通过 12 · 失败 0 · 提醒 0"（头两次跑出来的 ✘ 全是环境造成的：工具默认去 `$HOME/dsh-termux-kit`
+  找仓库、git 不信任容器里的工作目录、python3 按 ASCII 输出撞上工具打的 ✔/✘、自己的工作目录被当成未跟踪文件）。
+  `CONTRIBUTING.md` §十一 补了一张"每个脚本在 CI 里的去向"表：跑在哪、或者为什么不跑（要 APK/SDK、
+  要真机截图、会覆写 `apps/`、是运行期工具），照着仓库里的脚本逐个过了一遍。
 · **`tests/lib-tests.sh`**：把 `widgets/common.sh` 里能单独测的函数做成 35 条断言 —— `token_from_log`（含"最后一条生效"）、
   `port_open` / `wait_port_open` / `wait_port_free`、`url_code(200/000)` / `url_ready`、`boot_lock_acquire` /
   `owner` / `release` / `stale`（含"进程死了算过期"与"活着但锁太旧也算过期"）、`clear_orphan_cred_lock`（两个方向）、
