@@ -35,6 +35,10 @@ grep -q allow-external-apps ~/.termux/termux.properties 2>/dev/null \
 termux-reload-settings
 
 # 4) build the two apps (output in apps/console/build/ and apps/bridge/build/)
+#    both scripts need android.jar (aapt2 link, javac and d8 all take it). Either put it at
+#    $HOME/.smoke/android.jar, or point DSH_AJ at it: DSH_AJ=~/android.jar bash apps/console/build.sh
+#    It is the Android SDK platform jar (platforms/android-34/android.jar) and is deliberately not
+#    in this repo. The scripts stop with these instructions when it - or a build tool - is missing.
 bash apps/console/build.sh && bash apps/bridge/build.sh
 
 # 5) self-test: walks all 12 widgets, the destructive ones only rehearse by default

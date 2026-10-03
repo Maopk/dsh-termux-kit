@@ -1,9 +1,29 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Build the DSH Console APK (Termux only, no Android Studio)
 set -e
-SRC="$HOME/dsh-console"
-AJ="$HOME/.smoke/android.jar"
+SRC="$(cd "$(dirname "$0")" && pwd)"     # this script's own folder: work here, wherever the repo is
+KIT="$(cd "$SRC/../.." && pwd)"          # repo root (apps/console -> ../..)
+AJ="${DSH_AJ:-$HOME/.smoke/android.jar}" # Android platform jar, needed by aapt2 link / javac / d8
 OUT="$SRC/build"
+
+# ── 依赖检查（2026-10-01 加）──
+# 为什么：以前这里是 $HOME/dsh-console 和 $HOME/dsh-termux-kit 两个写死的路径，仓库放到别处
+# （或从 GitHub clone 下来）就必然失败，报的是半路一句 "command not found"，看不出缺什么。
+for t in aapt2 javac d8 zip keytool apksigner; do
+  command -v "$t" >/dev/null 2>&1 || {
+    echo "✘ 缺 $t —— 编译 APK 需要 aapt2 / javac / d8 / zip / keytool / apksigner 都在 PATH 上"
+    echo "   Termux 里装 Android 构建工具后再跑一次；不打算编译两个 App 的话，直接用发行版里的 APK。"
+    exit 1; }
+done
+if [ ! -f "$AJ" ]; then
+  echo "✘ 缺 android.jar：$AJ"
+  echo "   aapt2 link -I、javac -classpath、d8 --lib 都要它。它不在本仓库里，取法二选一："
+  echo "   ① 在装了 Android SDK 的电脑上取 \$ANDROID_HOME/platforms/android-34/android.jar，"
+  echo "      复制到手机的 \$HOME/.smoke/android.jar；"
+  echo "   ② 已经有这个文件时，用环境变量指过来：DSH_AJ=/path/to/android.jar bash apps/console/build.sh"
+  exit 1
+fi
+
 rm -rf "$OUT"; mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/gen"
 
 # ── 出包门禁（2026-09-27 加）──
@@ -12,9 +32,9 @@ rm -rf "$OUT"; mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/gen"
 # 现在编译前强制：① 从 ui/controls.json + ui/theme.json 重新生成三个产物；
 # ② 跑 tools/i18n-audit（字面量调用 / 中文覆盖 / 主题一致 / 色板一致 / 状态口径）。
 # 任一项不过就直接中止，不许产出一个"看起来修好了"的包。
-if [ -x "$HOME/dsh-termux-kit/tools/ui-controls" ]; then
-  python3 "$HOME/dsh-termux-kit/tools/ui-controls" gen || exit 1
-  python3 "$HOME/dsh-termux-kit/tools/i18n-audit" --quiet || {
+if [ -x "$KIT/tools/ui-controls" ]; then
+  python3 "$KIT/tools/ui-controls" gen || exit 1
+  python3 "$KIT/tools/i18n-audit" --quiet || {
     echo "✘ 文案/主题审计没过 —— 拒绝出包（跑 tools/i18n-audit 看细节）"; exit 1; }
 fi
 

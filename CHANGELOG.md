@@ -5,6 +5,18 @@
 
 ## [Unreleased]
 
+### 修复
+
+· **两个 App 的构建脚本不再写死路径**（`apps/console/build.sh` / `apps/bridge/build.sh`）：改为从脚本自身所在目录
+  取 `SRC`、从 `$SRC/../..` 取仓库根目录，仓库 clone 到任意位置都能编译；`android.jar` 可用 `DSH_AJ` 覆盖
+  （默认仍是 `$HOME/.smoke/android.jar`），缺它时先打印它是什么、从哪取、怎么指过来，而不是编到一半报一句
+  命令不存在；编译前先检查 `aapt2 / javac / d8 / zip / keytool / apksigner` 是否在 PATH 上。
+· **README 第 4 步写明编译前提**（中英两份）：先备好 `android.jar`，再跑两个 `build.sh`。
+· **术语修正**：`README.zh-CN.md` 的「工程日志」改成「运维笔记」（见 `docs/术语表.md` 第 44 行）。
+· **`widgets/i18n.sh` 恢复可执行位**：上一批它被按 100644 发布，`./widgets/i18n.sh` 这类直接调用会失败；
+  本批按文件带上 mode 重新发布（脚本保持 100755），顺带说明"脚本别用一律 100644 的方式发布"。
+  （本批不改三个产物的内容，不 bump 版本号，见 §六。）
+
 ### 变更
 
 · **README 中英两份重写**（`README.md` / `README.zh-CN.md`）：叙述结构重排 —— 删掉「包含什么 / 安装 / 使用说明（三处 UI 规范、小组件、控制台 App、页面插件）」，
