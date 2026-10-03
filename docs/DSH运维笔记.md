@@ -14,8 +14,10 @@
   新增 `tests/unit/test_report_fixture.py` 5 个用例：schema 能被检查器接受、11 条 device 失败只被**记录**不被豁免、
   `unclassified = 0`、`summary` 与 items 重算逐类一致、`summarize` 文案含三类。`tests/unit` 合计 19 个用例。
 
-为什么：隔壁那些用例都是**手写**报告，写入端（`tests/lib/report.sh`）把字段名改了、把某一类弄丢、把计数写错，
-  它们照样绿；只有拿真输出喂检查器，才把"写入端漂移"变成 CI 里的红。
+为什么：隔壁那些用例都是**手写**报告，钉不住检查器面对**真实产物**时的行为（字段、计数、放行语义、文案都可能
+  悄悄变）。分工要说清：写入端自己的形状由 `tests/lib-tests.sh` 逐字段断言（`report_item` 的字段数、
+  `report_summary`/`report_json` 交给 python 解析、转义往返）；写入端 ↔ 检查器的端到端由容器那一跑覆盖
+  （套件 → 报告 → `report_check.py`）；这份 fixture 管的是**检查器**这一侧。
 
 结果：pytest 19 passed / ruff 通过 / mypy 4 文件无问题 / shellcheck 55 文件 0 发现；本机端到端
   `logic 25/0/0 · simulable 18/0/1 · device 4/11/11`、`unexpected 0`、RC=0；容器那一跑（`9b521b8a` 的

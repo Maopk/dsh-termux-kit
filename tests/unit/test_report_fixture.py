@@ -1,9 +1,12 @@
-"""The writer and the checker have to agree on the report the suite actually produces.
+"""A real report, so the checker is tested against something it did not write itself.
 
-`tests/fixtures/selftest-report.json` is a real report from `tests/selftest.sh`, run on a machine that
-cannot answer the device questions (the throwaway HOME is scrubbed to `~`, the working copy to `$KIT`).
-`test_report_check.py` builds its reports by hand, so it would keep passing while the writer drifted —
-this file fails the moment the two sides disagree about a field name, a count or a category.
+`tests/fixtures/selftest-report.json` is one full report from `tests/selftest.sh` — 70 assertions, all three
+categories, the eleven device failures the policy records rather than waives (the throwaway HOME is scrubbed
+to `~`, the working copy to `$KIT`). The cases in `test_report_check.py` build their reports by hand, so they
+would keep passing while the checker's behaviour on a real artifact drifted; this file would not.
+
+The writer's own shape is not covered here: `tests/lib-tests.sh` asserts it field by field, and the container
+job runs the suite and hands its report to this same checker.
 """
 
 from __future__ import annotations

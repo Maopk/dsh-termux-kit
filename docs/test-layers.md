@@ -41,9 +41,10 @@ CI 变红 —— 这是「新增断言必须有归属」的兜底。
 * `tests/ci-selftest.sh` 用一次性 HOME 跑套件，然后把退出码交给 `tests/report_check.py`：
   logic/simulable 失败、或 device 里没有放行的失败 → 红（1）；报告本身坏了 → 2；否则绿（0）。
   `--strict` 仍然表示「用套件自己的退出码」（一条失败都不许有）。
-* 报告有一份真实样本当契约：`tests/fixtures/selftest-report.json` 是一次真机自检的完整输出（70 项，
-  临时 HOME 与工作副本的路径洗成 `~` / `$KIT`），`tests/unit/test_report_fixture.py` 直接拿它过检查器 ——
-  写入端一漂移（字段改名、计数对不上、某一类整体消失、放行行被删）就当场红。
+* 报告有一份真实样本当契约：`tests/fixtures/selftest-report.json` 是一次真机自检的完整输出（70 项、三类齐全、
+  含 11 条被记录而不被豁免的 device 失败；临时 HOME 与工作副本路径洗成 `~` / `$KIT`），
+  `tests/unit/test_report_fixture.py` 用它钉住**检查器**面对真实产物时的行为。
+  写入端自己的形状由 `tests/lib-tests.sh` 逐字段断言；写入端 ↔ 检查器的端到端由容器那一跑覆盖。
 
 ## 怎么维护
 
