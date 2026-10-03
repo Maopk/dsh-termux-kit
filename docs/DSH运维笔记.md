@@ -98,6 +98,20 @@
 下一步：手机上 `git pull` → `install-tools` → `bash tools/install-widgets`（**桌面组件一并刷新**）→
   编两个 APK → `dsh-gh release v1.13 …`；发版后补 `SHA256SUMS.txt` 与发行说明。
 
+2026-09-28 12:02 · 【推送记录】两个 commit 推上 master（术语标准化 + 工具误报修复）
+
+做了什么：按 §九 推送 —— `git fetch` 确认远端领先 0 → 复刻 `dsh-gh` 的推送行（跳过它的 `git add -A`，工作区还有一条笔记）
+  → 成功后 `git update-ref refs/remotes/origin/master HEAD` 对齐引用。用户明确“不单独 commit 那条笔记”。
+为什么：用户拍板“推”；两个 commit 一起推。
+结果：**第 1 次失败**（`OpenSSL SSL_read: unexpected eof while reading`，exit 128 —— 就是笔记里记过的“代理下 git 时通时断”），
+  按老规矩**重试**（不碰配置），**第 2 次成功**：`6b3d090..9694753 HEAD -> master`。
+  · commit 1 `2a12a5a5d1788c17773976be6403d59e4da2f92b` —— docs: 术语标准化（术语表 + 禁用词表 + i18n 中文侧软停），8 文件 +183/−28
+  · commit 2 `9694753020bd3d077cc251179d2e1ab4ca5511b3` —— fix: 工具自检的两处误报，2 文件 +10/−2
+  受影响文件 10 个：`CHANGELOG.md`、`CONTRIBUTING.md`、`README.md`、`README.zh-CN.md`、`docs/DSH运维笔记.md`、
+  `docs/术语表.md`（新）、`i18n/zh.json`、`widgets/i18n.sh`、`tools/dsh-gh`、`tools/pre-push-check`（合计 +193/−30）。
+  API 独立复核：远端 master HEAD = `9694753020bd3d077cc251179d2e1ab4ca5511b3`（2026-09-28T03:54:13Z）；本地/远端领先各 0。
+下一步：无。工作区仍有一条未提交的笔记（本轮推送记录 + 判断记录），按 §九.7 属预期。
+
 2026-09-28 12:02 · 【判断记录】三条小判断被用户确认（i18n 英中分治 / 跳过 pnpm install / 英文 README 同步）
 
 用户确认的三条（原话：“三条都对”）：
