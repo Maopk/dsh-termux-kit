@@ -7,6 +7,64 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-10-03 · 【自检首跑】控制台新按钮第一次跑：82 passed / 1 failed / 11 skipped
+
+做了什么：装好控制台 1.22（同签名，直接覆盖安装）后点维护区的 🩺「自检」，91.7 秒跑完，结果行落在控制台历史里
+（`[17:11:42] 自检 已完成（exit=1，用时 91.763s)` / `════ Result: 82 passed / 1 failed / 11 skipped ════` /
+`Verdict: 1 item(s) failed`）。唯一红项是 L4 真跑段的 `✘ 7_reconnect-ai.sh real run failed`；同一段里
+`8_enable-wireless-adb.sh` 与 `bridge soft stop/wake` 都正确地记成了 ○「preconditions unmet」——当时的手机状态是
+**adb 没连、Wi-Fi 不通（`online=?`）、桥刚被上一步关掉**。
+为什么红：不是组件的问题，是**判定写错了** —— 那一项要求输出里出现 `DSH Web : running` 才给过，而这次自检是在
+16:42 关掉 DSH（`2_shutdown-dsh.sh`，备份 53M、端口已释放）之后跑的，DSH Web 本来就该是"没在跑"。
+结果：`tests/selftest.sh` 的 L4 判定改成**只看组件有没有跑完**（exit 0），三个通道的真实状态照原样报出来；
+超时窗 120s → 180s（冷跑会转交 `8_` 与 `droid conn`/`discover`，它们自带 40s+30s），失败时把退出码和日志路径一起打出来。
+下一步：手机上下次 `dsh-kit-update`（或手工三步）拿到这次修复后重跑自检，预期 `83 passed / 0 failed / 11 skipped`。
+
+2026-10-03 · 【发布】v1.13 发出：控制台 1.22 / 桥 2.24 / 页面面板 0.10.1
+
+做了什么：仓库侧 `91d2c19d`（控制台「自检」按钮 + 三个生成器的 CRLF 修复 + 版本号 bump）→ CI run `37111115102` 5 个 job 全绿；
+手机侧 `git fetch origin` + `git merge --ff-only origin/master`（`9694753..91d2c19`，62 files）→ `install-tools`（一致 27 ·
+需同步 13 · 有意跳过 1 · 未装 10）→ `install-widgets`（12 个组件 + 中文名）→ 重编控制台 → 重打面板 tgz → 传三个资产。
+发行版 v1.13（id `402421491`）的资产与 SHA256：
+  `dsh-console-v1.22.apk` `89a329b0127d9a733f0f581b4bc05af245af46dd67636cb582797c814be27126`
+  `dsh-bridge-v2.24.apk` `fa522055cbd90cc11a06a5f52ee33688d88d3b20214f0066c376693bbaac90b8`
+  `dsh-mobile-local-v0.10.1.tgz` `219634aa50d5db3c55638a18d9260e066574d6f79b7957233d146405f3bc0ff8`
+为什么（两次踩坑，都已写进仓库，见 CHANGELOG v1.13 的修复段）：
+  ① 单跑 `git pull` 报 "There is no tracking information for the current branch" —— **它只更新了 origin/master 指针、
+     一个文件都没合并**，于是 `install-tools` 报"一致 40 · 需同步 0"、控制台打出旧版本号 1.21、`npm pack` 出 0.10.0，
+     一路到打包那步才露馅。⇒ 改成 `git fetch origin` + `git merge --ff-only origin/master`，并把顺序固化成新工具 `tools/dsh-kit-update`。
+  ② 换了构建目录（`~/dsh-console` → 仓库 `apps/console`）后，`build.sh` 因为那里没有 `ks.jks` **悄悄生成了一把新钥匙**
+     （`8b2dee4e…` ≠ 已装的 `da10e3f5…`），签出来的包装不上（安装器只报一句 "App not installed"）。
+     ⇒ 从 `~/dsh-console/ks.jks` 拷回 `apps/console/ks.jks` 后签名回到 `da10e3f5…`，能正常覆盖安装；`build.sh` 已改成先找已有密钥库再生成。
+结果：三个资产齐全、控制台 35/1.22 与手机上已装版**同一把签名钥匙**；`dist/SHA256SUMS.txt` 与两份 README 的「当前发行版」行已指到 v1.13。
+下一步：手机上装新控制台并点「自检」按钮；`SHA256SUMS.txt` 与发行说明正文由助手用 token 补传/补写。
+
+2026-10-03 · 【CI + 发布准备】两套 CI 上线、控制台加「自检」按钮、v1.13 版本号 bump
+
+做了什么（三段）：
+  ① **CI 上线（本仓库）**：新增 `.github/workflows/ci.yml`（5 个 job：语法 + shellcheck / ruff + 逐文件 mypy + 编译检查 /
+     9 道数据源门禁 / `widgets/common.sh` 单测 / 容器里跑 `tests/selftest.sh`），配套四个本地入口
+     （`tools/ci-shellcheck.sh`、`tools/ci-gates.sh`、`tests/lib-tests.sh`、`tests/ci-selftest.sh`）与钉版本的
+     `requirements-dev.txt`（shellcheck-py 0.11.0.1 / ruff 0.16.10 / mypy 2.4.0）。
+     推送记录：`3281a28a`（CI 五件套 + 静态检查抓出来的真 bug：`dsh-tasksd` 的 `last` 恒为 null、
+     两处双引号套双引号、7 处 `cd` 缺失败出口等）、`e7037158`（把 workflow 文件送进仓库——token 差的那点权限
+     走 device flow 重新授权拿到 `workflow` scope）、`e31d3f9d`（`tests/lib-tests.sh` 的 `port_open` 竞态：
+     先独立轮询等端口应答再断言，本机 35/0/0）、`4b475ac1`、`1287d466`、`0f059aa9`（容器里跑 `pre-push-check`
+     的环境修正：`DSH_KIT_REPO`、`git safe.directory`、`PYTHONUTF8`、commit 类型表补 `ci`、`.gitignore` 补
+     `ci-selftest-work/`）。**run #6 = 5 个 job 全绿**，容器里 pre-push 那份清单"通过 12 · 失败 0 · 提醒 0"。
+  ② **同一套骨架搬到 dsh-vision-kit**：`ec12139` 推上 main，4 个 job 一次全绿（静态五阶段：ast 编译 /
+     ruff / 逐文件 mypy / PSScriptAnalyzer / `node --check`；69 条无依赖单测；合成样本打分；需桌面的 10+6 项只记录不判红）。
+     顺手修掉三个 linter 找出来的问题（`Image.LANCZOS` → `Image.Resampling.LANCZOS`、六个非 ASCII 的 `.ps1` 补 UTF-8 BOM）。
+  ③ **v1.13 准备**：控制台加「自检」按钮（`ui/controls.json` 新增条目 `selftest` + `Tasks.java` 里给它自己的命令；
+     `tools/check-task-ids` 的例外表写明它不走 tasksd 白名单）；版本号 控制台 **1.21→1.22**（versionCode 34→35）、
+     页面面板 **0.10.0→0.10.1**（`client.js` 里嵌着三处版本号，控制台版本一变它就得跟着变）；
+     `tools/ui-controls gen` + `tools/i18n-table gen` 重生成；9 道门禁 **9 passed / 0 failed / 0 skipped**。
+为什么：CI 把"只有真机能跑"的那半显式列出来（列成清单、只记录不判红），其余部分每次 push 都自己证一遍；
+「自检」按钮是为了手机上不用敲命令 —— 用户原话"那你还不如再推行新的发行版，将更新做到 APK 里面呢"。
+结果：全部改动只碰源码（三个产物的内容只在版本号上变了），本文档随这一批一起推上去。
+下一步：手机上 `git pull` → `install-tools` → `bash tools/install-widgets`（**桌面组件一并刷新**）→
+  编两个 APK → `dsh-gh release v1.13 …`；发版后补 `SHA256SUMS.txt` 与发行说明。
+
 2026-09-28 11:53 · 【术语】i18n 中文侧 6 条改成"软停"，产物重生成并同步安装位（第一步）
 
 做了什么（用户拍板"中文侧改、英文侧保留 graceful"后执行）：
