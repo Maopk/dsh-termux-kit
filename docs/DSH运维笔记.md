@@ -52,6 +52,26 @@
 结果：三个资产齐全、控制台 35/1.22 与手机上已装版**同一把签名钥匙**；`dist/SHA256SUMS.txt` 与两份 README 的「当前发行版」行已指到 v1.13。
 下一步：手机上装新控制台并点「自检」按钮；`SHA256SUMS.txt` 与发行说明正文由助手用 token 补传/补写。
 
+2026-10-03 16:40 · 【安装】把仓库同步到手机：工具/小组件本就一致，面板插件补了 2 个文件
+
+做了什么（用户交办“把仓库里的项目更新到我的手机上”）：
+  ① `tools/install-tools --check` → **一致 40 · 需同步 0**（有意跳过 1：`droid` 英文版；未装 8：都注明“开发类工具就在仓库里跑”）。
+  ② `bash tools/install-widgets` → 12 个英文名 + 12 个中文名重装；复核 `widgets/[0-9]*.sh` 与 `~/.shortcuts/tasks/`
+     **12/12 逐字节一致**；`widgets/i18n.sh` 与安装位一致（09-28 那次“软停”改动已在位）。
+     `.stale/` 里 3 个旧备份是 09-26/09-27 留下的，本次没有新搬。
+  ③ **面板插件发现真漂移**：`plugins/dsh-mobile-local/` 与安装位相比，`client.js`/`package.json` 一致，但
+     `host.js`（仓库 567 / 安装位 524 字节）与 `cordis.patch.yml`（136 / 113 字节）是**旧的中文注释版**（09-26 21:56），
+     仓库那份是 09-27 全英文化之后的 → 只差注释和一条日志文案，**无行为差异**。
+     已把这两个文件同步到 `~/.dsh/profiles/web/local/dsh-mobile-local/` **和** `node_modules/dsh-mobile-local/`
+     （两处是各自独立的副本，inode 不同，必须分别写）。
+  ④ 门禁：`tools/panel-render-test` 三遍渲染全过（每遍 66 个组件）、`tools/i18n-audit` 全绿、`dsh-relink-bundles --check` 20 项齐。
+为什么：远端 + 本地仓库都已是最新，要对齐的是**手机上的安装位**；`host.js`/`cordis.patch.yml` 是最后一次全英文化时漏同步的两处。
+结果：仓库 vs 手机四处全部对齐 —— 工具 40/40 · 小组件 12/12 · 面板 4/4 · `widgets/i18n.sh` 一致。
+  **APK 侧**：状态查询显示 **桥 v2.24 running（与仓库/发行版一致，不用更新）**；**控制台版本查不到 —— adb 当前 disconnected**
+  （`droid conn` 试过：`Connection refused`，需要在手机上开一次「无线调试」）。本次**没编 APK、没装 APK**。
+下一步：等用户决定控制台要不要核对/更新 —— 开了无线调试我就能 `dumpsys package io.dsh.console` 查已装版本；
+  真需要装也用 `dsh-install-apk`（或用户自己装 dist/ 里的 `dsh-console-v1.21.apk`）。
+
 2026-10-03 · 【CI + 发布准备】两套 CI 上线、控制台加「自检」按钮、v1.13 版本号 bump
 
 做了什么（三段）：
