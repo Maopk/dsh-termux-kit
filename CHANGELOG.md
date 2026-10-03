@@ -15,6 +15,9 @@
   钉版本的开发依赖在 `requirements-dev.txt`（shellcheck-py / ruff / mypy），配置在 `ruff.toml`、`mypy.ini`、`.shellcheckrc`。
   门禁读仓库里的 `apps/` 镜像与 `i18n/zh.json`，不联网、不碰手机，同一个 commit 永远同一结论；
   `tools/sync-apps` 会覆写 `apps/`，CI 里不跑。
+  同一个 job 里还把 `tools/pre-push-check` 的整份输出录进产物（只记录、不判红）——容器里那份清单
+  实测能跑到"通过 9 · 失败 0 · 提醒 0"（第一次跑出来的两个 ✘ 是环境造成的：git 不信任容器里的工作目录、
+  python3 按 ASCII 输出撞上工具打的 ✔/✘）。
 · **`tests/lib-tests.sh`**：把 `widgets/common.sh` 里能单独测的函数做成 35 条断言 —— `token_from_log`（含"最后一条生效"）、
   `port_open` / `wait_port_open` / `wait_port_free`、`url_code(200/000)` / `url_ready`、`boot_lock_acquire` /
   `owner` / `release` / `stale`（含"进程死了算过期"与"活着但锁太旧也算过期"）、`clear_orphan_cred_lock`（两个方向）、
@@ -38,6 +41,9 @@
   `tools/dsh-gh`、`tools/i18n-audit`、`tools/i18n-table`、`tools/ui-controls`、`tools/sync-apps`、
   `tools/panel-render-test` 与 `tests/selftest.sh` 统一认 `DSH_KIT_REPO`（`pre-push-check`、`install-tools`
   本来就认它），不设时仍回退到 `$HOME/dsh-termux-kit`；规矩写进 `CONTRIBUTING.md` §八 的工具表下面。
+· **`tools/pre-push-check` 的第 8 条补上 `ci` 类型**（`CONTRIBUTING.md` §五 同步）：CI 那几笔 commit 用
+  `ci:` 开头，原来会被自己判成"不符合规范"。`.gitignore` 也补上 CI 的工作目录 `ci-selftest-work/`，
+  否则自检会把 CI 自己刚生成的产物同时记成"未跟踪文件"和"疑似明文凭据"。
 · **读 App 真源码的 5 个工具不再假设源码住在 `$HOME`**：`tools/app-verify`、`tools/i18n-audit`、
   `tools/i18n-table`、`tools/ui-controls`、`tools/sync-apps` 统一认 `DSH_CONSOLE_DIR` 与 `DSH_BRIDGE_DIR`
   （不设时回退 `~/dsh-console`、`~/droid-bridge`）；规矩与 `DSH_KIT_REPO` 并列写在同一处。

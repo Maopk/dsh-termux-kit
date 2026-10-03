@@ -38,3 +38,6 @@ Thumbs.db
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+
+# CI 与本地跑 tests/ci-selftest.sh 的工作目录（假手机 HOME 与产物都在这里）
+ci-selftest-work/

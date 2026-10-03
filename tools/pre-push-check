@@ -93,7 +93,7 @@ else ok 7 "本次没改 App，版本号无需变动（当前 $v_now）"; fi
 
 # 8) 最近一条 commit 的格式
 msg=$(git log -1 --pretty=%s 2>/dev/null || echo '')
-if echo "$msg" | grep -qE '^(feat|fix|ui|docs|chore|refactor|perf|test): .+'; then ok 8 "commit 格式合规：$msg"
+if echo "$msg" | grep -qE '^(feat|fix|ui|docs|chore|refactor|perf|test|ci): .+'; then ok 8 "commit 格式合规：$msg"
 else no 8 "最近一条 commit 不符合 <类型>: <总结> 规范：$msg"; fi
 
 # 9) .gitignore 覆盖

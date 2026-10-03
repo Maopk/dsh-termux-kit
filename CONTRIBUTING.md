@@ -108,7 +108,7 @@ README 是长期维护的唯一对外入口，**每次功能变化都要检查�
 ```
 
 **类型**：`feat` 新功能 · `fix` 修 bug · `ui` 纯 UI 改动 · `docs` 只改文档 · `chore` 构建/依赖/杂项 ·
-`refactor` 重构不改行为 · `perf` 性能 · `test` 测试
+`refactor` 重构不改行为 · `perf` 性能 · `test` 测试 · `ci` 只改 CI / 工作流
 
 示例：
 
