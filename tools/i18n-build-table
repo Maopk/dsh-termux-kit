@@ -53,7 +53,7 @@ def pairs_from_diff(rev, relpath):
             zh = [s for line in minus for s in STR_RE.findall(line) if HAN.search(s)]
             en = [s for line in plus for s in STR_RE.findall(line) if not HAN.search(s)]
             if len(zh) == len(en) and zh:
-                res.extend(zip(en, zh))
+                res.extend(zip(en, zh, strict=False))   # equal lengths are checked one line above
             elif len(zh) == 1 and len(en) == 1:
                 res.append((en[0], zh[0]))
         minus.clear(); plus.clear()

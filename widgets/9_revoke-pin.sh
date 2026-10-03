@@ -7,7 +7,7 @@
 # **No screen, no buttons**, and it does not affect DSH/bridge/adb (each has its own revoke path).
 #
 # Usage: 9_revoke-pin.sh [--dry-run]
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 parse_args "$@"

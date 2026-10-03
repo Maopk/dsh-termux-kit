@@ -9,10 +9,9 @@
 #   L4 real run   real, safe-and-reversible widget execution with result verification
 #   L5 sandbox    cold start of widget 1: a throwaway instance on 8099, sampling HTTP codes to prove 'port opens first, routes mount later'
 #   SKIP          a real run would kill this session (2/4/6) or needs manual recovery (0) → dry-run only, user picks the moment
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"   # CI 把它指到一次性目录，别写进真 HOME
 KIT="${DSH_KIT_REPO:-$HOME_DIR/dsh-termux-kit}"   # 仓库不一定住在 $HOME（测试副本、别的机器）
-CONSOLE_DIR="${DSH_CONSOLE_DIR:-$HOME_DIR/dsh-console}"   # 真源码也不一定住在 $HOME（和 tools/ 同一套规矩）
-BRIDGE_DIR="${DSH_BRIDGE_DIR:-$HOME_DIR/droid-bridge}"
+CONSOLE_DIR="${DSH_CONSOLE_DIR:-$HOME_DIR/dsh-console}"   # 真源码也不一定住在 $HOME（和 tools/ 同一套规矩；本套件只读控制台源码，桥目录变量是给 tools/ 的）
 T="$HOME_DIR/.shortcuts/tasks"
 L="$HOME_DIR/.local/share/dsh-widgets/common.sh"
 PASS=0; FAIL=0; SKIP=0; REPORT=""
@@ -223,7 +222,7 @@ LOCK_BLOCKED=0; LOCK_OK=0
 #   the holder used to hold the lock only 3s, but on this machine under heavy work (backup/sandbox) a sleep 1 stretches past 3s →
 #   by the time the tester grabbed it the holder had already released → a **false failure** saying "not blocked" (hit once for real).
 #   Now: the holder writes a ready file once it holds the lock and releases it only after the tester writes the go file.
-LOCK_READY="$TMPDIR/lock-ready.$$"; LOCK_GO="$TMPDIR/lock-go.$$"; rm -f "$LOCK_READY" "$LOCK_GO"
+LOCK_READY="${TMPDIR:-${PREFIX:-/tmp}}/lock-ready.$$"; LOCK_GO="${TMPDIR:-${PREFIX:-/tmp}}/lock-go.$$"; rm -f "$LOCK_READY" "$LOCK_GO"
 bash -c '. "$HOME/.local/share/dsh-widgets/common.sh"; boot_lock_acquire && : > "'"$LOCK_READY"'"; for _ in $(seq 1 100); do [ -f "'"$LOCK_GO"'" ] && break; sleep 0.2; done; boot_lock_release' &
 HOLDER=$!
 for _ in $(seq 1 50); do [ -f "$LOCK_READY" ] && break; sleep 0.1; done
@@ -381,7 +380,7 @@ fi
 if timeout 6 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' 2>/dev/null; then
   TOK=$(grep -ao 'token=[A-Za-z0-9_-]*' "$HOME_DIR/.dsh-restart.log" 2>/dev/null | tail -1 | cut -d= -f2)
   if [ -n "$TOK" ]; then
-    CJ="$TMPDIR/dsh-cj.$$"
+    CJ="${TMPDIR:-${PREFIX:-/tmp}}/dsh-cj.$$"
     curl -sL -c "$CJ" -b "$CJ" -o "$TMPLOG.page" "http://127.0.0.1:8080/?token=$TOK" 2>/dev/null
     U1=$(grep -oE '/plugins/\?\?[^"'"'"'\\]+' "$TMPLOG.page" 2>/dev/null | sed 's/&amp;/\&/g' | sort -u | head -1)
     if [ -n "$U1" ]; then
@@ -419,7 +418,7 @@ line "[L4] Real runs (safe and reversible)"
 
 # Revoke install-password authorisation: **sandbox paths only**; the real authorisation file is never touched (and is re-checked afterwards)
 if [ -f "$HOME_DIR/.dsh-auth-pass" ]; then HAD_REAL_PASS=1; else HAD_REAL_PASS=0; fi
-TMPPASS="${TMPDIR:-$PREFIX/tmp}/dsh-pass-selftest.$$"
+TMPPASS="${TMPDIR:-${PREFIX:-/tmp}}/dsh-pass-selftest.$$"
 if printf '123456' > "$TMPPASS" && chmod 600 "$TMPPASS"; then
   OUTR=$(DSH_AUTH_PASS_FILE="$TMPPASS" "$HOME_DIR/.local/bin/dsh-auth-pass" revoke 2>&1); RCR=$?
   if [ "$RCR" = 0 ] && [ ! -e "$TMPPASS" ]; then

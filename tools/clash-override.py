@@ -42,7 +42,7 @@ LABELS = ['HTTP 端口', 'Socks 端口', 'Redirect 端口', 'TProxy 端口', '�
 
 
 def sh(*args, timeout=45):
-    return subprocess.run(list(args), capture_output=True, text=True, timeout=timeout).stdout
+    return subprocess.run(list(args), capture_output=True, text=True, timeout=timeout, check=False).stdout
 
 
 def tap(x, y):
@@ -77,7 +77,7 @@ def dialog_title():
 
 def open_field(label):
     for _ in range(3):
-        subprocess.run([UITAP, label], capture_output=True, text=True, timeout=120)
+        subprocess.run([UITAP, label], capture_output=True, text=True, timeout=120, check=False)
         time.sleep(1.2)
         if dialog_title() == label:
             return True
@@ -117,36 +117,36 @@ def add_row(value):
 
 def list_set(label, values):
     if not open_field(label):
-        print('✘ cannot open field: %s (current title %s)' % (label, dialog_title()))
+        print(f'✘ cannot open field: {label} (current title {dialog_title()})')
         return 1
-    print('  entered: %s' % label)
+    print(f'  entered: {label}')
     n = clear_rows()
     if n:
-        print('  cleared %d old entries' % n)
+        print(f'  cleared {n} old entries')
     for v in values:
         if not add_row(v):
-            print('✘ write failed: %s' % v)
+            print(f'✘ write failed: {v}')
             close_dialog()
             return 1
-        print('  + %s' % v)
+        print(f'  + {v}')
     cnt = len([x for x in nodes() if x['desc'] == '删除'])
     if cnt != len(values):
-        print('✘ wrong entry count: expected %d, got %d' % (len(values), cnt))
+        print(f'✘ wrong entry count: expected {len(values)}, got {cnt}')
         close_dialog()
         return 1
     tap(*BTN_LIST_OK)
     time.sleep(1.5)
-    print('  ✔ %s = %d entries' % (label, cnt))
+    print(f'  ✔ {label} = {cnt} entries')
     return 0
 
 
 def enum_set(label, choice):
     if not open_field(label):
-        print('✘ cannot open field: %s' % label)
+        print(f'✘ cannot open field: {label}')
         return 1
     opts = [n for n in nodes() if n['text'] == choice]
     if not opts:
-        print('✘ option %s is not in the list; currently visible: %s' % (choice, [n['text'] for n in nodes()][:12]))
+        print('✘ option {} is not in the list; currently visible: {}'.format(choice, [n['text'] for n in nodes()][:12]))
         close_dialog()
         return 1
     tap(opts[0]['x'], opts[0]['y'])
@@ -155,7 +155,7 @@ def enum_set(label, choice):
     if btn:
         tap(btn[-1]['x'], btn[-1]['y'])
     time.sleep(1.2)
-    print('  ✔ %s = %s' % (label, choice))
+    print(f'  ✔ {label} = {choice}')
     return 0
 
 
@@ -163,7 +163,7 @@ def audit():
     ns = nodes()
     for i, n in enumerate(ns):
         if n['text'] in LABELS and i + 1 < len(ns):
-            print('%-40s = %s' % (n['text'], ns[i + 1]['text']))
+            print('{:<40} = {}'.format(n['text'], ns[i + 1]['text']))
 
 
 def main():

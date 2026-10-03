@@ -2,7 +2,7 @@
 # 5_cleanup-dsh — delete what should go: surplus backups / **my screenshots** / vision temp artifacts / large workspace files / logs / package cache
 # Rule: touch only "my artifacts" (fixed prefixes or known temp filenames); your own files are never touched.
 # Usage: 5_cleanup-dsh.sh [--dry-run] [--no-pnpm] [--keep-images N] [--keep-runs N] [--keep-full N] [--deep]
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 DRY=0; DO_PNPM=0; KEEP_IMG=0; KEEP_RUNS=3; KEEP_FULL=1; DEEP=0

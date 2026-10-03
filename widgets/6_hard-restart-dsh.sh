@@ -2,7 +2,7 @@
 # 6_hard-restart-dsh — the most thorough: graceful stop → -9 kill of every related process → backup → rotate → wait for the port → start → true-readiness check
 # Use it after changing plugins; client modules carry a rev, so **refresh the page** after the restart — no need to close the browser
 # Usage: 6_hard-restart-dsh.sh [--dry-run] [--no-backup] [--close-browser] (--keep-browser kept for compatibility)
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 DRY=0; DO_BAK=1; CLOSE_BROWSER=0
@@ -12,7 +12,7 @@ for a in "$@"; do case "$a" in
   --close-browser) CLOSE_BROWSER=1 ;;
   --keep-browser) CLOSE_BROWSER=0 ;;   # Legacy flag: keeping the browser is the default now, so it is harmless
 esac; done
-cd "$SHARED" 2>/dev/null || cd "$HOME_DIR"
+cd "$SHARED" 2>/dev/null || cd "$HOME_DIR" || exit
 [ -f "$HOME_DIR/.bashrc" ] && . "$HOME_DIR/.bashrc" >/dev/null 2>&1
 LOG="$(dsh_log)"; BROWSER_PKG="com.android.chrome"
 

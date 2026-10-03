@@ -3,11 +3,11 @@
 # Prerequisite: adb needs "Wireless debugging" switched on in Developer options (pairing records are kept, so no pairing code again)
 # ⚠️ Measured: once Wi-Fi drops, Android turns "Wireless debugging" off by itself → adb stops working with it (you have to switch it back on)
 # Usage: 7_reconnect-ai.sh [--dry-run]
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 parse_args "$@"
-cd "$SHARED" 2>/dev/null || cd "$HOME_DIR"
+cd "$SHARED" 2>/dev/null || cd "$HOME_DIR" || exit
 [ -f "$HOME_DIR/.bashrc" ] && . "$HOME_DIR/.bashrc" >/dev/null 2>&1
 
 step "① adb channel"

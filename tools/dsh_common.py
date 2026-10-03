@@ -33,7 +33,7 @@ def dsh_url():
     try:
         with open(URL_FILE, encoding='utf-8') as fh:
             return fh.readline().strip()
-    except Exception:
+    except Exception:  # noqa: BLE001 - a missing or unreadable ~/.dsh-url simply means "no URL yet"
         return ''
 
 
@@ -45,9 +45,9 @@ def dsh_port():
 
 def dsh_base():
     """Base URL for probing, e.g. http://127.0.0.1:8099/"""
-    return 'http://127.0.0.1:%d/' % dsh_port()
+    return f'http://127.0.0.1:{dsh_port()}/'
 
 
 def boot_lock():
     """Path of the boot lock for the current port (the lock is per port by design)."""
-    return os.path.join(HOME, '.dsh-boot-%d.lock' % dsh_port())
+    return os.path.join(HOME, f'.dsh-boot-{dsh_port()}.lock')

@@ -210,11 +210,11 @@ def status():
             try:
                 tail = subprocess.run(['tail', '-c', '400', p], capture_output=True,
                                       text=True, timeout=5).stdout
-                m = _TERM = re.compile(r'(?:\[(?P<n1>[^\]]{1,60})\]\s*(?P<s1>done|failed|skipped|not executed)\b|【(?P<n2>[^】]{1,60})】\s*(?P<s2>完成|失败|未执行))')
+                _TERM = re.compile(r'(?:\[(?P<n1>[^\]]{1,60})\]\s*(?P<s1>done|failed|skipped|not executed)\b|【(?P<n2>[^】]{1,60})】\s*(?P<s2>完成|失败|未执行))')
                 _NORM = {'完成': 'done', '失败': 'failed', '未执行': 'skipped', 'not executed': 'skipped'}
                 res = [_NORM.get(m.group('s2') or m.group('s1'), m.group('s1')) for m in _TERM.finditer(tail)]
                 t = re.findall(r'^===== ([\d\-]+ [\d:]+)', tail, re.M)
-                st['tasks'][name] = {'last': m[-1] if m else None,
+                st['tasks'][name] = {'last': res[-1] if res else None,
                                      'at': t[-1] if t else None}
             except Exception:
                 pass

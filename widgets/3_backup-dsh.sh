@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # 3_backup-dsh — back up and **verify**: create a snapshot → validate the archive → apply the retention policy → report usage
 # Usage: 3_backup-dsh.sh [--dry-run] [--verify-only]
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 DRY=0; VERIFY_ONLY=0

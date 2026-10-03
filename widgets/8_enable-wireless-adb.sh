@@ -7,7 +7,7 @@
 #      The only prerequisite: the bridge app has been granted WRITE_SECURE_SETTINGS (one time, with adb pm grant).
 #
 # Usage: 8_enable-wireless-adb.sh [--dry-run] [--force] [--no-ui]
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 SOCK="$HOME_DIR/.local/bin/droid-sock"
@@ -163,7 +163,7 @@ else
     else adb disconnect "$t" >/dev/null 2>&1; fi   # a port that is not adbd leaves a fake offline entry, so clean it up right away
   done
   if [ "$CONNECTED" != 1 ]; then
-    step "⑤·diagnosis: why it cannot connect (no longer just "cannot" connect)"
+    step '⑤·diagnosis: why it cannot connect (no longer just "cannot" connect)'
     N3=$(timeout 12 "$SOCK" netstate 2>/dev/null || true)
     W3=$(printf '%s' "$N3" | grep -oE '"wifi_on": *-?[0-9]+' | grep -oE '\-?[0-9]+$')
     O3=$(printf '%s' "$N3" | grep -oE '"online": *(true|false)' | grep -oE '(true|false)$')

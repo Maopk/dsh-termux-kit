@@ -1,0 +1,33 @@
+# ShellCheck settings for this repository.
+#
+# The gate runs at "warning" and above (see tools/ci-shellcheck.sh). Style-level
+# notes (info) are not worth a red build; the four codes below are switched off with
+# the reason they are switched off, so a later reader can re-check the call.
+
+severity=warning
+shell=bash
+
+# SC2034 (variable appears unused)
+# These scripts set variables that the sourced widget library, the i18n layer or the
+# on-phone status publisher reads - ShellCheck cannot see across a dynamic `source`.
+# Examples: SELF_DIR / BROWSER_PKG in widgets/*.sh, DSH_DIR in widgets/common.sh.
+disable=SC2034
+
+# SC1090 (non-constant source)
+# Every script sources a path built from $HOME_DIR at run time. That is exactly how
+# the widgets stay installable wherever the user's home is.
+disable=SC1090
+
+# SC2046 (unquoted command substitution)
+# Four deliberate sites, two shapes:
+#   * apps/*/build.sh: `javac ... $(find ... -name '*.java')` must become one
+#     argument per file - quoting it would pass a single broken name.
+#   * widgets/7_reconnect-ai.sh: `$([ "$DRY" = 1 ] && echo --dry-run)` must expand to
+#     either one argument or none.
+disable=SC2046
+
+# SC2294 (eval negates the benefit of arrays)
+# tools/install-widgets and widgets/common.sh both use one `run()` helper that either
+# prints the command line (--dry-run) or evals it. Running the same string twice is
+# the point of that helper.
+disable=SC2294

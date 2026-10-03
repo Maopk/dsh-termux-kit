@@ -97,7 +97,6 @@ def main():
         if b - a >= 24:
             print('   y %5d–%-5d  %s   (%d px)' % (a, b, c, b - a + 1))
 
-    top = rows[0][1]
     bottom = rows[-1][1]
     # 顶部那一行常是状态栏（半透明/黑），取"第一个够高的内容段"当页底色
     base = None

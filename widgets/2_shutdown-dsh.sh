@@ -8,13 +8,13 @@
 #      (it can only work through Termux RUN_COMMAND, so once Termux dies a refresh has to wait for the system to cold-start it).
 #      To really shut Termux down too: add --close-termux.
 # Usage: 2_shutdown-dsh.sh [--dry-run] [--no-backup] [--keep-browser] [--keep-bridge] [--full-stop] [--close-termux]
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 DRY=0; DO_BAK=1; KEEP_BROWSER=0; KEEP_TERMUX=1; KEEP_BRIDGE=0; FULL_STOP=0
 # 2026-09-26 fix: --keep-bridge existed only in the docs and was missing from this case, so it was silently ignored
 for a in "$@"; do case "$a" in --dry-run) DRY=1 ;; --no-backup) DO_BAK=0 ;; --keep-browser) KEEP_BROWSER=1 ;; --keep-termux) KEEP_TERMUX=1 ;; --close-termux) KEEP_TERMUX=0 ;; --keep-bridge) KEEP_BRIDGE=1 ;; --full-stop) FULL_STOP=1 ;; esac; done
-cd "$SHARED" 2>/dev/null || cd "$HOME_DIR"
+cd "$SHARED" 2>/dev/null || cd "$HOME_DIR" || exit
 [ -f "$HOME_DIR/.bashrc" ] && . "$HOME_DIR/.bashrc" >/dev/null 2>&1
 BROWSER_PKG="com.android.chrome"
 LOG="$(dsh_log)"
@@ -120,7 +120,7 @@ if [ "$KEEP_BRIDGE" = 0 ]; then
       if timeout 12 "$HOME_DIR/.local/bin/droid-sock" stop >/dev/null 2>&1; then
         ok "Bridge soft-stopped: port 8788 closed, persistent notification dropped"
         if printf '%s' "$CAPS" | grep -q '"stop_is_durable"'; then
-          ok "v1.8: it now remembers to "stay" off → a system accessibility rebind will not turn it back on"
+          ok 'v1.8: it now remembers to "stay" off → a system accessibility rebind will not turn it back on'
         else
           warn "This bridge version is older: after a soft stop a system accessibility rebind may bring it back; installing v1.8 fixes that for good"
         fi

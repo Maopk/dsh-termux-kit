@@ -4,7 +4,10 @@
 set -u
 
 DSH_PORT="${DSH_PORT:-8080}"
-HOME_DIR="/data/data/com.termux/files/home"
+# Where the phone keeps its home. DSH_HOME_DIR moves it for tests and CI: the whole
+# library derives SHARED/DL/LOGS/CRED_LOCK/BOOT_LOCK_DIR from here, so one variable is
+# enough to point a run at a throw-away directory (tests/ci-selftest.sh does exactly that).
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SHARED="$HOME_DIR/storage/shared"
 DL="$SHARED/Download"
 DSH_DIR="$DL/dsh"

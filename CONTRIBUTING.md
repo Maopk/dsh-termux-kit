@@ -240,14 +240,24 @@ tools/pre-push-check             # 顺带扫改动文件里的 key/token/passwor
 | `tools/check-task-ids` | 任务 id 在四个地方（tasksd 白名单 / 控制台 / 面板 / 组件脚本）一致 | 自检 |
 | `tools/install-tools --check` | 仓库 `tools/` 与安装位 `~/.local/bin` 一致（防"我照着仓库推理、跑的是旧代码"） | 自检 |
 | `tools/check-no-secrets.sh` | 本机凭据没泄进仓库 | push 前 |
-| `tests/selftest.sh` | 93 项总自检（含沙箱冷启动；**会在手机上压负载**，忙的时候别整跑） | 手动 |
+| `tests/selftest.sh` | 70 项总自检（含沙箱冷启动；**会在手机上压负载**，忙的时候别整跑） | 手动 / CI |
 | `tools/pre-push-check` | 第三节那份清单的脚本化版本 | push 前 |
 
 > 仓库不一定住在 `$HOME/dsh-termux-kit`：`tools/` 里的脚本都认 `DSH_KIT_REPO`
 > （例：`DSH_KIT_REPO=/path/to/dsh-termux-kit tools/ui-controls check`），不设时回退到 `$HOME/dsh-termux-kit`。
-> 同理，读 App **真源码**的工具（`sync-apps` / `i18n-audit` / `i18n-table` / `ui-controls` / `app-verify`）和
-> `tests/selftest.sh` 里读控制台源码的那几条断言都认 `DSH_CONSOLE_DIR` 与 `DSH_BRIDGE_DIR`
-> （不设时回退 `$HOME/dsh-console`、`$HOME/droid-bridge`）—— 仓库 `apps/` 是只读镜像，不是编译源，改了不生效。
+> 同理，读 App **真源码**的工具（`sync-apps` / `i18n-audit` / `i18n-table` / `ui-controls` / `app-verify`）认
+> `DSH_CONSOLE_DIR` 与 `DSH_BRIDGE_DIR`，`tests/selftest.sh` 里读控制台源码的那几条断言只认 `DSH_CONSOLE_DIR`
+> （都不设时回退 `$HOME/dsh-console`、`$HOME/droid-bridge`）—— 仓库 `apps/` 是只读镜像，不是编译源，改了不生效。
+> 另外 `widgets/common.sh`、`widgets/[0-9]*.sh` 与 `tests/selftest.sh` 的家目录认 `DSH_HOME_DIR`
+> （不设时是手机上那个 `/data/data/com.termux/files/home`）；`tools/install-tools` 的安装位跟 `$HOME` 走。
+
+> **CI**（`.github/workflows/ci.yml`）跑的就是上面这一批里"不碰手机也能跑"的部分：
+> `bash tools/ci-shellcheck.sh`（全量 `bash -n` + shellcheck）、`ruff check tools tests`、逐文件 `mypy`、
+> `bash tools/ci-gates.sh`（9 道数据源门禁）、`bash tests/lib-tests.sh`（`widgets/common.sh` 的 35 条单元断言）、
+> 以及在容器里 `bash tests/ci-selftest.sh`（一次性 HOME + 手机同款目录布局，汇总写进 run summary）。
+> 本地跑同一套：`python -m pip install -r requirements-dev.txt`，然后照抄上面五行命令。
+> 需要 adb、桥服务、装好的 DSH 页面插件或 Termux 解释器路径的检查，在 `tests/ci-selftest.sh` 的 `OFF_PHONE`
+> 里列着，只记录、不判红；**其余任何失败都会让 CI 变红**。`tools/sync-apps` 会覆写 `apps/`，CI 里不跑。
 
 改完东西的最短路径：
 

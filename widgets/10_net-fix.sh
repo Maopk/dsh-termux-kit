@@ -11,7 +11,7 @@
 # seconds — that is expected.
 #
 # Usage: 10_net-fix.sh [--dry-run]
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 parse_args "$@"
 step "Network first aid (clash-doctor --fix)"

@@ -1,0 +1,8 @@
+# Pinned versions for the checks in .github/workflows/ci.yml.
+#
+# shellcheck-py ships the ShellCheck binary itself, so CI and a laptop run the same
+# ShellCheck (the runner image's own copy is never used). ruff and mypy are pinned
+# for the same reason: a gate that drifts with whatever pip resolves is not a gate.
+shellcheck-py==0.11.0.1
+ruff==0.16.10
+mypy==2.4.0

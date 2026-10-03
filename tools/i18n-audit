@@ -53,8 +53,8 @@ STATUS_PUB = os.path.join(ROOT, 'tools', 'dsh-status-pub')
 TERMS = {'adb', 'token', 'Token', 'GitHub', 'Wi-Fi', 'DSH', 'APK', 'SHA256', 'SHA', 'exit',
          'HTTP', 'HTTPS', 'PWA', 'Clash', 'Termux', 'Android', 'RUN_COMMAND', 'mode', 'v',
          'OK', 'WiFi', 'adb_wifi', 'VPN', 'DNS', 'IP', 'ID', 'AI', 'App', 'APP', 'SIGTERM',
-         'kill', 'dry-run', 'JSON', 'GitHub', 'URL', 'Web', 'web', 'hive', 'Clash', 'adb'}
-REPORT = []
+         'kill', 'dry-run', 'JSON', 'URL', 'Web', 'web', 'hive'}
+REPORT: list[tuple[str, str]] = []
 
 
 def ok(msg):

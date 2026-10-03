@@ -9,12 +9,12 @@
 #      write lock (which waits at most 2 seconds) → one of them is bound to crash while the plugin tree loads.
 #   ③ Clear the orphan credentials lock before starting. After a -9 the lock file is left behind and every later start fails.
 # Usage: 1_start-dsh.sh [--dry-run] [--no-open]
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 DRY=0; OPEN=1
 for a in "$@"; do case "$a" in --dry-run) DRY=1 ;; --no-open) OPEN=0 ;; esac; done
-cd "$SHARED" 2>/dev/null || cd "$HOME_DIR"
+cd "$SHARED" 2>/dev/null || cd "$HOME_DIR" || exit
 [ -f "$HOME_DIR/.bashrc" ] && . "$HOME_DIR/.bashrc" >/dev/null 2>&1
 
 LOG="$(dsh_log)"

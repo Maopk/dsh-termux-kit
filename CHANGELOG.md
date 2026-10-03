@@ -5,6 +5,24 @@
 
 ## [Unreleased]
 
+### 新增
+
+· **CI（`.github/workflows/ci.yml`）**：5 个 job 跑这个仓库自己能证的离线部分 ——
+  `bash -n` 全量 + shellcheck（`tools/ci-shellcheck.sh`）、`ruff` + 逐文件 `mypy` + 编译检查、
+  9 道数据源门禁（`tools/ci-gates.sh`：任务 id / 密钥 / UI 与数据源 / i18n 表 / Java 转义 / 安装一致性 /
+  面板渲染 / 文案审计）、`widgets/common.sh` 的单元测试（`tests/lib-tests.sh`），
+  以及在容器里跑 `tests/selftest.sh`（`tests/ci-selftest.sh`，汇总写进 run summary 并上传产物）。
+  钉版本的开发依赖在 `requirements-dev.txt`（shellcheck-py / ruff / mypy），配置在 `ruff.toml`、`mypy.ini`、`.shellcheckrc`。
+  门禁读仓库里的 `apps/` 镜像与 `i18n/zh.json`，不联网、不碰手机，同一个 commit 永远同一结论；
+  `tools/sync-apps` 会覆写 `apps/`，CI 里不跑。
+· **`tests/lib-tests.sh`**：把 `widgets/common.sh` 里能单独测的函数做成 35 条断言 —— `token_from_log`（含"最后一条生效"）、
+  `port_open` / `wait_port_open` / `wait_port_free`、`url_code(200/000)` / `url_ready`、`boot_lock_acquire` /
+  `owner` / `release` / `stale`（含"进程死了算过期"与"活着但锁太旧也算过期"）、`clear_orphan_cred_lock`（两个方向）、
+  `rotate_log`（3MB 归档、小文件不动）、`run` 的 dry-run 与真跑两路、`dsh_log`、`parse_args --dry-run`。
+· **`tests/ci-selftest.sh`**：给 `tests/selftest.sh` 造一个假手机的 `HOME`（widgets → `~/.shortcuts/tasks`、
+  库 → `~/.local/share/dsh-widgets`、tools → `~/.local/bin`），把需要真机或联网才能过的检查列进 `OFF_PHONE`
+  只记录不判红，其余任何失败都让 CI 变红；`--strict` 原样透传套件退出码。
+
 ### 修复
 
 · **两个 App 的构建脚本不再写死路径**（`apps/console/build.sh` / `apps/bridge/build.sh`）：改为从脚本自身所在目录
@@ -23,6 +41,22 @@
 · **读 App 真源码的 5 个工具不再假设源码住在 `$HOME`**：`tools/app-verify`、`tools/i18n-audit`、
   `tools/i18n-table`、`tools/ui-controls`、`tools/sync-apps` 统一认 `DSH_CONSOLE_DIR` 与 `DSH_BRIDGE_DIR`
   （不设时回退 `~/dsh-console`、`~/droid-bridge`）；规矩与 `DSH_KIT_REPO` 并列写在同一处。
+· **静态检查抓出来的真问题**：`tools/dsh-tasksd` 的 `last` 字段取的是**编译后的正则**的下标（`re.compile` 的结果不能下标，
+  异常又被外层 `except Exception: pass` 吞掉），于是它永远是 null —— 改成取刚算出的状态列表的最后一项；
+  `tools/install-widgets` 数语言条数用的 `ls | grep -c` 换成 glob 计数（文件名里有空格也不会数错）；
+  `widgets/2_shutdown-dsh.sh:123` 与 `widgets/8_enable-wireless-adb.sh:166` 的提示语双引号套双引号（字符串会提前闭合）改用单引号；
+  7 处 `cd` 补上失败出口（SC2164）：`tools/dsh-restart`、`widgets/0_emergency-stop.sh`、`widgets/1_start-dsh.sh`、
+  `widgets/2_shutdown-dsh.sh`、`widgets/4_soft-restart-dsh.sh`、`widgets/6_hard-restart-dsh.sh`、`widgets/7_reconnect-ai.sh`；
+  `tools/clash-override.py` 13 处 `%` 格式化改 f-string（输出逐字不变）、两处 `subprocess.run` 显式写 `check=False`、
+  `tools/check-task-ids` 与 `tools/ui-controls` 删掉没用到的 import、`tools/i18n-audit` 补类型标注（mypy）、
+  `tools/app-verify` 保留"读 theme.json"这一句并注明原因（删了会让缺文件时不再报错）。
+· **12 个小部件脚本的 `HOME_DIR` 不再写死手机路径**：`widgets/[0-9]*.sh` 统一改成
+  `HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"`（`widgets/common.sh` 上一批已改），手机上行为不变。
+  这是自检套件在容器里跑不起来的真正原因：原来它们 source 不到库，12 个 `--dry-run` 全报 `command not found`（rc=127）。
+· **`tools/install-tools --check` 不再顺手建目录**：安装位不存在时只打印一行说明就返回 0，不再 `mkdir -p ~/.local/bin`
+  （检查动作不该改机器）。
+· **`tests/selftest.sh` 三处裸 `$TMPDIR` 改成 `${TMPDIR:-${PREFIX:-/tmp}}`**（`:225`、`:383`、`:421`）：
+  原来 `set -u` 下没设 `TMPDIR` 时套件会在 L3 中途断掉，连 `Result:` 汇总行都拿不到。
   （本批不改三个产物的内容，不 bump 版本号，见 §六。）
 · **`tools/panel-render-test` 的兜底更稳**：没有 `HOME` 时回退到 `os.homedir()`（Windows 上很常见），
   不再落到相对路径 `./dsh-termux-kit` 而在别的目录报 `ENOENT`。

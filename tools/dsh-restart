@@ -14,7 +14,7 @@ HOME_DIR="/data/data/com.termux/files/home"
 LOG="$(dsh_log)"
 FORCE=0; WAKELOCK=1
 for a in "$@"; do case "$a" in --force) FORCE=1 ;; --no-wake-lock) WAKELOCK=0 ;; esac; done
-cd "$SHARED" 2>/dev/null || cd "$HOME_DIR"
+cd "$SHARED" 2>/dev/null || cd "$HOME_DIR" || exit
 [ -f "$HOME_DIR/.bashrc" ] && . "$HOME_DIR/.bashrc" >/dev/null 2>&1
 
 if [ "$WAKELOCK" = 1 ] && need termux-wake-lock; then termux-wake-lock 2>/dev/null && log "wakelock held (stops the system freezing Termux)"; fi

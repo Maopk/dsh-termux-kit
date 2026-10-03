@@ -19,7 +19,11 @@ SRC="$REPO/tools"; DST="$HOME/.local/bin"
 CHECK=0; [ "${1:-}" = "--check" ] && CHECK=1
 
 [ -d "$SRC" ] || { echo "✘ 仓库 tools/ 不存在: $SRC" >&2; exit 2; }
-[ -d "$DST" ] || mkdir -p "$DST"
+if [ ! -d "$DST" ]; then
+  # --check 只报告：安装位不存在就没有可比的，不要顺手把目录建出来（本机、CI 都少一个副作用）
+  if [ "$CHECK" = 1 ]; then printf '   · 安装位 %s 不存在，没有可同步的工具\n' "$DST"; exit 0; fi
+  mkdir -p "$DST"
+fi
 
 # 有意不同步的（写在这里，不静默）：
 #   droid —— 仓库那份是英文版，安装位那份是用户实际在读的中文版；两份 231 行、**只有提示文字不同**。

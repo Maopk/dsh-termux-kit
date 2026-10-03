@@ -33,3 +33,8 @@ build/
 # 系统垃圾
 .DS_Store
 Thumbs.db
+
+# 静态检查工具的缓存（跑 ruff / mypy 会生成，别入库）
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/

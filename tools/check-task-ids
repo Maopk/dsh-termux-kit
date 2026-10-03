@@ -23,7 +23,6 @@ Usage: check-task-ids        exit 0 when they agree, 1 with the diff otherwise
 import json
 import os
 import re
-import subprocess
 import sys
 
 HOME = os.path.expanduser('~')

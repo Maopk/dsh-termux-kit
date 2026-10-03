@@ -2,11 +2,11 @@
 # 0_emergency-stop — revoke all of the AI control over this phone in one tap (works without looking at the screen or tapping a button)
 # Revokes four paths: ① DSH bridge (accessibility) ② token ③ shared-dir command channel ④ adb wireless debugging
 # Usage: 0_emergency-stop.sh [--dry-run]
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 parse_args "$@"
-cd "$SHARED" 2>/dev/null || cd "$HOME_DIR"
+cd "$SHARED" 2>/dev/null || cd "$HOME_DIR" || exit
 [ -f "$HOME_DIR/.bashrc" ] && . "$HOME_DIR/.bashrc" >/dev/null 2>&1
 
 log "Emergency stop: the goal is to cut all four AI control paths"

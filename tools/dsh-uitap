@@ -74,7 +74,7 @@ def main():
     if '--nth' in args:
         nth = int(args[args.index('--nth') + 1])
 
-    for attempt in range(14):
+    for _attempt in range(14):
         nodes = dump(target)
         # Match both text and desc: many buttons are an icon + contentDescription (such as 「新建」 or 「保存」)
         if contains:

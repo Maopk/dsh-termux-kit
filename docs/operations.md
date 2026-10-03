@@ -148,7 +148,7 @@ explicitly.
 ## 10. Self-test
 
 ```bash
-bash tests/selftest.sh        # 60 checks: syntax → dry-runs → regression → real runs → cold-start sandbox
+bash tests/selftest.sh        # 70 checks: syntax → dry-runs → regression → real runs → cold-start sandbox
 ```
 
 Everything testable runs for real (a second DSH instance is started on port 8099 in a sandbox profile, with its

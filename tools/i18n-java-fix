@@ -129,7 +129,7 @@ def main():
         return 0
     open(path, 'w', encoding='utf-8').write(out)
     print(f'✅ {path}: fixed {len(changes)} side(s) across {total} entries')
-    for side, line, old, new in changes:
+    for side, line, _old, _new in changes:
         print(f'   L{line} {side}')
     return 0
 

@@ -75,7 +75,7 @@ def call(obj, timeout=40):
     req['token'] = tok
     try:
         s = _connect_once(timeout)
-    except Exception as first:
+    except Exception:
         # Wake ladder: ① a broadcast carrying the token (silent) → ② raise the bridge UI (takes your screen).
         #
         # ⚠ 2026-09-27, reversed again by an explicit user request ("我启动dsh后还会再跳转到桥一次，我不想跳转"):

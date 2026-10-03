@@ -2,12 +2,12 @@
 # 4_soft-restart-dsh — no killing: SIGTERM alone for a graceful stop → backup → rotate logs → wait for the port → start → verify
 # Gives up after 15 seconds (never -9) and points you to "6_hard-restart-dsh"
 # Usage: 4_soft-restart-dsh.sh [--dry-run] [--no-backup]
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 DRY=0; DO_BAK=1
 for a in "$@"; do case "$a" in --dry-run) DRY=1 ;; --no-backup) DO_BAK=0 ;; esac; done
-cd "$SHARED" 2>/dev/null || cd "$HOME_DIR"
+cd "$SHARED" 2>/dev/null || cd "$HOME_DIR" || exit
 [ -f "$HOME_DIR/.bashrc" ] && . "$HOME_DIR/.bashrc" >/dev/null 2>&1
 LOG="$(dsh_log)"
 

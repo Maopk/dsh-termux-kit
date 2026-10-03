@@ -17,7 +17,7 @@
 # Usage: 11_update-apps.sh [--dry-run] [--force] [--console-ver X.Y]
 #   --console-ver  控制台自己把自己的版本传进来（App 最清楚自己装的是哪一版）；
 #                  不给就用 adb 读系统里那个包的 versionName。
-HOME_DIR="/data/data/com.termux/files/home"
+HOME_DIR="${DSH_HOME_DIR:-/data/data/com.termux/files/home}"
 . "$HOME_DIR/.local/share/dsh-widgets/common.sh"
 
 FORCE=0; CONSOLE_VER=""

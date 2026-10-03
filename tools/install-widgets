@@ -82,6 +82,14 @@ run install -m755 "'$REPO/i18n.sh'" "'$LIB/i18n.sh'"
 
 [ "$DRY" = 1 ] && { printf '\n(dry run: nothing was written)\n'; exit 0; }
 printf '\n✔ installed to %s\n' "$T"
-printf '   English tasks : %s\n' "$(ls "$T" | grep -cE '^[0-9]+_[a-z]')"
-printf '   Chinese names : %s\n' "$(ls "$T" | grep -cE '^[0-9]+_[^a-z]')"
+n_en=0; n_zh=0
+for p in "$T"/*; do
+  b="${p##*/}"
+  case "$b" in
+    [0-9]*_[a-z]*) n_en=$((n_en + 1)) ;;
+    [0-9]*_[!a-z]*) n_zh=$((n_zh + 1)) ;;
+  esac
+done
+printf '   English tasks : %s\n' "$n_en"
+printf '   Chinese names : %s\n' "$n_zh"
 printf '   moved aside   : %s\n' "$(ls "$STALE" 2>/dev/null | wc -l)"

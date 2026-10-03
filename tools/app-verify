@@ -116,7 +116,7 @@ def main():
         print('用法: app-verify console|bridge [apk]'); return 2
     spec = APPS[app]
     apk = sys.argv[2] if len(sys.argv) > 2 else spec['apk']
-    theme = json.load(io.open(THEME, encoding='utf-8'))
+    _theme = json.load(io.open(THEME, encoding='utf-8'))   # keep the read: a missing ui/theme.json must stop here
     print('审计 %s：%s' % (app, apk))
 
     # ① manifest：版本 + 主题
