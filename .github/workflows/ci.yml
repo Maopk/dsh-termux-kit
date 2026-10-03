@@ -154,6 +154,9 @@ jobs:
       - name: "Pre-push checklist (recorded, never a gate)"
         if: always()
         continue-on-error: true
+        env:
+          # The tool falls back to $HOME/dsh-termux-kit, which is not where a runner checks out.
+          DSH_KIT_REPO: ${{ github.workspace }}
         run: |
           mkdir -p ci-selftest-work
           bash tools/pre-push-check > ci-selftest-work/pre-push-check.txt 2>&1 || true
