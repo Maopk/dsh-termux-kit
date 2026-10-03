@@ -157,8 +157,16 @@ jobs:
         env:
           # The tool falls back to $HOME/dsh-termux-kit, which is not where a runner checks out.
           DSH_KIT_REPO: ${{ github.workspace }}
+          # Same two settings the gates job uses: without them python3 in this image still
+          # believes it is writing ASCII and dies on the ✔/✘ the tools print.
+          PYTHONUTF8: '1'
+          PYTHONIOENCODING: utf-8
+          DSH_CONSOLE_DIR: ${{ github.workspace }}/apps/console
+          DSH_BRIDGE_DIR: ${{ github.workspace }}/apps/bridge
         run: |
           mkdir -p ci-selftest-work
+          # The container user is not the checkout owner, so git refuses to look at it otherwise.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" 2>/dev/null || true
           bash tools/pre-push-check > ci-selftest-work/pre-push-check.txt 2>&1 || true
           tail -n 25 ci-selftest-work/pre-push-check.txt
       - name: Put the tally in the run summary
