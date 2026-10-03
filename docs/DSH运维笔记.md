@@ -98,6 +98,30 @@
 下一步：手机上 `git pull` → `install-tools` → `bash tools/install-widgets`（**桌面组件一并刷新**）→
   编两个 APK → `dsh-gh release v1.13 …`；发版后补 `SHA256SUMS.txt` 与发行说明。
 
+2026-09-28 12:02 · 【判断记录】三条小判断被用户确认（i18n 英中分治 / 跳过 pnpm install / 英文 README 同步）
+
+用户确认的三条（原话：“三条都对”）：
+  ① **i18n 中文侧改“软停”、英文侧保留 `graceful`** —— `graceful shutdown` 是英语行业标准词，不算 AI 味；
+     中文没有标准对应词，就用本项目定义的“软停”。**“一个动作一个词”不等于两种语言必须同构**。
+  ② **面板产物无变化时跳过 `pnpm install`** —— 它会剪掉指向运行时的软链（见「十三·补三十一」），没有变更就不跑；
+     改用只读的 `dsh-relink-bundles --check` 复核。**别为了走流程去跑有副作用的命令**（跳过要在报告里写明理由）。
+  ③ **英文 README 同步改 `One tap…` → `Emergency stop…`** —— 两份 README 结构一一对应，只改中文会让它们分叉。
+
+2026-09-28 11:54 · 【提交】拆成两个 commit（docs: 术语标准化 / fix: 工具误报），**未推**
+
+做了什么（第三步）：按用户要求拆两个 commit，不混装：
+  ① `2a12a5a` **docs: 术语标准化（术语表 + 禁用词表 + i18n 中文侧软停）** —— 8 个文件、+183/−28：
+     `docs/术语表.md`（新，5 类 25 条）、`CONTRIBUTING.md` §十三、`docs/DSH运维笔记.md`、`CHANGELOG.md`、
+     `README.md`、`README.zh-CN.md`、`i18n/zh.json`、`widgets/i18n.sh`。
+  ② `9694753` **fix: 工具自检的两处误报** —— 2 个文件、+10/−2：`tools/dsh-gh`、`tools/pre-push-check`。
+  两条都写完，工作区干净；**没推**（本地领先远端 2 个 commit）。
+为什么：上一轮记的教训"`docs:` commit 只装本批改动、上一轮遗留的单独 commit"——这次照做，两个 commit 各自单一主题。
+结果：`git log --oneline -3` = `9694753` / `2a12a5a` / `6b3d090`；`git status` 干净。
+  一处如实记：commit 1 里带了上一轮的 11:47 两条笔记（推送记录 + 教训）—— §九.7 规定推送记录在推后追加，
+  必然落进下一个 commit；已在 commit message 末尾写明。
+下一步：等用户 OK 后走 §九 推送（`git fetch` 确认远端领先 0 → 复刻 `dsh-gh` 的推送行 → 对齐 `origin/master` 引用），
+  推完按 §九.7 再记一条推送记录（两个 commit + 远端 HEAD）。
+
 2026-09-28 11:53 · 【术语】i18n 中文侧 6 条改成"软停"，产物重生成并同步安装位（第一步）
 
 做了什么（用户拍板"中文侧改、英文侧保留 graceful"后执行）：
