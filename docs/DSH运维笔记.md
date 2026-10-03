@@ -7,6 +7,25 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-10-03 · 【自检】给报告配一份"真家伙"当契约（真实自检输出进仓库）
+
+做了什么：把一次真实自检的完整输出（70 项）存成 `tests/fixtures/selftest-report.json`（临时 HOME 洗成 `~`、
+  工作副本洗成 `$KIT`；洗路径的脚本是 `D:\DSH\.tmp\mkfixture.py`，会打印残留的绝对路径而不是猜），
+  新增 `tests/unit/test_report_fixture.py` 5 个用例：schema 能被检查器接受、11 条 device 失败只被**记录**不被豁免、
+  `unclassified = 0`、`summary` 与 items 重算逐类一致、`summarize` 文案含三类。`tests/unit` 合计 19 个用例。
+
+为什么：隔壁那些用例都是**手写**报告，写入端（`tests/lib/report.sh`）把字段名改了、把某一类弄丢、把计数写错，
+  它们照样绿；只有拿真输出喂检查器，才把"写入端漂移"变成 CI 里的红。
+
+结果：pytest 19 passed / ruff 通过 / mypy 4 文件无问题 / shellcheck 55 文件 0 发现；本机端到端
+  `logic 25/0/0 · simulable 18/0/1 · device 4/11/11`、`unexpected 0`、RC=0；容器那一跑（`9b521b8a` 的
+  run 37116458125）打印同样的形状 —— `device 8/7/11` 正好是历史上被 `OFF_PHONE` 放行的那 7 条，
+  一条不多一条不少。
+
+下一步：`ci.yml` 的三处改动还在本地等 token 的 `workflow` 权限（`unit` job 跑 pytest、mypy 覆盖
+  `tests/report_check.py` 与 `tests/unit`、selftest 的 run summary 加分类统计）；手机端 `dsh-kit-update`
+  之后跑自检会多一行 `Assertions:` 并留下 `~/.smoke/selftest.json`。
+
 2026-10-03 · 【自检】测试分成三类（logic / simulable / device），报告变成 JSON 并由 CI 校验
 
 做了什么：把自检从"一个会红的列表 + 一条按消息匹配的正则"改成可被机器判定的三层。①新增 `tests/lib/report.sh`

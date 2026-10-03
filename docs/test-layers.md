@@ -41,6 +41,9 @@ CI 变红 —— 这是「新增断言必须有归属」的兜底。
 * `tests/ci-selftest.sh` 用一次性 HOME 跑套件，然后把退出码交给 `tests/report_check.py`：
   logic/simulable 失败、或 device 里没有放行的失败 → 红（1）；报告本身坏了 → 2；否则绿（0）。
   `--strict` 仍然表示「用套件自己的退出码」（一条失败都不许有）。
+* 报告有一份真实样本当契约：`tests/fixtures/selftest-report.json` 是一次真机自检的完整输出（70 项，
+  临时 HOME 与工作副本的路径洗成 `~` / `$KIT`），`tests/unit/test_report_fixture.py` 直接拿它过检查器 ——
+  写入端一漂移（字段改名、计数对不上、某一类整体消失、放行行被删）就当场红。
 
 ## 怎么维护
 
@@ -59,7 +62,7 @@ CI 变红 —— 这是「新增断言必须有归属」的兜底。
    「层都认不出来」才变红。
 2. **断言函数留在 shell，没有重写成 Python**：设备侧必须在 Termux 上跑，Python 不是这个仓库对
    手机的前提；仓库已有 CI 强制的 shell 单测通道（`tests/lib-tests.sh`，job `unit`）。
-   报告里那半部分用 Python/pytest：`tests/report_check.py` 是纯函数 + 12 个用例。
+   报告里那半部分用 Python/pytest：`tests/report_check.py` 是纯函数，加 `tests/unit/` 共 19 个用例。
 3. **device 的「预期缺席」从正则升级为被审阅的表**：原来藏在 `tests/ci-selftest.sh` 的
    `OFF_PHONE` 正则里（按消息匹配，顺带会吞掉同类的别的失败）；现在是一条条 id + 类别 + 理由，
    改动要过 review，且 CI 里那份「记录了但不算红」的清单会打在日志里。

@@ -1,0 +1,592 @@
+{
+  "schema": "dsh-selftest/1",
+  "suite": "widgets",
+  "started": "2026-10-03T18:20:01+0800",
+  "finished": "2026-10-03T18:21:58+0800",
+  "items": [
+    {
+      "status": "skip",
+      "tier": "L0",
+      "id": "precheck: bridge channel",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "a token-bearing wake cannot start it either — open the DSH Bridge app once (not a widget problem)"
+    },
+    {
+      "status": "skip",
+      "tier": "L0",
+      "id": "precheck: adb channel",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "not connected (Wi-Fi was off or restarted; enable Wireless debugging once first)"
+    },
+    {
+      "status": "skip",
+      "tier": "L0",
+      "id": "precheck: 8080",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "no session is running right now"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "0_emergency-stop.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "1_start-dsh.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "10_net-fix.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "11_update-apps.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "2_shutdown-dsh.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "3_backup-dsh.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "4_soft-restart-dsh.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "5_cleanup-dsh.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "6_hard-restart-dsh.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "7_reconnect-ai.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "8_enable-wireless-adb.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "9_revoke-pin.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "common.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "selftest.sh",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "syntax OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "droid-sock",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "python compile OK"
+    },
+    {
+      "status": "pass",
+      "tier": "L1",
+      "id": "task ids agree",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "the page panel, the app and the widgets only send ids the allowlist accepts"
+    },
+    {
+      "status": "fail",
+      "tier": "L1",
+      "id": "installed tools match the repo",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "drifted: → run tools/install-tools"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "0_emergency-stop.sh",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "dry-run completed and exited 0"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "1_start-dsh.sh",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "dry-run completed and exited 0"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "10_net-fix.sh",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "dry-run completed and exited 0"
+    },
+    {
+      "status": "fail",
+      "tier": "L2",
+      "id": "11_update-apps.sh",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "dry-run failed (see ~/.smoke/selftest.log)"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "2_shutdown-dsh.sh",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "dry-run completed and exited 0"
+    },
+    {
+      "status": "fail",
+      "tier": "L2",
+      "id": "3_backup-dsh.sh",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "dry-run failed (see ~/.smoke/selftest.log)"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "4_soft-restart-dsh.sh",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "dry-run completed and exited 0"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "5_cleanup-dsh.sh",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "dry-run completed and exited 0"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "6_hard-restart-dsh.sh",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "dry-run completed and exited 0"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "7_reconnect-ai.sh",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "dry-run completed and exited 0"
+    },
+    {
+      "status": "fail",
+      "tier": "L2",
+      "id": "8_enable-wireless-adb.sh",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "dry-run failed (see ~/.smoke/selftest.log)"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "9_revoke-pin.sh",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "dry-run completed and exited 0"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "2_shutdown-dsh --keep-bridge",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "the flag really takes effect (bridge channel kept)"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "2_shutdown-dsh default",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "the default stops the bridge (prefers sleep, falls back to stop on old versions)"
+    },
+    {
+      "status": "pass",
+      "tier": "L2",
+      "id": "lamp offsets measured",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "lamp spans compute offsets from the actual label lengths (language-proof)"
+    },
+    {
+      "status": "skip",
+      "tier": "L3",
+      "id": "stale token rejected",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "8080 is not running, cannot verify"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "half-started 404 rejected",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "the old check would let HTTP 404 through → the new one blocks it (this is the 404 from the screenshot)"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "token line extraction",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "got the local URL: http://127.0.0.1:8099/?token=AAA-bbb_CCC123"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "boot exclusion lock",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "the second boot was blocked; the lock is free again once the holder exits"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "boot lock idempotence",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "repeated takes in the same process all succeed (it never blocks itself)"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "orphan credentials lock",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "removed with no instance, left alone with one (no permanent boot hang after -9)"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "exited process fails fast",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "returns 'already exited' within 0s when the pid is gone"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "dsh_pids does not self-match",
+      "category": "simulable",
+      "ci_allowed": false,
+      "detail": "never counts the caller itself as a dsh process"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "lock before action",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "widgets 2/4/6 all take the lock before killing (a double tap no longer kills itself)"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "close action tells the truth",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "widget 2 never calls bare am force-stop; without adb dsh-close-window borrows the bridge to send keys (device-verified 2026-09-27: one Back key closes it)"
+    },
+    {
+      "status": "fail",
+      "tier": "L3",
+      "id": "dsh-close-window",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "missing or --probe broken → without adb, closing the window is a lie again"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "window close before bridge stop",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "the window closes at line 74, the bridge stops only at line 117 (reversed, it can never close without adb)"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "widget8 Wi-Fi handoff",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "with Wi-Fi off it opens the settings page, polls until you enable it, then finishes on its own"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "widget8 read-back after set",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "stops within 4s with the real cause when it does not stick — no more futile port scan, no more inverted conclusion"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "revoke password rights (widget)",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "widget 9 goes through dsh-auth-pass revoke and re-checks that the file really disappears"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "password-rights switch (console)",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "a Switch in the maintenance class: on = the AI may use your password to pass verification, off = revoked at once (not just for installs)"
+    },
+    {
+      "status": "fail",
+      "tier": "L3",
+      "id": "task plugin (page) matches the UI source",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "missing: Start / Stop  Channels (adb and bridge separate)  Maintenance  Security  Settings  Emergency  Status / Log  About this app  UI_CONTROLS  mb-switch (deploy with tools/install-tools + pnpm install, then refresh)"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "tasksd whitelist+virtual tasks",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "9_revoke-pin alongside bridge_wake/bridge_status are both whitelisted"
+    },
+    {
+      "status": "fail",
+      "tier": "L3",
+      "id": "runtime bundle symlinks",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "links missing → the page reports Failed to load plugins (run dsh-relink-bundles)"
+    },
+    {
+      "status": "skip",
+      "tier": "L3",
+      "id": "client bundle really fetches",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "the local 8080 is not running"
+    },
+    {
+      "status": "pass",
+      "tier": "L3",
+      "id": "status pushback not truncated",
+      "category": "logic",
+      "ci_allowed": false,
+      "detail": "--brief 0B (full 0B): status stays whole, only task output is tail-truncated"
+    },
+    {
+      "status": "fail",
+      "tier": "L4",
+      "id": "revoke password rights (real run)",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "exit 126 / the file is still there: tests/selftest.sh: ~/.local/bin/dsh-auth-pass: /data/data/com.termux/files/usr/bin/bash: bad interpreter: No such file or directory"
+    },
+    {
+      "status": "skip",
+      "tier": "L4",
+      "id": "real authorisation untouched",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "there is no authorisation file right now (not authorised)"
+    },
+    {
+      "status": "fail",
+      "tier": "L4",
+      "id": "3_backup-dsh.sh",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "real run failed (see ~/.smoke/selftest.log)"
+    },
+    {
+      "status": "pass",
+      "tier": "L4",
+      "id": "5_cleanup-dsh.sh",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "real run passed: Download/dsh: 0MB → 0MB"
+    },
+    {
+      "status": "pass",
+      "tier": "L4",
+      "id": "7_reconnect-ai.sh",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "real run passed: adb     :    Bridge  : not listening   T"
+    },
+    {
+      "status": "skip",
+      "tier": "L4",
+      "id": "8_enable-wireless-adb.sh",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "depends on the bridge channel; preconditions unmet (not a widget problem)"
+    },
+    {
+      "status": "skip",
+      "tier": "L4",
+      "id": "bridge soft stop/wake",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "depends on the bridge channel; preconditions unmet"
+    },
+    {
+      "status": "fail",
+      "tier": "L5",
+      "id": "1_start-dsh.sh cold start",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "never finished the real readiness check (exit=1; last widget lines:    ✘ Startup failed (the log tail is printed above)  [1_start-dsh.sh] failed (took 16s) )"
+    },
+    {
+      "status": "pass",
+      "tier": "L5",
+      "id": "half-start evidence",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "sampled HTTP code sequence: (none sampled; startup may have been too fast)"
+    },
+    {
+      "status": "fail",
+      "tier": "L5",
+      "id": "sandbox URL usable",
+      "category": "device",
+      "ci_allowed": true,
+      "detail": "the sandbox produced no usable token URL"
+    },
+    {
+      "status": "skip",
+      "tier": "SKIP",
+      "id": "0_emergency-stop.sh",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "a real run revokes the token + disables accessibility + drops adb and needs manual recovery; indirectly verified by the volume-key drill"
+    },
+    {
+      "status": "skip",
+      "tier": "SKIP",
+      "id": "2_shutdown-dsh.sh",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "a real run stops this session; every step has been run for real on its own (backup/rotation/port wait/bridge stop), and window closing was run for real via dsh-close-window"
+    },
+    {
+      "status": "skip",
+      "tier": "SKIP",
+      "id": "4_soft-restart-dsh.sh",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "a real run restarts the service and drops this session"
+    },
+    {
+      "status": "skip",
+      "tier": "SKIP",
+      "id": "6_hard-restart-dsh.sh",
+      "category": "device",
+      "ci_allowed": false,
+      "detail": "same as above; this is the only way to verify the -9 hard-kill path (orphan lock cleanup is covered by the L3 (5) unit test)"
+    }
+  ],
+  "summary": {
+    "logic": {
+      "pass": 25,
+      "fail": 0,
+      "skip": 0
+    },
+    "simulable": {
+      "pass": 18,
+      "fail": 0,
+      "skip": 1
+    },
+    "device": {
+      "pass": 4,
+      "fail": 11,
+      "skip": 11
+    },
+    "total": {
+      "pass": 47,
+      "fail": 11,
+      "skip": 12
+    },
+    "unexpected_failures": 0,
+    "unclassified": 0
+  }
+}
