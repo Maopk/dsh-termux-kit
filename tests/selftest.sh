@@ -764,5 +764,16 @@ if ! report_json "$REPORT_ROWS" "$REPORT_STARTED" "$(date '+%FT%T%z')" > "$JSON_
   line "⚠ could not write the JSON report to $JSON_OUT"
 fi
 line "Report: $HOME_DIR/.smoke/selftest-report.txt · JSON: $JSON_OUT"
+# The report is only worth having if someone rules on it. Run the same checker CI runs, right here, so
+# the console's 「自检」 output carries the policy verdict too — no second command, no "green by eye".
+# It is a **reader**: it cannot change $FAIL, and a missing checker is said out loud, never ignored.
+CHECKER="$KIT/tests/report_check.py"
+if [ -f "$CHECKER" ]; then
+  CHKOUT="$(python3 "$CHECKER" "$JSON_OUT" 2>&1)"; CHKRC=$?
+  printf '%s\n' "$CHKOUT"
+  [ "$CHKRC" = 0 ] || line "  (tests/report_check.py exited $CHKRC for this report — see docs/test-layers.md)"
+else
+  line "· report checker not found at $CHECKER — the policy verdict is skipped"
+fi
 rm -rf "$TMPD"
 exit "$FAIL"

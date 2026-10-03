@@ -45,6 +45,10 @@ CI 变红 —— 这是「新增断言必须有归属」的兜底。
   含 11 条被记录而不被豁免的 device 失败；临时 HOME 与工作副本路径洗成 `~` / `$KIT`），
   `tests/unit/test_report_fixture.py` 用它钉住**检查器**面对真实产物时的行为。
   写入端自己的形状由 `tests/lib-tests.sh` 逐字段断言；写入端 ↔ 检查器的端到端由容器那一跑覆盖。
+* **套件自己也会跑一遍检查器**（写完 JSON 之后），所以控制台「自检」的输出里直接就有一句
+  `✔ logic and simulable are clean …`（或逐条 `✘`），不必再手敲第二条命令。它只是**读者**：
+  改不了套件的退出码（那是 `$FAIL`，也就是真机自己看到的红），检查器缺失或跑不起来会明说一句，
+  不会悄悄跳过。
 
 ## 怎么维护
 
@@ -73,9 +77,11 @@ CI 变红 —— 这是「新增断言必须有归属」的兜底。
 * device 报告还没有「上传/链接」那一步：CI 只能校验交给它的报告。手机跑完把
   `~/.smoke/selftest.json` 拿上来，用同一条命令复核即可（合并策略见
   `.github/workflows/ci.yml` 的 `selftest` job）。
-* `.github/workflows/ci.yml` 还有两处待接：`mypy` 覆盖 `tests/report_check.py` 与 `tests/unit/`，
-  `selftest` job 的 run summary 打印分类统计。两者都要改 workflow 文件，而当前那枚 token 没有
-  `workflow` 权限 —— 改动已备好，等权限。**`tests/unit/` 本身已经在 CI 里跑**：`gates` job 的第 10 道
-  门禁（`tools/ci-gates.sh`）会跑 pytest，缺 pytest 时自己装 `requirements-dev.txt` 里那个 pin。
+* `.github/workflows/ci.yml` 的三处接线 2026-10-03 已经落地（`cd495d76`）：`mypy` 覆盖
+  `tests/report_check.py` 与 `tests/unit/`、`unit` job 装 `requirements-dev.txt` 并跑 pytest、
+  `selftest` job 的 run summary 打印分类统计。当时拖到最后的原因值得记一笔：**改 workflow 文件要求
+  那枚 token 带 `workflow` 权限**，`public_repo` 的 token 会被 GitHub 直接拒绝（而本机发布器当时把
+  `.github\` 静默跳过，所以没人发现改动躺在那儿）。`tests/unit/` 在此之前就已经在 CI 里跑：
+  `gates` job 的第 10 道门禁（`tools/ci-gates.sh`）会跑 pytest，缺 pytest 时自己装同一个 pin。
 * `apps/*/build.sh`（aapt2/javac/d8）与 `tools/sync-apps` 仍然只能在真机上跑，见
   `CONTRIBUTING.md` §三 的手工清单。

@@ -36,6 +36,12 @@
 · **背景与偏差**：老师看过这个仓库后给的是「断言分类 + 结构化报告 + 薄封装 + 渐进迁移」的路子。按仓库实际做的
   三处偏差（类别按层默认而不是逐条分类、断言函数留在 shell 而不是改写成 Python、放行清单从正则升级为被审阅的
   表）连同理由都写在 `docs/test-layers.md`。
+· **套件自己也会跑一遍检查器**（`tests/selftest.sh` 写完报告之后）：控制台「自检」的输出里现在直接就有
+  `passed/failed/skipped — logic … · simulable … · device …` 与 `✔ logic and simulable are clean …`（有越界就逐条 `✘`），
+  不必再手敲 `python3 tests/report_check.py` —— 那一步是真机上的最后一个摩擦点。检查器在这里只是**读者**：
+  它改不了套件的退出码（那仍是真机自己看到的 `$FAIL`），缺失或跑不起来会明说一句，不会悄悄跳过。
+  顺带把 `docs/test-layers.md` 的「还没做的」里那条已经落地的 ci.yml 接线改成事实记录，并写下当时的两条教训：
+  改 workflow 文件要求 token 带 `workflow` 权限，而发布器会把 `.github\` **静默**跳过（所以改动躺了几小时没人知道）。
 
 ### 修复
 
