@@ -437,10 +437,10 @@ else
   rec SKIP "real authorisation untouched" "there is no authorisation file right now (not authorised)"
 fi
 if timeout 180 bash "$T/3_backup-dsh.sh" > "$TMPLOG" 2>&1 && grep -q 'Archive readable' "$TMPLOG"; then
-  rec PASS "3_backup-dsh.sh" "real run passed: $(grep -oE '[0-9]+ archives? kept[^,]*' "$TMPLOG" | head -1)"
+  rec PASS "3_backup-dsh.sh" "real run passed: $(grep -aoE '[0-9]+ archives? kept[^,]*' "$TMPLOG" | head -1)"
 else rec FAIL "3_backup-dsh.sh" "real run failed (see $TMPLOG)"; fi
 if timeout 180 bash "$T/5_cleanup-dsh.sh" > "$TMPLOG" 2>&1; then
-  rec PASS "5_cleanup-dsh.sh" "real run passed: $(grep -oE 'Download/dsh: [0-9]+MB → [0-9]+MB' "$TMPLOG" | head -1)"
+  rec PASS "5_cleanup-dsh.sh" "real run passed: $(grep -aoE 'Download/dsh: [0-9]+MB → [0-9]+MB' "$TMPLOG" | head -1)"
 else rec FAIL "5_cleanup-dsh.sh" "real run failed"; fi
 # Verdict = did the widget run to completion, not what it found. It deliberately does **not** require
 # "DSH Web : running": the self-check is meant to be run any time, including right after 2_shutdown-dsh.sh,
@@ -448,7 +448,7 @@ else rec FAIL "5_cleanup-dsh.sh" "real run failed"; fi
 # assertion called exactly that case a failure.) 180s because a cold run may hand off to 8_ and then to
 # `droid conn`/`discover`, which carry their own 40+30s timeouts.
 if timeout 180 bash "$T/7_reconnect-ai.sh" > "$TMPLOG" 2>&1; then
-  rec PASS "7_reconnect-ai.sh" "real run passed: $(grep -oE 'adb     : .*' "$TMPLOG" | head -1 | cut -c1-40)"
+  rec PASS "7_reconnect-ai.sh" "real run passed: $(grep -aoE 'adb     : .*' "$TMPLOG" | head -1 | cut -c1-40)"
 else rec FAIL "7_reconnect-ai.sh" "real run failed (exit $?; see $TMPLOG)"; fi
 if [ "$BRIDGE_OK" = 0 ]; then
   rec SKIP "8_enable-wireless-adb.sh" "depends on the bridge channel; preconditions unmet (not a widget problem)"
@@ -488,13 +488,28 @@ else
     rec PASS "bridge capability probe" "durable soft stop (a feature introduced in bridge v1.8) + sleep still available; the bridge reports $(printf '%s' "$CAPS" | grep -oE '"ver": *"[^"]*"')"
     if timeout 15 "$HOME_DIR/.local/bin/droid-sock" stop >/dev/null 2>&1; then
       sleep 2
+      ALREADY=0
       if (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null; then
         rec FAIL "v1.8 soft stop durable" "the port is still open after stop"
       else
         CAME=0
         for i in $(seq 1 16); do sleep 1; (exec 3<>/dev/tcp/127.0.0.1/8788) 2>/dev/null && { CAME=1; break; }; done
-        [ "$CAME" = 0 ] && rec PASS "v1.8 soft stop durable" "8788 is closed after stop and does not self-recover within 18s (old versions came back in 14s)" \
-                        || rec FAIL "v1.8 soft stop durable" "it opened itself again ${i}s after stop"
+        if [ "$CAME" = 0 ]; then
+          rec PASS "v1.8 soft stop durable" "8788 is closed after stop and does not self-recover within 18s (old versions came back in 14s)"
+        else
+          ALREADY=1
+          # Who brought it back? `stop` sets paused=true and every ping reports it; a wake broadcast clears it again.
+          #   paused=false → something sent an explicit wake. Any droid-sock call wakes on a failed connect (the wake
+          #     ladder at droid-sock:79-104 is deliberate and revives a soft-stopped bridge in ~2s), so a status poll
+          #     from the console/page during this 18s window is enough. That is not a durability failure.
+          #   paused=true  → nothing woke it, yet it listens again: the system rebind overrode the durable stop (real bug).
+          PS1=$(timeout 12 "$HOME_DIR/.local/bin/droid-sock" ping --fast 2>/dev/null | grep -o '"paused": *[a-z]*')
+          case "$PS1" in
+            *false*) rec SKIP "v1.8 soft stop durable" "the port came back ${i}s after stop but the bridge reports paused=false → something sent an explicit wake (any failed droid-sock call does). Durability against system rebinds is not disproven; re-run with nothing else polling the bridge" ;;
+            "")      rec FAIL "v1.8 soft stop durable" "it opened itself again ${i}s after stop and would not answer a --fast ping, so a wake cannot be told from a rebind" ;;
+            *)       rec FAIL "v1.8 soft stop durable" "it opened itself again ${i}s after stop while still paused ($PS1) → the system rebind overrode the durable stop" ;;
+          esac
+        fi
         # The window is 45s: if the system reclaimed the app process, the broadcast must cold-start it, measured at 20-40s.
         # Late on 2026-09-26 it once did not return within 45s (the same version had passed the round before) → send one more broadcast and wait another 45s,
         # and state "came back only after the extra broadcast" honestly, instead of failing it or pretending one try was enough.
@@ -514,7 +529,11 @@ else
             sleep 1
           done
         fi
-        if [ "$BACK" != 0 ] && [ "$RETRY" = 0 ]; then
+        if [ "$ALREADY" = 1 ]; then
+          # The port never closed, so this round cannot show that a broadcast revives a stopped bridge. Saying so is
+          # the honest verdict; the earlier PASS ("back 2s after the broadcast") only measured the broadcast itself.
+          rec SKIP "v1.8 wake recovery" "the port was already open before the broadcast (see the durable line above), so the wake path was not exercised this round; the broadcast itself returned in ${BACK}s"
+        elif [ "$BACK" != 0 ] && [ "$RETRY" = 0 ]; then
           rec PASS "v1.8 wake recovery" "the port is back ${BACK}s after the broadcast wake (the process is alive, no re-authorisation needed)"
         elif [ "$BACK" != 0 ]; then
           rec PASS "v1.8 wake recovery" "the first broadcast did not bring it back within 45s; the extra one recovered it at ${BACK}s (slow vivo cold start, a known jitter)"
@@ -599,6 +618,10 @@ SAVED=1   # from here on, cleanup (including when interrupted) may restore these
 #   run was not enough — an interrupted run leaves a detached DSH that finishes later and
 #   overwrites it again, after the restore (this is how the user ended up inside the sandbox
 #   on 2026-09-27). Redirecting the file removes the race instead of racing it.
+# Record the state of the port *before* the sandbox starts: if 8099 is already served, widget 1 takes its
+# idempotent branch and never cold-starts anything — the sandbox run then proves nothing about widget 1
+# (2026-10-03, third run: exit=0 with no "Startup complete" was exactly that).
+(exec 3<>/dev/tcp/127.0.0.1/8099) 2>/dev/null && line "     (note: 8099 is ALREADY served before the sandbox starts — this run will not exercise the cold start)"
 DSH_PORT=8099 DSH_URL_FILE="$HOME_DIR/.smoke/dsh-url.sandbox" \
   DSH_WEB_EXTRA="--patch $HOME_DIR/.smoke/patch.yml" \
   timeout 200 bash "$T/1_start-dsh.sh" --no-open > "$TMPLOG" 2>&1 &
@@ -611,11 +634,24 @@ while kill -0 "$WPID" 2>/dev/null; do
   sleep 0.3
 done
 wait "$WPID"; WRC=$?
-SBURL=$(grep -oE 'http://127\.0\.0\.1:8099/\?token=[A-Za-z0-9_-]+' "$TMPLOG" | tail -1)
+# Widget 1 is idempotent: if something already serves the port it takes that branch, prints
+# "A service is already on 8099" and exits 0 **without ever printing "Startup complete"**. Naming the listener
+# turns "never finished the readiness check" (2026-10-03, third run) from a mystery into a fact.
+sandbox_listener() {
+  local p cl
+  for p in $(pgrep -f 'bin[.]js web' 2>/dev/null); do
+    cl=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
+    case "$cl" in *'--port 8099'*) printf 'pid %s: %s' "$p" "$cl"; return 0 ;; esac
+  done
+  printf 'no listener found any more (it exited between the check and now)'
+}
+SBURL=$(grep -aoE 'http://127\.0\.0\.1:8099/\?token=[A-Za-z0-9_-]+' "$TMPLOG" | tail -1)
 if grep -q 'Startup complete' "$TMPLOG"; then
-  rec PASS "1_start-dsh.sh cold start" "waited for real readiness and passed the 200 check (took $(grep -oE 'took [0-9]+s' "$TMPLOG" | tail -1))"
+  rec PASS "1_start-dsh.sh cold start" "waited for real readiness and passed the 200 check (took $(grep -aoE 'took [0-9]+s' "$TMPLOG" | tail -1))"
+elif grep -q 'already on 8099' "$TMPLOG"; then
+  rec SKIP "1_start-dsh.sh cold start" "8099 was already served when the sandbox started, so widget 1 took its idempotent path ($(sandbox_listener)) — the cold start was not exercised this round and no widget failed"
 else
-  rec FAIL "1_start-dsh.sh cold start" "never finished the real readiness check (exit=$WRC, see $TMPLOG)"
+  rec FAIL "1_start-dsh.sh cold start" "never finished the real readiness check (exit=$WRC; last widget lines: $(tail -n 3 "$TMPLOG" 2>/dev/null | tr '\n' ' ' | cut -c1-200))"
 fi
 # Evidence: the sequence of HTTP codes seen during the cold start. The old logic only looked for 'not 000' and took the first code as ready.
 SEQ=$(printf '%s' "$SAMPLES" | sed 's/^ //')

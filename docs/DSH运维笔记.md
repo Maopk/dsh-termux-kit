@@ -7,6 +7,23 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-10-03 · 【自检】第三次自检的两条红项：不是组件坏，是判定不会区分
+
+做了什么：分诊手机上第三跑（`exit=2`、`86 passed / 2 failed / 9 skipped`）的两条红 ——
+  `✘ v1.8 soft stop durable   it opened itself again 3s after stop` 与
+  `✘ 1_start-dsh.sh cold start never finished the real readiness check (exit=0)`。
+为什么：这两条都可能是"测试自己不会分辨"，直接当 bug 去改组件会把真机制改坏。
+结果（读码结论）：①`tools/droid-sock` 连不上桥时会走唤醒阶梯**主动发广播**（68-116 行，注释 79-88 行写明"被软停的桥
+  在一次广播后约 2 秒回来"）⇒ `stop` 之后端口回来很可能是**别人把它叫醒的**（自检窗口里控制台/页面任何一次状态轮询
+  都够）；判据是 `droid-sock ping --fast` 的 `paused` 字段（`BridgeService.java` 的 `stop` 会 `setUserPaused(true)`，
+  `caps.stop_is_durable` 的语义是"软停后系统 rebind 不会把它拉起来"）：`false`=有人显式唤醒、`true`=rebind 压过了持久软停。
+  ②`widgets/1_start-dsh.sh:106-134` 在端口已占用时走**幂等分支**，`exit 0` 且**不打** `Startup complete`
+  ⇒ 报告里的 `exit=0` + 没标记 = 冷启动压根没执行（沙箱启动前 8099 已被占）。
+改了 `tests/selftest.sh`：durable 项改成三态判定（○/✘ 分开）、`wake recovery` 在端口没关过时记 ○ 并说明、
+  L5 判定三分支 + 新增 `sandbox_listener()`（`pgrep -f 'bin[.]js web'` 读 `/proc/<pid>/cmdline` 点名占用者）、
+  沙箱启动前记录 8099 是否已经开着、5 处读日志的 grep 加 `-a`（二进制化会让明细整条消失）。
+下一步：手机重跑一次自检看这三项的新说法；若 durable 仍记 ✘ 且 `paused=true`，那才是 v1.8 的真问题。
+
 2026-10-03 · 【发现】这本笔记在仓库里曾经有两个名字，我的条目一直写进错的那一个
 
 做了什么：核对 master 上 `docs/DSH运维笔记.md` 的真实内容（raw 下载 + blob sha）时发现它停在**一天前的旧版**——
