@@ -17,7 +17,7 @@
 set -u
 TOKFILE="$HOME/.dsh-gh-token"
 REPO="Maopk/dsh-termux-kit"
-LOCAL="$HOME/dsh-termux-kit"
+LOCAL="${DSH_KIT_REPO:-$HOME/dsh-termux-kit}"
 API="https://api.github.com"
 
 tok() { [ -s "$TOKFILE" ] || { printf '✘ no %s (run the device-code authorization once first)\n' "$TOKFILE" >&2; exit 3; }; cat "$TOKFILE"; }

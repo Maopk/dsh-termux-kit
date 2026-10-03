@@ -16,6 +16,15 @@
 · **`widgets/i18n.sh` 恢复可执行位**：上一批它被按 100644 发布，`./widgets/i18n.sh` 这类直接调用会失败；
   本批按文件带上 mode 重新发布（脚本保持 100755），顺带说明"脚本别用一律 100644 的方式发布"。
   （本批不改三个产物的内容，不 bump 版本号，见 §六。）
+· **8 个工具与自检脚本不再假设仓库住在 `$HOME/dsh-termux-kit`**：`tools/app-verify`、`tools/check-task-ids`、
+  `tools/dsh-gh`、`tools/i18n-audit`、`tools/i18n-table`、`tools/ui-controls`、`tools/sync-apps`、
+  `tools/panel-render-test` 与 `tests/selftest.sh` 统一认 `DSH_KIT_REPO`（`pre-push-check`、`install-tools`
+  本来就认它），不设时仍回退到 `$HOME/dsh-termux-kit`；规矩写进 `CONTRIBUTING.md` §八 的工具表下面。
+  以前在仓库副本里跑这些自检，它们会去读一个不存在的 `$HOME/dsh-termux-kit` 然后报错 ——
+  实测（在副本里设 `DSH_KIT_REPO`）：`ui-controls check`、`i18n-table check`、`i18n-audit --quiet`、
+  `check-task-ids` 四个自检全绿，`panel-render-test` 三遍渲染通过。
+  仍然按设计去 `$HOME/dsh-console`、`$HOME/droid-bridge` 读 App 真源码（仓库 `apps/` 是只读镜像）。
+  （同上：本批不 bump 版本号，见 §六。）
 
 ### 变更
 

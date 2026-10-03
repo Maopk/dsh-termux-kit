@@ -40,7 +40,7 @@ import subprocess
 import sys
 
 HOME = os.path.expanduser('~')
-ROOT = os.path.join(HOME, 'dsh-termux-kit')
+ROOT = os.path.expanduser(os.environ.get('DSH_KIT_REPO') or os.path.join(HOME, 'dsh-termux-kit'))
 SRC = os.path.join(ROOT, 'ui', 'controls.json')
 THEME = os.path.join(ROOT, 'ui', 'theme.json')
 PANEL = os.path.join(ROOT, 'plugins', 'dsh-mobile-local', 'client.js')

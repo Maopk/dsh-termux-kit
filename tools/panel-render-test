@@ -25,7 +25,8 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const file = process.argv[2] || path.join(process.env.HOME || '.', 'dsh-termux-kit/plugins/dsh-mobile-local/client.js');
+const kitRoot = process.env.DSH_KIT_REPO || path.join(process.env.HOME || '.', 'dsh-termux-kit');
+const file = process.argv[2] || path.join(kitRoot, 'plugins/dsh-mobile-local/client.js');
 let src = fs.readFileSync(file, 'utf8');
 
 const PASSES = [

@@ -10,6 +10,7 @@
 #   L5 sandbox    cold start of widget 1: a throwaway instance on 8099, sampling HTTP codes to prove 'port opens first, routes mount later'
 #   SKIP          a real run would kill this session (2/4/6) or needs manual recovery (0) → dry-run only, user picks the moment
 HOME_DIR="/data/data/com.termux/files/home"
+KIT="${DSH_KIT_REPO:-$HOME_DIR/dsh-termux-kit}"   # 仓库不一定住在 $HOME（测试副本、别的机器）
 T="$HOME_DIR/.shortcuts/tasks"
 L="$HOME_DIR/.local/share/dsh-widgets/common.sh"
 PASS=0; FAIL=0; SKIP=0; REPORT=""
@@ -130,7 +131,7 @@ fi
 # dsh-screen-ui had no "refuse to tap when Settings is not foreground" guard.
 # tools/install-tools --check is the contract here: exit 0 = every installed copy matches the repo
 # (a tool that is not installed at all does not count as drift — a fresh clone passes).
-if DRIFT=$("$HOME_DIR/dsh-termux-kit/tools/install-tools" --check 2>&1); then
+if DRIFT=$("$KIT/tools/install-tools" --check 2>&1); then
   rec PASS "installed tools match the repo" "$(printf '%s' "$DRIFT" | tail -1 | tr -d ' ')"
 else
   rec FAIL "installed tools match the repo" "drifted: $(printf '%s' "$DRIFT" | sed -n 's/^   ⚠ \([^ ]*\).*/\1/p' | tr '\n' ' ')→ run tools/install-tools"
@@ -345,7 +346,7 @@ while read -r want; do
   PLUG_N=$((PLUG_N+1))
   grep -qF "$want" "$PLUG" 2>/dev/null || PLUG_MISS="$PLUG_MISS $want"
 done <<EOF
-$(python3 - "$HOME_DIR/dsh-termux-kit/ui/controls.json" <<'PYEOF'
+$(python3 - "$KIT/ui/controls.json" <<'PYEOF'
 import json, sys
 d = json.load(open(sys.argv[1], encoding='utf-8'))
 for c in d['cats']:

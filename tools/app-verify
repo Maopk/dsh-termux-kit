@@ -30,7 +30,7 @@ import sys
 import zipfile
 
 HOME = os.path.expanduser('~')
-ROOT = os.path.join(HOME, 'dsh-termux-kit')
+ROOT = os.path.expanduser(os.environ.get('DSH_KIT_REPO') or os.path.join(HOME, 'dsh-termux-kit'))
 THEME = os.path.join(ROOT, 'ui', 'theme.json')
 APPS = {
     'console': dict(apk=os.path.join(HOME, 'dsh-console', 'build', 'dsh-console.apk'),
