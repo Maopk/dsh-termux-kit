@@ -14,7 +14,7 @@ An engineering journal is maintained as well: `docs/DSH运维笔记.md` (Chinese
 
 ## Quick start
 
-The simplest path is the APKs from the latest release. Current release: **[v1.12](https://github.com/Maopk/dsh-termux-kit/releases/tag/v1.12)** — Console 1.21, Bridge 2.24, page panel 0.10.0, all three on the release page with `SHA256SUMS.txt`.
+The simplest path is the APKs from the latest release. Current release: **[v1.13](https://github.com/Maopk/dsh-termux-kit/releases/tag/v1.13)** — Console 1.22, Bridge 2.24, page panel 0.10.1, all three on the release page with `SHA256SUMS.txt`.
 
 Source on `master` can be newer than the release: this is what "pushed but not released" looks like. The version line in both apps keeps those numbers apart on purpose — the installed version, the release, and the repo source.
 
@@ -26,7 +26,7 @@ pkg install zstd imagemagick tesseract tesseract-lang
 
 # 2) put the scripts in place
 git clone https://github.com/Maopk/dsh-termux-kit && cd dsh-termux-kit
-install -m755 tools/* ~/.local/bin/
+bash tools/install-tools        # installs ~/.local/bin (honours each tool's "# install: runtime" marker)
 bash tools/install-widgets      # installs the 12 widgets, plus Chinese names for them
 
 # 3) let external apps run commands in Termux (the Console app needs this)
@@ -44,6 +44,28 @@ bash apps/console/build.sh && bash apps/bridge/build.sh
 # 5) self-test: walks all 12 widgets, the destructive ones only rehearse by default
 bash tests/selftest.sh
 ```
+
+To update an existing install:
+
+```bash
+~/.local/bin/dsh-kit-update     # one command: fast-forward the repo → refresh ~/.local/bin → refresh the 12 widgets
+                                # --check only reports; local changes or a non-fast-forward stop it with a reason
+```
+
+Before that tool is in place, the manual steps are these three — note that **`git pull` does not work in this repo**:
+`master` has no upstream, so it only moves the remote-tracking pointer and merges nothing, while still looking like it
+succeeded (that is how the whole v1.13 release ended up running on stale code on 2026-10-03):
+
+```bash
+cd ~/dsh-termux-kit && git fetch origin && git merge --ff-only origin/master
+bash tools/install-tools        # refresh ~/.local/bin
+bash tools/install-widgets      # refresh the 12 widgets and their Chinese names
+```
+
+The apps do not update here: for the released build use the「11_更新APK」widget (`11_update-apps.sh`) or
+`~/.local/bin/dsh-update`; building from source is step 4 above (**check first that `ks.jks` is still in its original
+directory** — a new signing key means the new APK will not install over the old one, and `.gitignore` keeps it out of the
+repo; see the v1.13 "Fixed" section in `CHANGELOG.md`).
 
 Two steps remain after that:
 
@@ -92,6 +114,7 @@ dsh-uitap "刷新状态"            # tap UI by its text; it scrolls for you, fa
 dsh-install-apk <apk> --verify  # fully automatic install, then opens the APK again to verify
 clash-doctor                    # five-step Clash check, including the "node domain eaten by fake-ip" problem
 dsh-gh push|release|status      # maintain this repo
+dsh-kit-update [--check]        # update the kit itself: fast-forward the repo → refresh tools → refresh the 12 widgets
 ```
 
 ### Conventions shared by the three surfaces

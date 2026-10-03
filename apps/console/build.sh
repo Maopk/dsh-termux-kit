@@ -58,13 +58,27 @@ cp "$OUT/base.apk" "$OUT/unsigned.apk"
 (cd "$OUT/dex" && zip -q -u "$OUT/unsigned.apk" classes.dex)
 
 echo "⑥ Sign"
-if [ ! -f "$SRC/ks.jks" ]; then
-  keytool -genkeypair -keystore "$SRC/ks.jks" -alias dsh -keyalg RSA -keysize 2048 \
+# ── 密钥库查找（2026-10-03 加）──
+# 为什么：ks.jks 在 .gitignore 里（*.jks），只存在于**当初出包的那个目录**。构建目录一变
+# （真源码 ~/dsh-console → 仓库里的 apps/console），这里就会**悄悄生成一把新钥匙**，
+# 新包签名和手机上已装的那份对不上，安装器直接拒绝覆盖（只报 "App not installed"，
+# 不解释原因）。现在按顺序找一把**已经存在**的密钥库，全都没有才新建，并打印用的是哪一个。
+KS="${DSH_KS:-}"
+if [ -z "$KS" ]; then
+  for c in "$SRC/ks.jks" "$HOME/dsh-console/ks.jks" "$HOME/.dsh-console/ks.jks"; do
+    [ -f "$c" ] && { KS="$c"; break; }
+  done
+fi
+[ -n "$KS" ] || KS="$SRC/ks.jks"
+if [ ! -f "$KS" ]; then
+  keytool -genkeypair -keystore "$KS" -alias dsh -keyalg RSA -keysize 2048 \
     -validity 10000 -storepass dshbridge -keypass dshbridge \
     -dname "CN=DSH Bridge,O=DSH,C=CN" >/dev/null 2>&1
-  echo "   Generated self-signed key $SRC/ks.jks (password dshbridge)"
+  echo "   Generated self-signed key $KS (password dshbridge) —— 以后一直用它，别丢"
+else
+  echo "   Keystore: $KS"
 fi
-apksigner sign --ks "$SRC/ks.jks" --ks-pass pass:dshbridge --key-pass pass:dshbridge \
+apksigner sign --ks "$KS" --ks-pass pass:dshbridge --key-pass pass:dshbridge \
   --out "$OUT/dsh-console.apk" "$OUT/unsigned.apk"
 
 echo "⑦ Verify"

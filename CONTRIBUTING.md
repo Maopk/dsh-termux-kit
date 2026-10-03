@@ -239,6 +239,7 @@ tools/pre-push-check             # 顺带扫改动文件里的 key/token/passwor
 | `tools/panel-render-test` | 真跑三遍面板渲染，抓"一点开就消失"这类运行时错误 | `i18n-audit` 里 |
 | `tools/check-task-ids` | 任务 id 在四个地方（tasksd 白名单 / 控制台 / 面板 / 组件脚本）一致 | 自检 |
 | `tools/install-tools --check` | 仓库 `tools/` 与安装位 `~/.local/bin` 一致（防"我照着仓库推理、跑的是旧代码"） | 自检 |
+| `tools/dsh-kit-update --check` | 仓库是否落后 `origin/master` **且** `~/.local/bin` 是否与仓库一致 | 手动（不带 `--check` 就会动手更新，顺序固定：快进合并 → 工具 → 小组件） |
 | `tools/check-no-secrets.sh` | 本机凭据没泄进仓库 | push 前 |
 | `tests/selftest.sh` | 70 项总自检（含沙箱冷启动；**会在手机上压负载**，忙的时候别整跑） | 手动 / CI |
 | `tools/pre-push-check` | 第三节那份清单的脚本化版本 | push 前 |
@@ -272,6 +273,7 @@ tools/pre-push-check             # 顺带扫改动文件里的 key/token/passwor
 | `tools/ui-bg-check` | **不进**：输入是一张真机截图 |
 | `tools/sync-apps` | **不进**：它会覆写 `apps/`，而 CI 里 `apps/` 是只读镜像 |
 | `tools/i18n-build-table` · `tools/verify-i18n-patch` | **不进**：翻译流程的助手，要人给的输入（git diff / 补丁 JSON）；它们生成的表由 `i18n-table check` 把关 |
+| `tools/dsh-kit-update` | **不进**：运行期工具，在手机上把仓库 / `~/.local/bin` / 12 个小组件更新到最新（CI 里仓库是只读的，也没有"已安装副本"要刷新） |
 | 其余 `tools/dsh-*` · `tools/droid*` · `tools/clash-*` · `tools/install-widgets`（不带 `--dry-run`） | **不进**：都是在手机上操作 DSH / 桥 / adb / 代理的**运行期**工具，不是测试；`install-widgets --dry-run` 那 12 条在 selftest 的 L2 里跑 |
 
 改完东西的最短路径：
@@ -282,6 +284,8 @@ tools/i18n-audit && cp plugins/dsh-mobile-local/client.js ~/.dsh/profiles/web/lo
 ( cd ~/.dsh/profiles/web && pnpm install --prefer-offline && ~/.local/bin/dsh-relink-bundles --check )
 
 # APK 改动（必须重新编译；build.sh 里已经内置前两个门禁）
+# 编译前确认 ks.jks 还在原来那个目录：build.sh 按 DSH_KS → $SRC/ks.jks → ~/dsh-console/ks.jks 找，
+# 全都没有才会新建一把；换了钥匙新包就装不上手机（安装器只报一句 "App not installed"，不解释原因）。
 bash apps/console/build.sh && bash apps/bridge/build.sh
 tools/app-verify console && tools/app-verify bridge
 ```

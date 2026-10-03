@@ -14,7 +14,7 @@ DSH 运行在一台 vivo 手机上，该 ROM 对后台应用的冻结较为激�
 
 ## 快速开始
 
-最简路径是直接使用最新发行版中的 APK。当前发行版：**[v1.12](https://github.com/Maopk/dsh-termux-kit/releases/tag/v1.12)** —— 控制台 1.21、桥 2.24、页面面板 0.10.0，三个产物均在发行版页面，并附 `SHA256SUMS.txt`。
+最简路径是直接使用最新发行版中的 APK。当前发行版：**[v1.13](https://github.com/Maopk/dsh-termux-kit/releases/tag/v1.13)** —— 控制台 1.22、桥 2.24、页面面板 0.10.1，三个产物均在发行版页面，并附 `SHA256SUMS.txt`。
 
 `master` 上的源码可能比发行版更新——即「已推送源码但尚未发版」的状态。两个 App 的版本行会把「本机安装的 / 发行版最新的 / 仓库源码中的」三项版本号有意分开显示。
 
@@ -26,7 +26,7 @@ pkg install zstd imagemagick tesseract tesseract-lang
 
 # 2) 把脚本放到位
 git clone https://github.com/Maopk/dsh-termux-kit && cd dsh-termux-kit
-install -m755 tools/* ~/.local/bin/
+bash tools/install-tools        # 装 ~/.local/bin（认每个工具头部的 "# install: runtime" 标记）
 bash tools/install-widgets      # 装 12 个小组件，同时装它们的中文名
 
 # 3) 允许外部 App 调用 Termux 命令（控制台 App 依赖此项）
@@ -40,6 +40,26 @@ bash apps/console/build.sh && bash apps/bridge/build.sh
 # 5) 自检：会把 12 个小组件走一遍，破坏性的那几步默认只预演
 bash tests/selftest.sh
 ```
+
+已经装过一遍，要更新到最新：
+
+```bash
+~/.local/bin/dsh-kit-update     # 一条命令：快进合并 → 刷新 ~/.local/bin → 刷新 12 个小组件
+                                # --check 只报告不动手；有本地改动或不能快进就停下来说清楚
+```
+
+第一次还没装上这个工具时，等价的手工三步 —— 注意 **`git pull` 在本仓库不生效**：`master` 没有上游，
+它只更新远端指针、一个文件都不合并，退出状态看着却像成功（2026-10-03 发 v1.13 时因此整批跑在旧代码上）：
+
+```bash
+cd ~/dsh-termux-kit && git fetch origin && git merge --ff-only origin/master
+bash tools/install-tools        # 刷新 ~/.local/bin
+bash tools/install-widgets      # 刷新 12 个小组件与它们的中文名
+```
+
+App 不在这里更新：发行版用桌面小组件「11_更新APK」或 `~/.local/bin/dsh-update`；自己改源码编译才用第 4 步那两个
+`build.sh`（**编译前先确认 `ks.jks` 还在原来那个目录**：签名钥匙换了，新包就装不上手机，而 `.gitignore` 让它永远不进仓库 ——
+详见 `CHANGELOG.md` v1.13 的修复段）。
 
 完成后还有两项操作：
 
@@ -88,6 +108,7 @@ dsh-uitap "刷新状态"            # 按文字点击界面，会自动滚动，
 dsh-install-apk <apk> --verify  # 全自动安装，装完再打开一次 APK 复核
 clash-doctor                    # Clash 五项自检，含「节点域名被 fake-ip 吃掉」这一问题
 dsh-gh push|release|status      # 维护这个仓库
+dsh-kit-update [--check]        # 更新这套东西本身：快进合并仓库 → 刷新工具 → 刷新 12 个小组件
 ```
 
 ### 三处界面的约定

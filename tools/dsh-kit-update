@@ -1,0 +1,94 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# install: runtime   （一条命令把仓库 + ~/.local/bin 工具 + 12 个桌面组件都更到最新）
+# dsh-kit-update —— 手机侧的「更新套件」。
+#
+# 为什么要有它：2026-10-03 发 v1.13 时踩过一次，值得写下来当墓碑 ——
+#   单跑 `git pull` 报了 "There is no tracking information for the current branch"，
+#   它**只更新了 origin/master 指针、一个文件都没合并**，而且退出状态看着像成功；
+#   后面的 install-tools（一致 40 · 需同步 0）、重编控制台（打出旧版本号 1.21）、
+#   npm pack（打出旧版本 0.10.0）全都在旧代码上跑，直到打包那步才露馅。
+#   ⇒ 顺序固定下来：先看本地有没有改动 → fetch → **只允许快进合并** → 再刷新工具和组件 → 报告结果。
+#
+# Usage:
+#   dsh-kit-update            更新到 origin/master（有本地改动、或不能快进，就停下来说清楚）
+#   dsh-kit-update --check    只看状态，一个字节都不改（需要更新时退出码 1）
+set -u
+
+KIT="${DSH_KIT_REPO:-$HOME/dsh-termux-kit}"
+BRANCH="${DSH_KIT_BRANCH:-master}"
+CHECK=0
+[ "${1:-}" = "--check" ] && CHECK=1
+
+say()  { printf '%s\n' "$*"; }
+ok()   { printf '   ✔ %s\n' "$*"; }
+warn() { printf '   ⚠ %s\n' "$*"; }
+bad()  { printf '   ✘ %s\n' "$*" >&2; }
+
+[ -d "$KIT" ] || { bad "仓库不存在：$KIT（用 DSH_KIT_REPO 指过去）"; exit 2; }
+cd "$KIT" || exit 2
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { bad "$KIT 不是 git 仓库"; exit 2; }
+
+# ── ① 本地改动：不替你 stash，也不硬合（会把你正在编辑的东西搅乱）──
+# 只把**已跟踪文件**的改动当拦路虎（快进合并会碰它们）；未跟踪文件只提醒一句 ——
+# git 自己在"会被覆盖"时会拒绝合并，比一刀切"有 ?? 就不让更新"更准确。
+dirty=$(git status --porcelain --untracked-files=no)
+if [ -n "$dirty" ]; then
+  warn "有未提交的改动，先自己处理（git stash / git commit），我不动它们："
+  printf '%s\n' "$dirty" | sed 's/^/      /'
+  [ "$CHECK" = 1 ] || exit 1
+fi
+untracked=$(git status --porcelain | grep '^??' || true)
+if [ -n "$untracked" ]; then
+  warn "有未跟踪文件（一般不影响快进合并，除非 git 说会被覆盖）："
+  printf '%s\n' "$untracked" | sed 's/^/      /'
+fi
+
+# ── ② fetch：只更新远端指针，这一步永远不会动工作区 ──
+git fetch --quiet origin "$BRANCH" || { bad "git fetch origin $BRANCH 失败（网络？）"; exit 1; }
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse "origin/$BRANCH" 2>/dev/null) || { bad "读不到 origin/$BRANCH"; exit 1; }
+
+if [ "$LOCAL" = "$REMOTE" ]; then
+  ok "仓库已是最新：$(git log --oneline -1)"
+else
+  # ── ③ 只接受快进：本地领先或分叉都要人来看，绝不自动 merge/rebase ──
+  if git merge-base --is-ancestor "$LOCAL" "$REMOTE"; then
+    n=$(git rev-list --count "$LOCAL..$REMOTE")
+    if [ "$CHECK" = 1 ]; then
+      warn "落后 $n 个提交（--check 不动手）："
+      git log --oneline "$LOCAL..$REMOTE" | sed 's/^/      /'
+      exit 1
+    fi
+    say "→ 快进合并 $n 个提交"
+    git merge --ff-only "origin/$BRANCH" >/dev/null || { bad "快进合并失败"; exit 1; }
+    ok "仓库已更新：$(git log --oneline -1)"
+  else
+    bad "本地与 origin/$BRANCH 分叉或本地领先 —— 不自动处理，请看："
+    git log --oneline "origin/$BRANCH..HEAD" | sed 's/^/      /'
+    exit 1
+  fi
+fi
+
+# ── ④ 工具与桌面组件：装到 ~/.local/bin 的那份是"仓库的副本"，不刷新就还是旧行为 ──
+if [ "$CHECK" = 1 ]; then
+  bash tools/install-tools --check || true
+  exit 0
+fi
+
+say ""
+say "→ 刷新工具（~/.local/bin）"
+bash tools/install-tools || { bad "install-tools 失败"; exit 1; }
+
+say ""
+say "→ 刷新 12 个桌面组件"
+bash tools/install-widgets || { bad "install-widgets 失败"; exit 1; }
+
+say ""
+if bash tools/install-tools --check >/dev/null 2>&1; then
+  ok "收尾核对：仓库与 ~/.local/bin 一致"
+else
+  warn "收尾核对仍有差异 —— 跑 bash tools/install-tools --check 看细节"
+fi
+say "完成：$(git log --oneline -1)"
+say "（控制台/桥的 APK 不在这里更新：发行版用桌面「11_更新APK」或 dsh-update；"
+say "  自己编译才要 bash apps/console/build.sh / bash apps/bridge/build.sh）"

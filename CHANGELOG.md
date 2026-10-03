@@ -13,6 +13,12 @@
 
 ### 新增
 
+· **`tools/dsh-kit-update`：手机侧一条命令把整套更新到最新**（`# install: runtime`，会随 `install-tools` 装进 `~/.local/bin`）：
+  先看本地改动（有就停下报告，不替你 stash）、`git fetch origin master`、**只接受快进合并**（本地领先或分叉就列出来让你决定），
+  然后依次刷新 `~/.local/bin` 里的工具与 12 个桌面组件，最后核对「仓库与已装工具一致」。`--check` 只报告、不动手。
+  为什么要有它：2026-10-03 发 v1.13 时，单跑 `git pull` 因为分支没设上游 **只更新了远端指针、一个文件都没合并**
+  （退出状态看着还像成功），后面的工具刷新、控制台编译、面板打包**全在旧代码上跑** —— `install-tools` 报"一致 40 · 需同步 0"、
+  控制台打出旧版本号 `1.21`、`npm pack` 打出旧版本 `0.10.0`，直到打包那步才露馅。顺序从此固定在这一个入口里。
 · **控制台多了「自检」按钮**（🩺，维护区，只出现在控制台）：一键在 Termux 里跑完整的 `tests/selftest.sh`
   —— 70 项（语法、每个组件的 `--dry-run`、就绪回归、安全可逆的真跑、8099 端口上的一次性冷启动），
   `════ Result: … ════` 那行会直接落在控制台的历史里（结果回传保留尾部 4000 字符，这行正好在尾部）。
@@ -46,6 +52,16 @@
 
 ### 修复
 
+· **两个 App 的构建脚本不再"悄悄换一把签名钥匙"**（`apps/console/build.sh`、`apps/bridge/build.sh`）：
+  原来只在 `$SRC/ks.jks` 不存在时 `keytool -genkeypair` 新生成一把 —— 而 `ks.jks` 在 `.gitignore` 里（`*.jks`）、
+  只存在于**当初出包的那个目录**，所以换一个构建目录（真源码 `~/dsh-console` → 仓库里的 `apps/console`）就会生成新钥匙，
+  签出来的包与手机上已装的那份签名不一致，安装器直接拒绝覆盖，**只报一句 "App not installed"**，不解释原因。
+  2026-10-03 发 v1.13 时真踩了（新生成的 `8b2dee4e…` vs 手机上已装的 `da10e3f5…`），从 `~/dsh-console/ks.jks` 拷回来才签对。
+  现在按 `DSH_KS` → `$SRC/ks.jks` → `$HOME/dsh-console/ks.jks`（桥是 `$HOME/droid-bridge/ks.jks`）→ `$HOME/.dsh-console/ks.jks`
+  的顺序找一把**已经存在**的密钥库，全都没有才新建，并把用的是哪一个打印出来（`Keystore: …`）。
+· **两个面板插件的 `npm pack` 不再把上一次的 tgz 打进包里**（`plugins/dsh-mobile-local`、`plugins/dsh-filepanel-local`）：
+  加 `files` 白名单（`client.js` / `cordis.patch.yml` / `host.js` / `package.json`）。没有它时 `npm pack` 会收进目录里的一切 ——
+  v1.13 第一次打出来的面板包是 39.5 kB / 5 个文件，因为里面还裹着上一次的 `dsh-mobile-local-0.10.0.tgz`（正常 19.4 kB / 4 个）。
 · **三个生成器不再写出 CRLF**（`tools/ui-controls`、`tools/i18n-table`、`tools/i18n-build-table`）：写入时显式
   `newline='\n'`。不写这一条时 Python 会把 `\n` 翻译成宿主平台的行尾 —— 在 Windows 上重生成 `i18n/zh.json`、
   两份 `Lang.java`、`widgets/i18n.sh`、面板 `client.js` 和几个主题/控件文件，会把**每一行**都改掉（整文件 diff），

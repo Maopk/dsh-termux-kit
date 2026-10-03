@@ -5,6 +5,12 @@
   "type": "module",
   "description": "Local bundle wrapper for the DSH workspace file panel (Lings01/dsh-filepanel-plugin), adapted for the profile bundle environment.",
   "main": "./host.js",
+  "files": [
+    "client.js",
+    "cordis.patch.yml",
+    "host.js",
+    "package.json"
+  ],
   "exports": {
     ".": "./host.js",
     "./client": "./client.js",

@@ -5,6 +5,12 @@
   "type": "module",
   "description": "Mobile UI enhancements: touch hit areas / bottom safe area + task shortcut buttons (wired to the dsh-tasksd allowlist runner)",
   "main": "./host.js",
+  "files": [
+    "client.js",
+    "cordis.patch.yml",
+    "host.js",
+    "package.json"
+  ],
   "exports": {
     ".": "./host.js",
     "./client": "./client.js",
