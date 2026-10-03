@@ -63,8 +63,8 @@
   失败 = 红；device 里没有放行行的失败 = unexpected；报告自相矛盾 = 不可用，退出码 2），配 `tests/unit/` 12 个
   pytest 用例；④`tests/ci-selftest.sh` 的退出码交给它，原来那条 `OFF_PHONE` 正则删掉；⑤CI：`unit` job 加 pytest、
   mypy 覆盖 `tests/report_check.py`、容器 job 的 run summary 多一段策略结论；⑥`docs/test-layers.md` 写清分类规则、
-  报告 schema 与三处与老师方案的偏差。
-为什么：老师给的是一套通用方案（断言分类 + 结构化报告 + 薄封装 + 渐进迁移）。这个仓库的实际情况有三处不同 ——
+  报告 schema 与三处与那次外部评审的偏差。
+为什么：那次评审给的是一套通用方案（断言分类 + 结构化报告 + 薄封装 + 渐进迁移）。这个仓库的实际情况有三处不同 ——
   断言要在 Termux 上跑，Python 不是手机的前提；同一个 id 会跨层重名（`3_backup-dsh.sh` 在 L2 与 L4 各一条）；
   device 的"预期缺席"原本藏在一条正则里，而它按**消息**匹配，会顺带吞掉同一类的别的失败。所以做成了
   「类别按层默认 + 例外进表 + 放行必须写理由」。
