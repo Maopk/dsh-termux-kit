@@ -73,7 +73,7 @@ while IFS= read -r line; do
   if [ -z "$num" ]; then
     # 英文拼写数字：机器核对不了，列出来人工看一眼
     n_word=$((n_word + 1))
-    report="${report}  ? ${file}:${ln}  “${m}”（拼写数字，需人工核对）${where}\n"
+    report="${report}  ? ${file}:${ln}  '${m}'（拼写数字，需人工核对）${where}\n"
     [ "$STRICT" = 1 ] && fail=1
     continue
   fi

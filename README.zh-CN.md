@@ -183,9 +183,9 @@ dsh-kit-update [--check]        # 更新这套东西本身：快进合并仓库 
 解决方案：无需处理，这是如实显示。要让它显示「已是最新」，需要发布一个发行版。
 
 ### 在电脑上跑门禁会报失败
-现象：在一台从未连过手机的机器上，`bash tools/check-counts` 退出码为 1。
-原因：这道闸是一致性核对，不是对本机副本的测试。它报出的不一致落在 `apps/` —— 那是 `~/dsh-console` 与 `~/droid-bridge` 的只读镜像（CONTRIBUTING §十一：改镜像不生效，`tools/sync-apps` 从真源刷回来）。
-解决方案：看它打印的文件清单。当剩下的不一致全在只读镜像里时，`check-counts` 会明确打印「预期为红」—— 这是仓库副本的正常状态，不是你的副本坏了。要改就改手机上的真源再镜像回来，别改 `apps/`。
+现象：在一台从未连过手机的机器上，`bash tools/check-counts` 退出码为 1、`python3 tools/i18n-table check` 失败、或 `./tools/app-verify console` 报「包与源码不一致」。
+原因：这类闸核对的是一致性，而一致性所依赖的东西并非都在仓库副本里。`check-counts` 报出的不一致落在 `apps/` —— 那是 `~/dsh-console` 与 `~/droid-bridge` 的只读镜像（CONTRIBUTING §十一：改镜像不生效，`tools/sync-apps` 从真源刷回来）。`i18n-table` 要的是同一批真源码，`app-verify` 读的是已编好的包（`~/dsh-console/build/dsh-console.apk`）；在电脑上这两道都停在「路径不存在」，什么也没核。同类还有一个坑：`check-no-secrets` 按**文件名**扫整棵树，所以放进仓库目录里的签名 keystore 会让它报红 —— 与那个文件是否被跟踪无关（`.gitignore` 只保证它不进仓库，不保证它不被扫）。
+解决方案：先看它到底在抱怨什么。当剩下的不一致全在只读镜像里时，`check-counts` 会明确打印「预期为红」—— 这是仓库副本的正常状态，不是你的副本坏了。`i18n-table` 与 `app-verify` 请到手机上、在真源里跑；要改就改手机上的真源再镜像回来，别改 `apps/`。签名材料请放在仓库目录之外。
 
 ## 环境要求与限制
 

@@ -189,9 +189,9 @@ Cause: these are three distinct facts: the version installed locally, the versio
 Solution: no workaround is required; the display is accurate. To make it report "up to date", cut a release.
 
 ### A gate reports failure on a PC checkout
-Symptom: `bash tools/check-counts` exits 1 on a machine that never touched the phone.
-Cause: this gate is a consistency check, not a test of your copy. The mismatch it reports sits in `apps/` — the read-only mirror of `~/dsh-console` and `~/droid-bridge` (CONTRIBUTING §十一: editing a mirror has no effect, `tools/sync-apps` refreshes it from the true source).
-Solution: read the file list it prints. When every remaining mismatch is inside a read-only mirror, `check-counts` says so explicitly ("预期为红") — that is the expected state of a checkout, not a defect of your copy. Fix the true source on the phone and mirror it back; do not edit `apps/`.
+Symptom: on a machine that never touched the phone, `bash tools/check-counts` exits 1, `python3 tools/i18n-table check` fails, or `./tools/app-verify console` reports that the package does not match the source.
+Cause: these gates check consistency between things a checkout does not all contain. The mismatch `check-counts` reports sits in `apps/` — the read-only mirror of `~/dsh-console` and `~/droid-bridge` (CONTRIBUTING §十一: editing a mirror has no effect, `tools/sync-apps` refreshes it from the true source). `i18n-table` needs those same true sources, and `app-verify` reads a built APK (`~/dsh-console/build/dsh-console.apk`); on a PC both stop at a missing path instead of checking anything. One more trap of the same kind: `check-no-secrets` walks file names across the whole tree, so a signing keystore kept inside your checkout turns it red whether or not that file is tracked (`.gitignore` keeps it out of the repository, not out of the scan).
+Solution: read what the gate actually complains about. When every remaining mismatch is inside a read-only mirror, `check-counts` says so explicitly ("预期为红") — that is the expected state of a checkout, not a defect of your copy. Run `i18n-table` and `app-verify` on the phone, in the true source; fix the true source there and mirror it back; do not edit `apps/`. Keep signing material outside the checkout directory.
 
 ## Requirements and limits
 

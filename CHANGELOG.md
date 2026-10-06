@@ -19,6 +19,14 @@
 
 ### 修复
 
+· **修掉上一次发布带进 CI 的红**：`tools/check-counts:76` 里用了两个 unicode 引号（U+201C/U+201D），ShellCheck 0.11.0
+  报 `SC1111`，CI 的 `checks` 作业因此退出 1 —— 发布时本机没跑这道闸（仓库里明明有 `tools/ci-shellcheck.sh`，
+  教训就是：**新脚本先在本地跑它**）。改成 ASCII 单引号后，用同一个版本在本机跑
+  `bash tools/ci-shellcheck.sh` = **56 个 shell 文件 / 0 findings / ✔ clean**。同批把 README 的
+  「在电脑上跑门禁会报失败」一节补全：除 `check-counts` 外，`python3 tools/i18n-table check`（要 App 真源码）与
+  `./tools/app-verify console`（要已编好的 APK）在电脑上也必然报失败；并写明 `check-no-secrets` 是**按文件名**
+  扫整棵树 —— 签名材料放进仓库目录就会让它报红，与那个文件是否被跟踪无关。
+
 · **试点留下的计数漂移逐处修掉**（纯文档与注释，**不改任何行为**）：`widgets/common.sh:28` 的 "all 10 widgets"、
   `tests/selftest.sh:2` 的 "for the 9 widgets"、`tools/dsh-tasksd` docstring 的 "the 9 whitelisted component
   scripts"（实际 `ALLOWED` 是 12 个，服务启动时本来就自己打印真数）—— 三处都改成**不含数字**的写法
