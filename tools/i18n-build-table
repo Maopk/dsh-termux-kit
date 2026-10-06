@@ -24,6 +24,12 @@ TARGET = os.path.join(REPO, 'widgets', 'i18n.sh')
 HAN = re.compile(r'[\u4e00-\u9fff]')
 STR_RE = re.compile(r"""['"]([^'"]{3,300})['"]""")
 
+# Historical name map: the Chinese file names these widgets had *before* the rename to English.
+# It exists only so the git-history mining below (`git diff -- ... OLD_NAME.get(relpath, relpath)`)
+# can line old hunks up with today's paths. It therefore covers exactly the widgets that ever had a
+# Chinese name (0–9); widgets added after the rename need no entry — this table is not a list of the
+# widgets and must not be "completed". Superseded for maintenance: `tools/i18n-table` is how the
+# shipped table is built now (see docs/i18n.md).
 OLD_NAME = {
     'widgets/0_emergency-stop.sh': 'widgets/0_紧急停止.sh',
     'widgets/1_start-dsh.sh': 'widgets/1_启动DSH.sh',

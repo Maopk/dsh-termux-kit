@@ -2,7 +2,8 @@
 """dsh-tasksd —— task runner for the web UI (loopback only, whitelist, token required).
 
 Why: the DSH UI on the phone wants "one-click run" buttons for components, but a web page cannot run shell directly.
-This starts a small service bound to 127.0.0.1 only, accepting **the 9 whitelisted component scripts**,
+This starts a small service bound to 127.0.0.1 only, accepting **only the whitelisted component scripts**
+(the exact set is `ALLOWED` below, and the service prints its own count at startup — do not write the number here),
 and requires a token on each request (the token lives in a 600 file that the page reads through filepanel readText).
 
 Security boundary (stated honestly):

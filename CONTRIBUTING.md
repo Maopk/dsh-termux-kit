@@ -238,6 +238,7 @@ tools/pre-push-check             # 顺带扫改动文件里的 key/token/passwor
 | `tools/app-verify console\|bridge` | 打开**编好的 APK**核对：版本、主题、翻译表真的在包里；**版本号唯一性** | 出包后 |
 | `tools/panel-render-test` | 真跑三遍面板渲染，抓"一点开就消失"这类运行时错误 | `i18n-audit` 里 |
 | `tools/check-task-ids` | 任务 id 在四个地方（tasksd 白名单 / 控制台 / 面板 / 组件脚本）一致 | 自检 |
+| `tools/check-counts` | **(h) 可数的量只许写一处**：小组件数的字面量与 `widgets/` 实际不符即报错；`--strict` = 除唯一源外不许出现字面量（**尚未达到**，是 (h) 的目标形态） | 自检（本地闸，**未接 CI**） |
 | `tools/install-tools --check` | 仓库 `tools/` 与安装位 `~/.local/bin` 一致（防"我照着仓库推理、跑的是旧代码"） | 自检 |
 | `tools/dsh-kit-update --check` | 仓库是否落后 `origin/master` **且** `~/.local/bin` 是否与仓库一致 | 手动（不带 `--check` 就会动手更新，顺序固定：快进合并 → 工具 → 小组件） |
 | `tools/check-no-secrets.sh` | 本机凭据没泄进仓库 | push 前 |

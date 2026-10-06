@@ -6,6 +6,17 @@ Running DeepSeek Harness (DSH) on a non-rooted Android phone without continuous 
 
 Running DSH on a phone differs from running it on a laptop: Termux is frozen by the system, the browser window is discarded, and when a failure occurs the log cannot be read from the device. This repository covers those gaps. Twelve Termux widgets handle start, stop and recovery; a Console app provides buttons; an Accessibility app lets the AI read the screen, tap, swipe and type. Everything runs on Termux, Android's Accessibility service and Termux's own `RUN_COMMAND`. No root and no PC are required.
 
+## Who this is for
+
+You need this kit when DSH runs on a phone you cannot sit in front of:
+
+- the ROM freezes Termux or reclaims the Accessibility service while you are away, and you want start, stop and recovery to be **home-screen widgets** instead of a shell;
+- `adb` wireless debugging dies every time Wi-Fi blinks, and you want one command that re-establishes it and **names the step that failed**;
+- you want the AI to read the screen, tap and type on the phone **without root and without a PC**;
+- you want a single command (`~/.local/bin/dsh-kit-update`) to bring the phone's install up to date, instead of a `git pull` that reports success and merges nothing.
+
+You do **not** need it if DSH already runs on a machine you administer: this kit is Android-specific (Termux, an Accessibility service, `RUN_COMMAND`), it is not a general Android automation framework, it installs nothing on a desktop, and it does not test your DSH setup.
+
 ## Overview
 
 DSH is used on a vivo phone, and that ROM freezes background apps aggressively: the accessibility bridge is periodically reclaimed by the system, adb wireless debugging terminates as soon as Wi-Fi drops, and the browser window is occasionally discarded. Recovering all of that manually became impractical, so it was implemented as scripts and apps.
@@ -103,6 +114,8 @@ Two steps remain after that:
 
 Every widget supports `--dry-run`, which prints and executes nothing.
 
+Adding a 13th: [task authoring](docs/TASK-AUTHORING.md) — the file and its header, the Chinese-name gate, the language table, the whitelist, and the counts you must not leave stale.
+
 ### Commands
 
 ```bash
@@ -175,6 +188,11 @@ Symptom: the Console displays "Version: v1.21 · the release channel is still v1
 Cause: these are three distinct facts: the version installed locally, the version offered in GitHub Releases, and the version in `master`. Pushing source without cutting a release makes them disagree.
 Solution: no workaround is required; the display is accurate. To make it report "up to date", cut a release.
 
+### A gate reports failure on a PC checkout
+Symptom: `bash tools/check-counts` exits 1 on a machine that never touched the phone.
+Cause: this gate is a consistency check, not a test of your copy. The mismatch it reports sits in `apps/` — the read-only mirror of `~/dsh-console` and `~/droid-bridge` (CONTRIBUTING §十一: editing a mirror has no effect, `tools/sync-apps` refreshes it from the true source).
+Solution: read the file list it prints. When every remaining mismatch is inside a read-only mirror, `check-counts` says so explicitly ("预期为红") — that is the expected state of a checkout, not a defect of your copy. Fix the true source on the phone and mirror it back; do not edit `apps/`.
+
 ## Requirements and limits
 
 - Tested on Termux 0.119.0-beta.3. Termux is a GitHub pre-release, so the add-ons must come from the same source.
@@ -184,6 +202,7 @@ Solution: no workaround is required; the display is accurate. To make it report 
 - The adb channel requires working Wi-Fi; the bridge channel requires no network.
 - Installing an APK requires the 6-digit lock-screen PIN once, for Android's own verification. The PIN is stored only in `~/.dsh-auth-pass` (mode 600) and is read only when passing that verification on your behalf.
 - A cold start of about 18 seconds is normal.
+- Some gates only make sense where the true source lives. `tools/check-counts` compares every literal that names the widget count against `widgets/[0-9]*.sh`; `tools/pre-push-check` additionally reads the git checkout, `~/DSH运维笔记.md` and the installed APK builds. Run them on the phone: `cd ~/dsh-termux-kit && bash tools/pre-push-check --strict`. A gate run against this repository alone is checking the mirror, not the source.
 
 ## Security and permissions
 
@@ -211,7 +230,7 @@ The PIN is read only when passing system verification on your behalf. It is neve
 | `ui/` | The wording and colour sources for all three surfaces: `ui/controls.json` (categories, control names, one-line consequences, danger flags, `appVersions`) and `ui/theme.json` (27 colours → two `Palette.java`, two `res/values/dsh_theme.xml` and the console's shape drawables). `tools/ui-controls gen` writes both out, and `tools/i18n-audit` checks the result item by item |
 | `i18n/zh.json` | The only translation source; every Chinese string in all three surfaces is generated from it |
 | `tests/selftest.sh` | The self-test suite |
-| `docs/` | [Engineering journal](docs/DSH运维笔记.md) · [troubleshooting](docs/operations.md) · [architecture](docs/architecture.md) · [languages](docs/i18n.md) · [glossary](docs/术语表.md) |
+| `docs/` | [Engineering journal](docs/DSH运维笔记.md) · [troubleshooting](docs/operations.md) · [architecture](docs/architecture.md) · [languages](docs/i18n.md) · [glossary](docs/术语表.md) · [task authoring](docs/TASK-AUTHORING.md) |
 | `dist/` | Built APKs and their SHA256 |
 | `CONTRIBUTING.md` | The rules this repository follows: how every change gets logged, and which gates run before a push |
 | `CHANGELOG.md` | Every version's changes, newest first, in [Keep a Changelog](https://keepachangelog.com/) form |

@@ -5,6 +5,29 @@
 
 ## [Unreleased]
 
+### 新增
+
+· **前门补「什么时候你需要它」+ 加题指南**（两份 README 各新增一节；新增 `docs/TASK-AUTHORING.md`）：
+  前门原来只回答"这是什么"，没回答"什么时候你需要它"；小组件清单原来只有名字，没有"怎么加第 13 个"。
+  指南逐条写出文件名与头部范式、中文名门禁（`tools/install-widgets` 的 `MAP`）、翻译表链路
+  （`i18n/zh.json` → `tools/i18n-table gen` 的三个生成块）、面板/控制台白名单（`tools/dsh-tasksd` 的 `ALLOWED`）
+  与四处 id 一致性门禁（`tools/check-task-ids`），以及新增小组件时必须同步的那几处计数 —— 顺带把"12"写在哪
+  几处一次列清。该段还给下游交了一份试点回执 —— 其内容**已全部并入** `Maopk/vision-work` 的
+  `OPENSOURCE-READINESS.md` §8（标准七条 → 八条、两条示范句、本仓库内部的计数漂移），按那份文档 §8 的
+  决定**不在本仓库保留回执文件**；依据 commit `28b9cad`（总纲）与 `1ee37ef`（回灌）。
+  **纯文档改动**（按 §六 不 bump 版本号）。
+
+### 修复
+
+· **试点留下的计数漂移逐处修掉**（纯文档与注释，**不改任何行为**）：`widgets/common.sh:28` 的 "all 10 widgets"、
+  `tests/selftest.sh:2` 的 "for the 9 widgets"、`tools/dsh-tasksd` docstring 的 "the 9 whitelisted component
+  scripts"（实际 `ALLOWED` 是 12 个，服务启动时本来就自己打印真数）—— 三处都改成**不含数字**的写法
+  （"every widget" / "the widget scripts" / "only the whitelisted component scripts"），这样它们不可能再漂；
+  `tools/i18n-build-table` 的 `OLD_NAME` 表加注说明它是**历史映射**（只覆盖改英文名之前存在的 0–9，后加的
+  组件不需要条目），所以它不是缺项。同批新增 `tools/check-counts` —— (h) 的第一道执行闸：小组件数的字面量与
+  `widgets/` 实际不符就报错（`--strict` 是"除唯一源外不许出现字面量"的目标形态，尚未达到），并写进
+  CONTRIBUTING §十一 与 `docs/TASK-AUTHORING.md` §1.5；删除试点回执 `PILOT-FEEDBACK.md`（内容已并入总纲 §8）。
+
 ### 变更
 
 · **测试分成三类，类别落在仓库里、由 CI 校验**（新增 `tests/lib/categories.tsv`、`tests/lib/report.sh`、

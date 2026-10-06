@@ -7,6 +7,26 @@
 > 格式按 `CONTRIBUTING.md` §二：**时间 · 标题 / 做了什么 / 为什么 / 结果 / 下一步**。
 > 旧的分类分节（一、二、三…）保留在下面，不再改写。
 
+2026-10-06 · 【开源就绪】阶段 1 收尾：计数闸落地、前门补第三问、发布前自检暴露 3 处既有红
+
+做了什么：两份 README 各加「什么时候你需要它」与「在电脑上跑门禁会报失败」两节；新增 `docs/TASK-AUTHORING.md`
+  （加第 13 个小组件的完整路径，含中文名门禁与生成链）与 `tools/check-counts`（计数单一源闸：默认档只报
+  与 `widgets/[0-9]*.sh` 真数不一致的处，`--strict` 连拼写数字一起管）；修四处漂移（`widgets/common.sh:28`
+  写 10、`tests/selftest.sh:2` 写 9、`tools/dsh-tasksd` 文档串写 9、`tools/i18n-build-table` 的 `OLD_NAME`
+  表只覆盖 0–9 —— 改成在表前注明「历史映射，不是组件清单」，不是补全）；删掉试点回执 `PILOT-FEEDBACK.md`
+  （内容已并入 vision-work 的 `OPENSOURCE-READINESS.md` §8，回执留在被试点的仓库里会和总纲抢单一源）。
+为什么：陌生人从 clone 到「再加一个」走不通（前门只答了「是什么/怎么跑」）；「12」这个数字写在 ≥9 处、
+  已经漂了 2 处 —— 靠人记必然再漂，得有一条闸替人记。
+结果：电脑侧可核项全绿（`check-task-ids` 退出码 0、`check-no-secrets` = safe、发布面 11/160、两次 dry-run
+  之间没有任何文件被门禁改动）。手机侧 `bash tools/pre-push-check --strict` 首跑 = **通过 10 / 失败 3 / 提醒 1**，
+  三条红**都在本批之前就存在**：① `check-no-secrets` 报仓库内有 keystore/私钥文件 —— `.gitignore:12-13`
+  已覆盖 `*.jks`/`*.keystore`，即未跟踪、不会外泄，属本机产物；② `i18n-table check`（读 App 真源码）
+  ③ `app-verify console`（读已编的包）。②③ 与本批无关：本批不碰 `apps/`、不碰 i18n 生成块。
+  另 6.1 提醒本机 `~/DSH运维笔记.md` 与仓库版不一致（本机既有状态）。
+下一步：发布后手机 `git pull --ff-only` → `./tools/install-tools`（本批动了 `tools/dsh-tasksd` 与
+  `tools/i18n-build-table`，两者在 `~/.local/bin` 里都有安装副本，会先报「有差异」）→ `python3 tools/check-counts`
+  应打印「预期为红：这 N 处全在只读镜像 apps/ 里」（真源在手机上）；上面 ②③ 两条红另立项，不在本批处理。
+
 2026-10-03 · 【自检】控制台里的自检输出现在自带策略结论
 
 做了什么：`tests/selftest.sh` 写完 `~/.smoke/selftest.json` 之后，自己再跑一遍 `tests/report_check.py`，

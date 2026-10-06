@@ -6,6 +6,17 @@
 
 在手机上运行 DSH 与在电脑上运行存在差异：Termux 会被系统冻结，浏览器窗口会被丢弃，出现故障时在设备上也无法读取日志。本仓库用于弥补这些缺口：12 个 Termux 小组件负责启动、停止与恢复，一个控制台 App 提供按钮，一个无障碍 App 让 AI 能够读取屏幕、点按和输入。全部依赖 Termux、Android 的无障碍服务和 Termux 官方的 `RUN_COMMAND`，不需要 root，也不需要电脑。
 
+## 什么时候你需要它
+
+当 DSH 跑在一台你没法一直盯着的手机上时，你需要这套东西：
+
+- ROM 会冻结 Termux、或把无障碍服务回收，而你希望启动、停止、恢复都是**桌面小组件**上的一次点击，而不是敲命令行；
+- `adb` 无线调试一断 Wi-Fi 就失效，而你希望一条命令把它重新建立起来，并且**指明是哪一步失败**；
+- 你希望 AI 能在手机上读屏、点按、输入，**不需要 root，也不需要电脑**；
+- 你希望一条命令（`~/.local/bin/dsh-kit-update`）就把手机上的安装更新到最新，而不是被一次"报告成功、其实什么都没合并"的 `git pull` 骗过去。
+
+**不需要**它的情况：DSH 已经跑在你自己管得着的机器上 —— 这套东西是 Android 专用的（Termux、无障碍服务、`RUN_COMMAND`），不是通用的 Android 自动化框架，它不会在你的电脑上装任何东西，也不会替你测试你的 DSH 配置。
+
 ## 概览
 
 DSH 运行在一台 vivo 手机上，该 ROM 对后台应用的冻结较为激进：无障碍桥会周期性被系统回收，adb 无线调试在 Wi-Fi 断开时立即中断，浏览器窗口偶尔会被系统丢弃。逐一手动恢复的成本过高，因此实现为脚本和 App。
@@ -97,6 +108,8 @@ App 不在这里更新：发行版用桌面小组件「11_更新APK」或 `~/.lo
 
 每个小组件都支持 `--dry-run`，只打印不执行。
 
+加第 13 个：见[加题指南](docs/TASK-AUTHORING.md) —— 文件名与头部、中文名门禁、翻译表、白名单，以及不许留在原地的那几处计数。
+
 ### 常用命令
 
 ```bash
@@ -169,6 +182,11 @@ dsh-kit-update [--check]        # 更新这套东西本身：快进合并仓库 
 原因：这是三项不同的事实：本机安装的版本、GitHub Releases 中提供的最新版本、`master` 中的版本号。推送源码而未发布发行版时，三者就会不一致。
 解决方案：无需处理，这是如实显示。要让它显示「已是最新」，需要发布一个发行版。
 
+### 在电脑上跑门禁会报失败
+现象：在一台从未连过手机的机器上，`bash tools/check-counts` 退出码为 1。
+原因：这道闸是一致性核对，不是对本机副本的测试。它报出的不一致落在 `apps/` —— 那是 `~/dsh-console` 与 `~/droid-bridge` 的只读镜像（CONTRIBUTING §十一：改镜像不生效，`tools/sync-apps` 从真源刷回来）。
+解决方案：看它打印的文件清单。当剩下的不一致全在只读镜像里时，`check-counts` 会明确打印「预期为红」—— 这是仓库副本的正常状态，不是你的副本坏了。要改就改手机上的真源再镜像回来，别改 `apps/`。
+
 ## 环境要求与限制
 
 - 在 Termux 0.119.0-beta.3 上测试通过。Termux 是 GitHub 预发布版，配套的 addon 必须与其同源。
@@ -178,6 +196,7 @@ dsh-kit-update [--check]        # 更新这套东西本身：快进合并仓库 
 - adb 通道依赖可用的 Wi-Fi；桥通道不需要网络。
 - 安装 APK 时需要 6 位锁屏密码过一次系统验证。密码仅保存在 `~/.dsh-auth-pass`（600），仅在代为通过系统验证时读取。
 - 冷启动约 18 秒属于正常情况。
+- 有些门禁只在真源所在处才有意义。`tools/check-counts` 把每一处「写着组件数量」的字面量与 `widgets/[0-9]*.sh` 的实际个数比对；`tools/pre-push-check` 还会读 git 检出、`~/DSH运维笔记.md` 与装好的 APK 构建。请在手机上跑：`cd ~/dsh-termux-kit && bash tools/pre-push-check --strict`。只对着本仓库跑，检查的是镜像而不是源。
 
 ## 安全与权限
 
@@ -205,7 +224,7 @@ dsh-kit-update [--check]        # 更新这套东西本身：快进合并仓库 
 | `ui/` | 三处界面的文案与配色源文件：`ui/controls.json`（分类、控件名、一句话说明、危险标记、`appVersions`）与 `ui/theme.json`（27 个颜色 → 两份 `Palette.java`、两份 `res/values/dsh_theme.xml` 和控制台的形状 drawable）。两者均由 `tools/ui-controls gen` 写出，再由 `tools/i18n-audit` 逐项核对 |
 | `i18n/zh.json` | 唯一的翻译源，三处界面的中文均从它生成 |
 | `tests/selftest.sh` | 自检套件 |
-| `docs/` | [运维笔记](docs/DSH运维笔记.md)、[排障](docs/operations.md)、[架构](docs/architecture.md)、[语言](docs/i18n.md)、[术语表](docs/术语表.md) |
+| `docs/` | [运维笔记](docs/DSH运维笔记.md)、[排障](docs/operations.md)、[架构](docs/architecture.md)、[语言](docs/i18n.md)、[术语表](docs/术语表.md)、[加题指南](docs/TASK-AUTHORING.md) |
 | `dist/` | 构建出的 APK 及其 SHA256 |
 | `CONTRIBUTING.md` | 本仓库遵循的规则：每次改动如何记录、push 前需要过哪些门禁 |
 | `CHANGELOG.md` | 每个版本的改动记录，最新在上，格式按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) |

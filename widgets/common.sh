@@ -25,7 +25,7 @@ done
 # If the layer is missing for any reason, fall back to printing English unchanged.
 command -v dsh_msg >/dev/null 2>&1 || dsh_msg() { printf '%s' "$1"; }
 
-# Every user-visible line goes through dsh_msg() so the language switch reaches all 10 widgets
+# Every user-visible line goes through dsh_msg() so the language switch reaches every widget
 # without touching a single call site. The completion banners in die()/done_() below are DATA
 # (parsed by dsh-status-pub / dsh-tasksd / the page panel) and must never be translated.
 log()  { printf '%s %s\n' "$(date '+%H:%M:%S')" "$(dsh_msg "$*")"; }

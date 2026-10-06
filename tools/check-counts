@@ -1,0 +1,111 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# check-counts —— (h) 的执行闸：可数的量只许写一处（源），别处的字面量必须与源一致
+#
+# 为什么要有它：本仓库自己踩过 —— 小组件数还是个位数时，注释与 docstring 里写下了当时正确的
+# 数字；后来数字变了，那些注释没人再看，于是"小于 <N> / <N> 附近"的几种写法同时留在注释、docstring
+# 与两份 README 里，评审看不出来。人写的"数字住在哪几处"清单会同样过期，所以判据必须是可执行的一条命令。
+#
+# 两档判据：
+#   默认    小组件数的字面量与 `widgets/[0-9]*.sh` 的实际个数不符 ⇒ 报错（退出 1）。
+#           相符的仍然逐条列出 —— 它们是"改成读唯一源"的待办清单（今天不因此失败，否则全仓库都红）。
+#   --strict  (h) 的目标形态：除"源"以外**不许出现任何字面量**，出现即报错。
+#
+# 有意跳过的"冻结区"：`CHANGELOG.md` 与 `docs/DSH运维笔记.md` —— 仓库规则是已发布的历史不再改写
+# （见 `CHANGELOG.md:4` 的格式声明）；`recon/`、`_local/` 不从仓库发布。
+#
+# 已知边界（诚实的部分）：
+#   · 只认"数字/英文数字 + 小组件同段出现"的写法；换词说法（例如术语表里"N 个脚本"那种）用第三条
+#     模式兜住，再偏的说法靠 `docs/TASK-AUTHORING.md` §1.5 的 grep 手工兜底；
+#   · `apps/` 是 App 源码的**只读镜像**（CONTRIBUTING §十一：改了不生效）⇒ 那里面若有不一致，
+#     本闸照样报，修法是真源（`$HOME/dsh-console` / `$HOME/droid-bridge`）改完由 `sync-apps` 镜像回来；
+#   · 不与 `tools/check-task-ids` 重复（任务 id 在四处一致由那道闸管）。
+#
+# 用法：bash tools/check-counts [仓库根] [--strict] [--quiet]
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STRICT=0
+QUIET=0
+for a in "$@"; do
+  case "$a" in
+    --strict) STRICT=1 ;;
+    --quiet)  QUIET=1 ;;
+    -*) echo "unknown flag: $a" >&2; exit 2 ;;
+    *)  ROOT="$a" ;;
+  esac
+done
+cd "$ROOT" || exit 2
+
+# ── 唯一源：widgets/ 下的任务脚本（数字由目录本身给出，不写在任何文件里） ──
+true_n=$(find widgets -maxdepth 1 -name '[0-9]*.sh' 2>/dev/null | wc -l | tr -d ' ')
+if [ "${true_n:-0}" -le 0 ]; then
+  echo "✘ 没找到 widgets/[0-9]*.sh —— 仓库根目录对吗？（现在：$ROOT）" >&2
+  exit 2
+fi
+
+# 只认"数字/英文数字 + 小组件"同段出现的写法。第三条覆盖换词说法（"小组件…N 个脚本"，可以跨表格竖线），
+# 但要求**同一行里出现过"小组件/桌面组件/桌面小部件"** —— 裸的"N 个脚本"是另一个可数量（CI 的 shell 脚本数），
+# 不能算进来（`CONTRIBUTING.md` 的门禁表里就有一处）。
+PATTERNS='[0-9]+[[:space:]]*(Termux[[:space:]]+)?widgets?|[0-9]+[[:space:]]*个[[:space:]]*(小组件|桌面组件|桌面小部件|组件脚本)|(小组件|桌面组件|桌面小部件).*[0-9]+[[:space:]]*个[[:space:]]*脚本|Twelve[^.]{0,24}widgets'
+SKIP='^\./(CHANGELOG\.md|docs/DSH运维笔记\.md|recon/|_local/|\.git/)'
+MIRROR='^\./apps/'
+
+n_ok=0
+n_bad=0
+n_word=0
+n_bad_mirror=0
+report=""
+fail=0
+
+while IFS= read -r line; do
+  file="${line%%:*}"; rest="${line#*:}"
+  ln="${rest%%:*}"; text="${rest#*:}"
+  m=$(printf '%s' "$text" | grep -oE "$PATTERNS" | head -1)
+  [ -n "$m" ] || continue
+  # 换词写法里可能夹着别的数字（"点组件 1/7/8 … 12 个脚本"）⇒ 优先取紧贴"个脚本"的那个数
+  num=$(printf '%s' "$m" | grep -oE '[0-9]+[[:space:]]*个[[:space:]]*脚本' | grep -oE '[0-9]+' | head -1)
+  [ -n "$num" ] || num=$(printf '%s' "$m" | grep -oE '[0-9]+' | head -1)
+  if printf '%s' "$file" | grep -qE "$MIRROR"; then
+    where="（只读镜像 ⇒ 改真源 \$HOME/dsh-console 或 ~/droid-bridge，再 sync-apps 镜像回来）"
+  else
+    where=""
+  fi
+  if [ -z "$num" ]; then
+    # 英文拼写数字：机器核对不了，列出来人工看一眼
+    n_word=$((n_word + 1))
+    report="${report}  ? ${file}:${ln}  “${m}”（拼写数字，需人工核对）${where}\n"
+    [ "$STRICT" = 1 ] && fail=1
+    continue
+  fi
+  if [ "$num" = "$true_n" ]; then
+    n_ok=$((n_ok + 1))
+    report="${report}  · ${file}:${ln}  ${num}（与源一致 —— 待办：改成读源）\n"
+    [ "$STRICT" = 1 ] && fail=1
+  else
+    n_bad=$((n_bad + 1))
+    [ -n "$where" ] && n_bad_mirror=$((n_bad_mirror + 1))
+    fail=1
+    report="${report}  ✘ ${file}:${ln}  写的是 ${num}，实际 ${true_n} ${where}\n"
+  fi
+done < <(grep -rInE "$PATTERNS" . 2>/dev/null | grep -Ev "$SKIP" | grep -Ev '/(node_modules|\.git)/')
+
+if [ "$QUIET" != 1 ]; then
+  printf '小组件数的唯一源：widgets/[0-9]*.sh ⇒ %s 个\n' "$true_n"
+  printf '%b' "$report"
+fi
+
+if [ "$fail" = 1 ]; then
+  if [ "$STRICT" = 1 ] && [ "$n_bad" = 0 ]; then
+    printf '\n✘ --strict：还有 %d 处字面量与 %d 处拼写数字（(h) 的目标是除唯一源外不许出现）\n' "$n_ok" "$n_word"
+  else
+    printf '\n✘ 有 %d 处字面量与唯一源不符（另有 %d 处一致、%d 处拼写数字）\n' "$n_bad" "$n_ok" "$n_word"
+  fi
+  printf '  修法见 docs/TASK-AUTHORING.md §1.5；注释与 docstring 里**直接不要写数字**（今天的三处错都是这么来的）。\n'
+  if [ "$n_bad_mirror" = "$n_bad" ] && [ "$n_bad" -gt 0 ]; then
+    printf '  预期为红：这 %d 处全在只读镜像 apps/ 里 —— 本机改不了，真源在手机上（$HOME/dsh-console / ~/droid-bridge）。\n' "$n_bad"
+  fi
+  exit 1
+fi
+
+printf '\n✔ %d 处字面量与唯一源一致，%d 处拼写数字；没有不一致（(h) 的下一步 = 把它们改成读源，见总纲 §4 (h)）\n' "$n_ok" "$n_word"
+exit 0

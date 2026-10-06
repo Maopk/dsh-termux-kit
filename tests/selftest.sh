@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# selftest.sh — self-test suite for the 9 widgets (run this after every change)
+# selftest.sh — self-test suite for the widget scripts (run this after every change)
 #
 # Tiered tests:
 #   L0 precheck   the environment itself breaks (bridge/adb/8080): judge it first, never score an env problem as a widget failure
